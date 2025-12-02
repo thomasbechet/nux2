@@ -5,9 +5,10 @@ const api = @import("api.zig");
 
 const Self = @This();
 
-const transform = nux.transform;
-
 pub fn main() !void {
+    const allocator = std.heap.page_allocator;
+    try nux.init(allocator);
+    nux.deinit();
     var context = window.Context{};
     try context.init();
 }

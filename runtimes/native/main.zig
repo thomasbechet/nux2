@@ -7,8 +7,8 @@ const Self = @This();
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
-    try nux.init(allocator);
-    nux.deinit();
+    var core: nux.Core = try .init(allocator);
+    defer core.deinit();
     var context = window.Context{};
     try context.init();
 }

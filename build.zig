@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
 
     // Core
     const nux = b.addModule("nux", .{
-        .root_source_file = b.path("core/root.zig"),
+        .root_source_file = b.path("core/core.zig"),
         .target = target,
         .optimize = optimize,
     });

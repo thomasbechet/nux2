@@ -1,5 +1,5 @@
 const std = @import("std");
-const nux = @import("root.zig");
+const nux = @import("core.zig");
 
 const Vec3 = struct { x: u32, y: u32, z: u32 };
 
@@ -8,10 +8,12 @@ pub const Transform = struct {
 };
 const Self = @This();
 
-transforms: nux.Objects(Transform) = .{},
+transforms: nux.Objects(Transform),
 
-pub fn init(self: *Self, allocator: std.mem.Allocator) !void {
-    try self.transforms.init(allocator);
+pub fn init(core: *nux.Core) !Self {
+    return .{
+        .transforms = try .init(core.allocator),
+    };
 }
 pub fn deinit(self: *Self) void {
     self.transforms.deinit();

@@ -1,0 +1,10 @@
+player:
+  type: transform
+  position: 0 0 0
+  children:
+    arm:
+      type: staticmesh
+      mesh: mymesh # Declare as an input
+    health:
+      type: health
+      value: 100

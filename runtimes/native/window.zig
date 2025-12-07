@@ -6,7 +6,7 @@ const nux = @import("nux");
 pub const Context = struct {
     running: bool = true,
 
-    pub fn init(self: *@This()) !void {
+    pub fn run(self: *@This(), core: *nux.Core) !void {
         if (c.glfwInit() == 0) {
             @panic("Failed to initialize GLFW");
         }
@@ -16,6 +16,7 @@ pub const Context = struct {
         c.glfwSetWindowUserPointer(window, @ptrCast(self));
         while (c.glfwWindowShouldClose(window) == 0 and self.running) {
             c.glfwPollEvents();
+            try core.update();
             c.glfwSwapBuffers(window);
         }
         c.glfwDestroyWindow(window);

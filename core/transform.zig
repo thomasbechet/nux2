@@ -1,5 +1,5 @@
 const std = @import("std");
-const nux = @import("core.zig");
+const nux = @import("nux");
 
 const Vec3 = struct { x: u32, y: u32, z: u32 };
 

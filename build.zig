@@ -44,10 +44,10 @@ pub fn build(b: *std.Build) void {
     }
 
     // Tests
-    const mod_tests = b.addTest(.{
+    const nux_tests = b.addTest(.{
         .root_module = nux,
     });
-    const run_mod_tests = b.addRunArtifact(mod_tests);
+    const run_mod_tests = b.addRunArtifact(nux_tests);
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
     });

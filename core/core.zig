@@ -2,6 +2,10 @@ const std = @import("std");
 pub const Object = @import("base/object.zig");
 pub const ObjectID = Object.ObjectID;
 pub const Objects = Object.Objects;
+pub const Vec = @import("math/vec.zig").Vec;
+pub const Vec2 = Vec(2, f32);
+pub const Vec3 = Vec(3, f32);
+pub const Vec4 = Vec(4, f32);
 
 const Module = struct {
     pub const Error = error{

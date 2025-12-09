@@ -1,11 +1,11 @@
 const std = @import("std");
-pub const Object = @import("base/object.zig");
-pub const ObjectID = Object.ObjectID;
-pub const Objects = Object.Objects;
-pub const Vec = @import("math/vec.zig").Vec;
-pub const Vec2 = Vec(2, f32);
-pub const Vec3 = Vec(3, f32);
-pub const Vec4 = Vec(4, f32);
+pub const object = @import("base/object.zig");
+pub const ObjectID = object.ObjectID;
+pub const Objects = object.Objects;
+pub const vec = @import("math/vec.zig");
+pub const transform = @import("base/transform.zig");
+pub const Vec2 = vec.Vec2;
+pub const Vec3 = vec.Vec3;
 
 const Module = struct {
     pub const Error = error{
@@ -79,11 +79,13 @@ const Module = struct {
     }
 };
 
+pub const OS = struct {};
+
 pub const Core = struct {
     allocator: std.mem.Allocator,
     modules: std.ArrayList(Module),
 
-    object: *Object,
+    object: *object,
 
     pub fn init(allocator: std.mem.Allocator, comptime mods: anytype) !*@This() {
         var core = try allocator.create(@This());
@@ -92,7 +94,11 @@ pub const Core = struct {
 
         // Register core modules
         core.object = try core.registerOne(@import("base/object.zig"));
-        try core.register(.{@import("base/transform.zig")});
+        try core.register(.{
+            @import("base/transform.zig"),
+            @import("input/input.zig"),
+            @import("input/inputmap.zig"),
+        });
         // Register user modules
         try core.register(mods);
 

@@ -34,7 +34,9 @@ const ObjectInfo = struct {
 const ObjectType = struct {
     info: *std.ArrayList(ObjectInfo),
     ptr: *anyopaque,
-    v_new: *const fn (*anyopaque) anyerror!void,
+    v_new: *const fn (*anyopaque, id: ObjectID) anyerror!ObjectID,
+    v_load_json: *const fn (*anyopaque, id: ObjectID, s: []const u8) anyerror!void,
+    v_save_json: *const fn (*anyopaque, id: ObjectID, allocator: std.mem.Allocator) anyerror!std.ArrayList(u8),
 };
 
 pub fn Objects(comptime T: type, comptime DTO: type, comptime Context: type) type {
@@ -55,10 +57,29 @@ pub fn Objects(comptime T: type, comptime DTO: type, comptime Context: type) typ
         ) !void {
             // Create new container entry
             self.type_index = @intCast(core.object.types.items.len);
-            var container = try core.object.types.addOne(core.allocator);
 
-            container.ptr = self;
-            container.info = &self.info;
+            const Self = @This();
+            const gen = struct {
+                fn new(pointer: *anyopaque, id: ObjectID) anyerror!ObjectID {
+                    const p: *Self = @ptrCast(@alignCast(pointer));
+                    return try Self.new(p, id);
+                }
+                fn loadJson(pointer: *anyopaque, id: ObjectID, s: []const u8) anyerror!void {
+                    const p: *Self = @ptrCast(@alignCast(pointer));
+                    try Self.loadJson(p, id, s);
+                }
+                fn saveJson(pointer: *anyopaque, id: ObjectID, allocator: std.mem.Allocator) anyerror!std.ArrayList(u8) {
+                    const p: *Self = @ptrCast(@alignCast(pointer));
+                    return try Self.saveJson(p, id, allocator);
+                }
+            };
+
+            var typ = try core.object.types.addOne(core.allocator);
+            typ.ptr = self;
+            typ.info = &self.info;
+            typ.v_new = gen.new;
+            typ.v_load_json = gen.loadJson;
+            typ.v_save_json = gen.saveJson;
 
             self.allocator = core.allocator;
             self.context = context;
@@ -73,13 +94,16 @@ pub fn Objects(comptime T: type, comptime DTO: type, comptime Context: type) typ
             self.free.deinit(self.allocator);
         }
 
-        pub fn new(self: *@This(), parent: ObjectID) !*T {
+        pub fn new(self: *@This(), parent: ObjectID) !ObjectID {
             _ = parent;
             var data: *T = undefined;
+            var idx: ObjectID.Index = undefined;
             if (self.free.pop()) |index| {
                 self.info.items[index].version += 1;
                 data = &self.data.items[index];
+                idx = index;
             } else {
+                idx = @intCast(self.data.items.len);
                 data = try self.data.addOne(self.allocator);
                 var info = try self.info.addOne(self.allocator);
                 info.version = 1;
@@ -87,7 +111,11 @@ pub fn Objects(comptime T: type, comptime DTO: type, comptime Context: type) typ
             if (@hasDecl(T, "init")) {
                 try T.init(data, self.context);
             }
-            return data;
+            return .{
+                .index = idx,
+                .type_index = self.type_index,
+                .version = self.info.items[idx].version,
+            };
         }
 
         pub fn getID(self: *@This(), ptr: *T) ObjectID {
@@ -120,38 +148,38 @@ pub fn Objects(comptime T: type, comptime DTO: type, comptime Context: type) typ
             return &self.data.items[id.index];
         }
 
-        pub fn setDTO(self: *@This(), id: ObjectID, dto: DTO) !void {
+        pub fn load(self: *@This(), id: ObjectID, dto: DTO) !void {
             const data = try self.get(id);
             if (@hasDecl(T, "load")) {
                 try T.load(data, self.context, dto);
             } else if (comptime std.meta.eql(T, DTO)) {
                 data.* = dto;
             } else {
-                @compileError("no dto loading function");
+                @compileError("no load function for object type " ++ @typeName(T));
             }
         }
 
-        pub fn setJson(self: *@This(), id: ObjectID, s: []const u8) !void {
+        pub fn loadJson(self: *@This(), id: ObjectID, s: []const u8) !void {
             const parsed = try std.json.parseFromSlice(DTO, self.allocator, s, .{ .allocate = .alloc_always });
             defer parsed.deinit();
-            try self.setDTO(id, parsed.value);
+            try self.load(id, parsed.value);
         }
 
-        pub fn getDTO(self: *@This(), id: ObjectID) !DTO {
+        pub fn save(self: *@This(), id: ObjectID) !DTO {
             const data = try self.get(id);
-            if (@hasDecl(T, "store")) {
-                return try T.store(data);
+            if (@hasDecl(T, "save")) {
+                return try T.save(data, self.context);
             } else if (comptime std.meta.eql(T, DTO)) {
                 return data.*;
             } else {
-                @compileError("no dto storing function");
+                @compileError("no save function for object type " ++ @typeName(T));
             }
         }
 
-        pub fn getJson(self: *@This(), id: ObjectID, allocator: std.mem.Allocator) !std.ArrayList(u8) {
-            const dto = try self.getDTO(id);
+        pub fn saveJson(self: *@This(), id: ObjectID, allocator: std.mem.Allocator) !std.ArrayList(u8) {
+            const dto = try self.save(id);
             var out: std.io.Writer.Allocating = .init(allocator);
-            try std.json.Stringify.value(dto, .{ .whitespace = .indent_2 }, &out.writer);
+            try std.json.Stringify.value(dto, .{ .emit_null_optional_fields = false, .whitespace = .indent_2 }, &out.writer);
             return out.toArrayList();
         }
     };
@@ -168,6 +196,26 @@ pub fn deinit(self: *@This()) void {
     self.types.deinit(self.allocator);
 }
 
+fn getType(self: *@This(), index: ObjectID.Index) !*ObjectType {
+    if (index >= self.types.items.len) {
+        return ObjectError.invalidType;
+    }
+    return &self.types.items[index];
+}
+
+pub fn new(self: *@This(), index: ObjectID.Index, parent: ObjectID) !ObjectID {
+    const typ = try self.getType(index);
+    return try typ.v_new(typ.ptr, parent);
+}
+pub fn loadJson(self: *@This(), id: ObjectID, s: []const u8) !void {
+    const typ = try self.getType(id.type_index);
+    try typ.v_load_json(typ.ptr, id, s);
+}
+pub fn saveJson(self: *@This(), id: ObjectID, allocator: std.mem.Allocator) !std.ArrayList(u8) {
+    const typ = try self.getType(id.type_index);
+    return try typ.v_save_json(typ.ptr, id, allocator);
+}
 pub fn getParent(self: *@This(), id: ObjectID) ?ObjectID {
-    return self.types.items[id.type_index].info.items[id.index].parent;
+    const typ = try self.getType(id.type_index);
+    return typ.info.items[id.index].parent;
 }

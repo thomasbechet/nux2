@@ -4,6 +4,7 @@ const input = @import("input.zig");
 
 const Self = @This();
 const Inputmap = struct {
+    const DTO = struct {};
     const Entry = struct {
         name: []const u8,
         key: input.Key,
@@ -16,10 +17,15 @@ const Inputmap = struct {
             if (std.mem.eql(u8, name, entry.name)) break entry;
         };
     }
+
+    pub fn load(_: *@This(), _: *Self, _: DTO) !void {}
+    pub fn save(_: *@This(), _: *Self) !DTO {
+        return .{};
+    }
 };
 
 allocator: std.mem.Allocator,
-inputmaps: nux.Objects(Inputmap, void, Self),
+inputmaps: nux.Objects(Inputmap, Inputmap.DTO, Self),
 
 pub fn init(self: *Self, core: *nux.Core) !void {
     self.allocator = core.allocator;

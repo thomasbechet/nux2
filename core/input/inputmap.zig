@@ -19,7 +19,7 @@ const Inputmap = struct {
 };
 
 allocator: std.mem.Allocator,
-inputmaps: nux.Objects(Inputmap, Self),
+inputmaps: nux.Objects(Inputmap, void, Self),
 
 pub fn init(self: *Self, core: *nux.Core) !void {
     self.allocator = core.allocator;

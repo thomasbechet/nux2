@@ -37,7 +37,7 @@ const ObjectType = struct {
     v_new: *const fn (*anyopaque) anyerror!void,
 };
 
-pub fn Objects(comptime T: type, comptime Context: type) type {
+pub fn Objects(comptime T: type, comptime DTO: type, comptime Context: type) type {
     return struct {
         const default_capacity = 1000;
 
@@ -111,13 +111,48 @@ pub fn Objects(comptime T: type, comptime Context: type) type {
             if (self.type_index != id.type_index) {
                 return ObjectError.invalidType;
             }
-            if (id.index >= self.info.items.len || self.info[id.index].alive) {
+            if (id.index >= self.info.items.len or self.info.items[id.index].alive) {
                 return ObjectError.invalidIndex;
             }
-            if (self.meta[id.index].version != id.version) {
+            if (self.info.items[id.index].version != id.version) {
                 return ObjectError.invalidVersion;
             }
-            return &self.data.items[id];
+            return &self.data.items[id.index];
+        }
+
+        pub fn setDTO(self: *@This(), id: ObjectID, dto: DTO) !void {
+            const data = try self.get(id);
+            if (@hasDecl(T, "load")) {
+                try T.load(data, self.context, dto);
+            } else if (comptime std.meta.eql(T, DTO)) {
+                data.* = dto;
+            } else {
+                @compileError("no dto loading function");
+            }
+        }
+
+        pub fn setJson(self: *@This(), id: ObjectID, s: []const u8) !void {
+            const parsed = try std.json.parseFromSlice(DTO, self.allocator, s, .{ .allocate = .alloc_always });
+            defer parsed.deinit();
+            try self.setDTO(id, parsed.value);
+        }
+
+        pub fn getDTO(self: *@This(), id: ObjectID) !DTO {
+            const data = try self.get(id);
+            if (@hasDecl(T, "store")) {
+                return try T.store(data);
+            } else if (comptime std.meta.eql(T, DTO)) {
+                return data.*;
+            } else {
+                @compileError("no dto storing function");
+            }
+        }
+
+        pub fn getJson(self: *@This(), id: ObjectID, allocator: std.mem.Allocator) !std.ArrayList(u8) {
+            const dto = try self.getDTO(id);
+            var out: std.io.Writer.Allocating = .init(allocator);
+            try std.json.Stringify.value(dto, .{ .whitespace = .indent_2 }, &out.writer);
+            return out.toArrayList();
         }
     };
 }

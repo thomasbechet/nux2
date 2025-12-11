@@ -7,14 +7,10 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // Core
-    const nux = b.addModule("nux", .{
-        .root_source_file = b.path("core/core.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{} });
 
     // Runtime
-    const exe = b.addExecutable(.{
+    const runtime = b.addExecutable(.{
         .name = "nux",
         .use_llvm = true,
         .root_module = b.createModule(.{
@@ -22,21 +18,21 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "nux", .module = nux },
+                .{ .name = "nux", .module = core },
             },
         }),
     });
-    b.installArtifact(exe);
+    b.installArtifact(runtime);
 
     // GLFW
     const glfw_dep = b.dependency("glfw", .{ .target = target, .optimize = optimize });
     const glfw_lib = glfw_dep.artifact("glfw");
-    exe.linkLibrary(glfw_lib);
-    exe.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
+    runtime.linkLibrary(glfw_lib);
+    runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
 
     // Run
     const run_step = b.step("run", "run the app");
-    const run_cmd = b.addRunArtifact(exe);
+    const run_cmd = b.addRunArtifact(runtime);
     run_step.dependOn(&run_cmd.step);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
@@ -45,11 +41,11 @@ pub fn build(b: *std.Build) void {
 
     // Tests
     const nux_tests = b.addTest(.{
-        .root_module = nux,
+        .root_module = core,
     });
     const run_mod_tests = b.addRunArtifact(nux_tests);
     const exe_tests = b.addTest(.{
-        .root_module = exe.root_module,
+        .root_module = runtime.root_module,
     });
     const run_exe_tests = b.addRunArtifact(exe_tests);
     const test_step = b.step("test", "run tests");
@@ -61,13 +57,13 @@ pub fn build(b: *std.Build) void {
         "lldb",
         "--",
     });
-    lldb.addArtifactArg(exe);
+    lldb.addArtifactArg(runtime);
     const lldb_step = b.step("debug", "run the tests under lldb");
     lldb_step.dependOn(&lldb.step);
 
     // Valgrind
     const valgrind = b.addSystemCommand(&.{"valgrind"});
-    valgrind.addArtifactArg(exe);
+    valgrind.addArtifactArg(runtime);
     const valgrind_step = b.step("valgrind", "run the runtime with valgrind");
     valgrind_step.dependOn(&valgrind.step);
 }

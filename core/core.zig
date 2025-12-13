@@ -14,7 +14,7 @@ const Module = struct {
 
     allocator: std.mem.Allocator,
     name: []const u8,
-    ptr: *anyopaque,
+    v_ptr: *anyopaque,
     v_init: ?*const fn (*anyopaque, core: *Core) anyerror!void,
     v_deinit: ?*const fn (*anyopaque) void,
     v_update: ?*const fn (*anyopaque) anyerror!void,
@@ -52,7 +52,7 @@ const Module = struct {
         return .{
             .allocator = allocator,
             .name = @typeName(T),
-            .ptr = mod,
+            .v_ptr = mod,
             .v_init = gen.init,
             .v_deinit = gen.deinit,
             .v_update = gen.update,
@@ -60,21 +60,21 @@ const Module = struct {
         };
     }
     fn destroy(self: *@This()) void {
-        self.v_destroy(self.allocator, self.ptr);
+        self.v_destroy(self.allocator, self.v_ptr);
     }
     fn init(self: *@This(), core: *Core) !void {
         if (self.v_init) |call| {
-            try call(self.ptr, core);
+            try call(self.v_ptr, core);
         }
     }
     fn deinit(self: *@This()) void {
         if (self.v_deinit) |call| {
-            call(self.ptr);
+            call(self.v_ptr);
         }
     }
     fn update(self: *@This()) !void {
         if (self.v_update) |call| {
-            try call(self.ptr);
+            try call(self.v_ptr);
         }
     }
 };
@@ -129,7 +129,7 @@ pub const Core = struct {
     pub fn findModule(self: *@This(), comptime T: type) !*T {
         for (self.modules.items) |*mod| {
             if (std.mem.eql(u8, mod.name, @typeName(T))) {
-                return @ptrCast(@alignCast(mod.ptr));
+                return @ptrCast(@alignCast(mod.v_ptr));
             }
         }
         return Module.Error.moduleNotFound;

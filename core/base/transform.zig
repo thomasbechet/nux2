@@ -35,8 +35,7 @@ pub fn deinit(self: *Self) void {
 }
 
 pub fn new(self: *Self) !nux.ObjectID {
-    const p = try self.transforms.new(.null);
-    return self.transforms.getID(p);
+    return try self.transforms.new(.null);
 }
 pub fn getPosition(self: *Self, id: nux.ObjectID) nux.Vec3 {
     return self.transforms.get(id).position;

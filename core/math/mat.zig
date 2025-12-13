@@ -308,7 +308,7 @@ pub fn Mat(r: comptime_int, c: comptime_int, comptime T: type) type {
             return result;
         }
 
-        pub fn fromQuaternion(q: Quaternion(T)) Self {
+        pub fn fromQuaternion(q: Quat(T)) Self {
             comptime {
                 if (r != 4 or c != 4) {
                     @compileError("fromQuaternion is only defined for 4x4 matrices");

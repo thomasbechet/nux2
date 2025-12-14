@@ -42,7 +42,6 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(runtime);
     runtime.linkLibrary(glfw_lib);
     runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
-    runtime.addIncludePath(b.path("externals/glad"));
 
     // run
     const run_step = b.step("run", "run the app");

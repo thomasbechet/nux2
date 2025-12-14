@@ -1,0 +1,14 @@
+{
+  "name": "nux-palettes",
+  "displayName": "NUX Palette",
+  "description": "Palettes for NUX",
+  "version": "1.0",
+  "categories": [
+    "Palettes"
+  ],
+  "contributes": {
+    "palettes": [
+      { "id": "Sweetie16", "path": "./sweetie-16.gpl" }
+    ]
+  }
+}

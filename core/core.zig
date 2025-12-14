@@ -1,4 +1,5 @@
 const std = @import("std");
+const zlua = @import("zlua");
 pub const object = @import("base/object.zig");
 pub const ObjectID = object.ObjectID;
 pub const Objects = object.Objects;
@@ -87,7 +88,7 @@ pub const Core = struct {
 
     object: *object,
 
-    pub fn init(allocator: std.mem.Allocator, comptime mods: anytype) !*@This() {
+    pub fn init(allocator: std.mem.Allocator, comptime mods: anytype) !*Core {
         var core = try allocator.create(@This());
         core.allocator = allocator;
         core.modules = try .initCapacity(allocator, 32);
@@ -102,10 +103,21 @@ pub const Core = struct {
         // Register user modules
         try core.register(mods);
 
+        // Initialize the Lua vm
+        var lua = try zlua.Lua.init(allocator);
+        defer lua.deinit();
+
+        // Add an integer to the Lua stack and retrieve it
+        lua.pushInteger(42);
+        std.debug.print("{}\n", .{try lua.toInteger(1)});
+
+        const buffer = try std.fs.cwd().readFileAllocOptions(allocator, "test-samples/rigged_simple/RiggedSimple.gltf", 512_000, null, std.mem.Alignment.@"4", null);
+        defer allocator.free(buffer);
+
         return core;
     }
 
-    pub fn deinit(self: *@This()) void {
+    pub fn deinit(self: *Core) void {
         var i: usize = self.modules.items.len;
         while (i > 0) {
             i -= 1;
@@ -120,13 +132,13 @@ pub const Core = struct {
         self.allocator.destroy(self);
     }
 
-    pub fn update(self: *@This()) !void {
+    pub fn update(self: *Core) !void {
         for (self.modules.items) |*mod| {
             try mod.update();
         }
     }
 
-    pub fn findModule(self: *@This(), comptime T: type) !*T {
+    pub fn findModule(self: *Core, comptime T: type) !*T {
         for (self.modules.items) |*mod| {
             if (std.mem.eql(u8, mod.name, @typeName(T))) {
                 return @ptrCast(@alignCast(mod.v_ptr));
@@ -135,7 +147,7 @@ pub const Core = struct {
         return Module.Error.moduleNotFound;
     }
 
-    fn register(self: *@This(), comptime mods: anytype) !void {
+    fn register(self: *Core, comptime mods: anytype) !void {
         const first = self.modules.items.len;
         inline for (mods) |mod| {
             std.log.info("register module {s}...", .{@typeName(mod)});
@@ -147,7 +159,7 @@ pub const Core = struct {
         }
     }
 
-    fn registerOne(self: *@This(), comptime T: anytype) !*T {
+    fn registerOne(self: *Core, comptime T: anytype) !*T {
         try self.register(.{T});
         return self.findModule(T);
     }

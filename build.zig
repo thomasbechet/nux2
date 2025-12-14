@@ -2,14 +2,20 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
 
-    // Configuration
+    // configuration
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // Core
-    const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{} });
+    // ziglua
+    const ziglua_dep = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua52 });
 
-    // Runtime
+    // zgltf
+    const zgltf_dep = b.dependency("zgltf", .{});
+
+    // core
+    const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{ .{ .name = "zlua", .module = ziglua_dep.module("zlua") }, .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") } } });
+
+    // runtime
     const runtime = b.addExecutable(.{
         .name = "nux",
         .use_llvm = true,
@@ -24,13 +30,13 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(runtime);
 
-    // GLFW
+    // gltf
     const glfw_dep = b.dependency("glfw", .{ .target = target, .optimize = optimize });
     const glfw_lib = glfw_dep.artifact("glfw");
     runtime.linkLibrary(glfw_lib);
     runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
 
-    // Run
+    // run
     const run_step = b.step("run", "run the app");
     const run_cmd = b.addRunArtifact(runtime);
     run_step.dependOn(&run_cmd.step);
@@ -39,7 +45,7 @@ pub fn build(b: *std.Build) void {
         run_cmd.addArgs(args);
     }
 
-    // Tests
+    // tests
     const nux_tests = b.addTest(.{
         .root_module = core,
     });
@@ -52,7 +58,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
 
-    // LLDB
+    // lldb
     const lldb = b.addSystemCommand(&.{
         "lldb",
         "--",
@@ -61,7 +67,7 @@ pub fn build(b: *std.Build) void {
     const lldb_step = b.step("debug", "run the tests under lldb");
     lldb_step.dependOn(&lldb.step);
 
-    // Valgrind
+    // valgrind
     const valgrind = b.addSystemCommand(&.{"valgrind"});
     valgrind.addArtifactArg(runtime);
     const valgrind_step = b.step("valgrind", "run the runtime with valgrind");

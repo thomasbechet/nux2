@@ -3,9 +3,7 @@
     .version = "0.0.0",
     .fingerprint = 0xc1ce10817941648d,
     .minimum_zig_version = "0.15.2",
-    .dependencies = .{
-        .glfw = .{ .path = "externals/glfw.zig" },
-    },
+    .dependencies = .{ .glfw = .{ .path = "externals/glfw.zig" }, .ziglua = .{ .path = "externals/ziglua-0.6.0" }, .zgltf = .{ .path = "externals/zgltf" } },
     .paths = .{
         "build.zig",
         "build.zig.zon",

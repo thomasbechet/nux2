@@ -1,5 +1,6 @@
 const std = @import("std");
 const zlua = @import("zlua");
+const zigimg = @import("zigimg");
 pub const object = @import("base/object.zig");
 pub const ObjectID = object.ObjectID;
 pub const Objects = object.Objects;
@@ -106,6 +107,10 @@ pub const Core = struct {
         // Initialize the Lua vm
         var lua = try zlua.Lua.init(allocator);
         defer lua.deinit();
+
+        var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE * 10]u8 = undefined;
+        var image = try zigimg.Image.fromFilePath(allocator, "pannel22.jpg", read_buffer[0..]);
+        defer image.deinit(allocator);
 
         // Add an integer to the Lua stack and retrieve it
         lua.pushInteger(42);

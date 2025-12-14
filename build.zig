@@ -8,13 +8,23 @@ pub fn build(b: *std.Build) void {
 
     // ziglua
     const ziglua_dep = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua52 });
-
     // zgltf
-    const zgltf_dep = b.dependency("zgltf", .{});
-
+    const zgltf_dep = b.dependency("zgltf", .{ .target = target, .optimize = optimize });
+    // zigimg
+    const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
     // core
-    const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{ .{ .name = "zlua", .module = ziglua_dep.module("zlua") }, .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") } } });
+    const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{ .{ .name = "zlua", .module = ziglua_dep.module("zlua") }, .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") }, .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") } } });
 
+    // gltf
+    const glfw_dep = b.dependency("glfw", .{ .target = target, .optimize = optimize });
+    const glfw_lib = glfw_dep.artifact("glfw");
+    // zigglgen
+    const zigglgen = @import("zigglgen").generateBindingsModule(b, .{
+        .api = .gl,
+        .version = .@"4.3",
+        .profile = .core,
+        .extensions = &.{},
+    });
     // runtime
     const runtime = b.addExecutable(.{
         .name = "nux",
@@ -25,16 +35,14 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "nux", .module = core },
+                .{ .name = "gl", .module = zigglgen },
             },
         }),
     });
     b.installArtifact(runtime);
-
-    // gltf
-    const glfw_dep = b.dependency("glfw", .{ .target = target, .optimize = optimize });
-    const glfw_lib = glfw_dep.artifact("glfw");
     runtime.linkLibrary(glfw_lib);
     runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
+    runtime.addIncludePath(b.path("externals/glad"));
 
     // run
     const run_step = b.step("run", "run the app");

@@ -1,8 +1,6 @@
 const nux = @import("../core.zig");
 const std = @import("std");
 
-const Module = @This();
-
 const Transform = struct {
     const Context = Module;
     const Self = @This();
@@ -28,18 +26,21 @@ const Transform = struct {
     }
 };
 
-object: *nux.Module(Object),
-transforms: *nux.Objects(Transform),
+pub const Module = struct {
+    object: *nux.object.Module,
+    transforms: *nux.Objects(Transform),
 
-pub fn init(self: *@This(), core: *nux.Core) !void {
-    self.transforms = try .init(core);
-}
-pub fn deinit(_: *@This()) !void {}
+    pub fn init(self: *@This(), core: *nux.Core) !void {
+        self.object = core.object;
+        self.transforms = try core.object.register(Transform, .{});
+    }
+    pub fn deinit(_: *@This()) !void {}
 
-pub fn new(self: *@This()) !nux.ObjectID {
-    return try self.transforms.new(.null);
-}
-pub fn delete(self: *@This(), id: nux.ObjectID) !void {}
-pub fn getPosition(self: *@This(), id: nux.ObjectID) nux.Vec3 {
-    return self.transforms.get(id).position;
-}
+    pub fn new(self: *@This()) !nux.ObjectID {
+        return try self.transforms.new(.null);
+    }
+    pub fn delete(_: *@This(), _: nux.ObjectID) !void {}
+    pub fn getPosition(self: *@This(), id: nux.ObjectID) nux.Vec3 {
+        return self.transforms.get(id).position;
+    }
+};

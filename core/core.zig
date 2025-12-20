@@ -1,28 +1,103 @@
 const std = @import("std");
 const zlua = @import("zlua");
 const zigimg = @import("zigimg");
-const object = @import("object.zig");
-const module = @import("module.zig");
+
+pub const object = @import("base/object.zig");
+pub const transform = @import("base/transform.zig");
 
 pub const ObjectID = object.ObjectID;
 pub const Objects = object.Objects;
 pub const vec = @import("math/vec.zig");
-pub const transform = @import("base/transform.zig");
 pub const Vec2 = vec.Vec2;
 pub const Vec3 = vec.Vec3;
 
+pub const Module = struct {
+    pub const Error = error{
+        moduleNotFound,
+    };
+
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    v_ptr: *anyopaque,
+    v_init: ?*const fn (*anyopaque, core: *Core) anyerror!void,
+    v_deinit: ?*const fn (*anyopaque) void,
+    v_update: ?*const fn (*anyopaque) anyerror!void,
+    v_destroy: *const fn (std.mem.Allocator, *anyopaque) void,
+
+    pub fn init(comptime T: type, allocator: std.mem.Allocator) !@This() {
+        const mod: *T = try allocator.create(T);
+
+        const gen = struct {
+            const PT = @typeInfo(*T).pointer.child;
+            fn init(pointer: *anyopaque, c: *Core) anyerror!void {
+                const self: *T = @ptrCast(@alignCast(pointer));
+                inline for (@typeInfo(T).@"struct".fields) |field| {
+                    if (@typeInfo(field.type) == .@"struct" and @hasDecl(field.type, "IsObjects")) {}
+                }
+                if (@hasDecl(PT, "init")) {
+                    return PT.init(self, c);
+                }
+            }
+            fn deinit(pointer: *anyopaque) void {
+                const self: *T = @ptrCast(@alignCast(pointer));
+                if (@hasDecl(PT, "deinit")) {
+                    PT.deinit(self);
+                }
+            }
+            fn update(pointer: *anyopaque) anyerror!void {
+                const self: *T = @ptrCast(@alignCast(pointer));
+                if (@hasDecl(PT, "update")) {
+                    return PT.update(self);
+                }
+            }
+            fn free(alloc: std.mem.Allocator, pointer: *anyopaque) void {
+                const self: *T = @ptrCast(@alignCast(pointer));
+                alloc.destroy(self);
+            }
+        };
+
+        return .{
+            .allocator = allocator,
+            .name = @typeName(T),
+            .v_ptr = mod,
+            .v_init = gen.init,
+            .v_deinit = gen.deinit,
+            .v_update = gen.update,
+            .v_destroy = gen.free,
+        };
+    }
+    pub fn deinit(self: *@This()) void {
+        self.v_destroy(self.allocator, self.v_ptr);
+    }
+    pub fn call_init(self: *@This(), core: *Core) !void {
+        if (self.v_init) |call| {
+            try call(self.v_ptr, core);
+        }
+    }
+    pub fn call_deinit(self: *@This()) void {
+        if (self.v_deinit) |call| {
+            call(self.v_ptr);
+        }
+    }
+    pub fn call_update(self: *@This()) !void {
+        if (self.v_update) |call| {
+            try call(self.v_ptr);
+        }
+    }
+};
+
 pub const Core = struct {
     allocator: std.mem.Allocator,
-    object: object.Module,
-    module: *@import("module.zig"),
+    modules: std.StringHashMap(Module),
+    object: *object.Module,
 
     pub fn init(allocator: std.mem.Allocator, comptime mods: anytype) !*Core {
         var core = try allocator.create(@This());
         core.allocator = allocator;
-        core.module = .init(allocator);
-        core.object = .init(allocator);
+        core.modules = .init(allocator);
 
         // Register core modules
+        core.object = try core.registerModule(object.Module);
         try core.registerModules(.{
             @import("base/transform.zig").Module,
             @import("input/input.zig").Module,
@@ -53,11 +128,11 @@ pub const Core = struct {
         var it = self.modules.iterator();
         while (it.next()) |entry| {
             std.log.info("deinit module {s}...", .{entry.key_ptr.*});
-            entry.value_ptr.deinit();
+            entry.value_ptr.call_deinit();
         }
         it = self.modules.iterator();
         while (it.next()) |entry| {
-            entry.value_ptr.destroy();
+            entry.value_ptr.deinit();
         }
         self.modules.deinit();
         self.module.deinit();
@@ -67,32 +142,31 @@ pub const Core = struct {
     pub fn update(self: *Core) !void {
         var it = self.modules.iterator();
         while (it.next()) |entry| {
-            try entry.value_ptr.update();
+            try entry.value_ptr.call_update();
         }
     }
 
-    fn registerModules(self: *Core, comptime mods: anytype) !void {
+    pub fn registerModules(self: *Core, comptime mods: anytype) !void {
         inline for (mods) |mod| {
             std.log.info("register module {s}...", .{@typeName(mod)});
-            try self.modules.put(@typeName(mod), try .create(mod, self.allocator));
+            try self.modules.put(@typeName(mod), try .init(mod, self.allocator));
         }
         inline for (mods) |mod| {
             std.log.info("init module {s}...", .{@typeName(mod)});
-            try self.modules.getPtr(@typeName(mod)).?.init(self);
+            try self.modules.getPtr(@typeName(mod)).?.call_init(self);
         }
     }
 
-    fn registerModule(self: *Core, comptime T: anytype) !*T {
+    pub fn registerModule(self: *Core, comptime T: anytype) !*T {
         try self.registerModules(.{T});
         return self.getModule(T);
     }
 
-    pub fn getModule(self: *Core, comptime T: type) !*T {
-        return self.module.getModule(T);
-    }
-
-    pub fn registerObject(self: *Core, comptime T: type) !*Objects(T) {
-        return try self.objects.put(@typeName(T), .init(self));
+    pub fn getModule(self: *@This(), comptime T: type) !*T {
+        if (self.modules.getPtr(@typeName(T))) |mod| {
+            return @ptrCast(@alignCast(mod.v_ptr));
+        }
+        return Module.Error.moduleNotFound;
     }
 };
 

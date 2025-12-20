@@ -1,5 +1,5 @@
 const std = @import("std");
-const nux = @import("core.zig");
+const nux = @import("../core.zig");
 
 pub const ObjectError = error{
     invalidIndex,
@@ -25,7 +25,7 @@ pub const ObjectID = packed struct(u64) {
     index: Index,
 };
 
-const ObjectMeta = struct {
+const Object = struct {
     version: u8,
     hash: u32,
     alive: bool,
@@ -36,7 +36,7 @@ const ObjectMeta = struct {
 };
 
 pub const ObjectType = struct {
-    objects: *std.ArrayList(ObjectMeta),
+    objects: *std.ArrayList(Object),
     name: []const u8,
     ptr: *anyopaque,
     v_new: *const fn (*anyopaque, id: ObjectID) anyerror!ObjectID,
@@ -52,45 +52,22 @@ pub fn Objects(comptime T: type) type {
         context: *anyopaque,
         type_index: ObjectID.TypeIndex,
         data: std.ArrayList(T),
-        objects: std.ArrayList(ObjectMeta),
+        objects: std.ArrayList(Object),
         free: std.ArrayList(ObjectID.Index),
 
         pub fn init(
-            self: *@This(),
             core: *nux.Core,
             context: *anyopaque,
-        ) !void {
-            self.type_index = @intCast(core.object.types.items.len);
-
-            const Self = @This();
-            const gen = struct {
-                fn new(pointer: *anyopaque, id: ObjectID) anyerror!ObjectID {
-                    const p: *Self = @ptrCast(@alignCast(pointer));
-                    return try Self.new(p, id);
-                }
-                // fn loadJson(pointer: *anyopaque, id: ObjectID, s: []const u8) anyerror!void {
-                //     const p: *Self = @ptrCast(@alignCast(pointer));
-                //     try Self.loadJson(p, id, s);
-                // }
-                // fn saveJson(pointer: *anyopaque, id: ObjectID, allocator: std.mem.Allocator) anyerror!std.ArrayList(u8) {
-                //     const p: *Self = @ptrCast(@alignCast(pointer));
-                //     return try Self.saveJson(p, id, allocator);
-                // }
+            type_index: ObjectID.TypeIndex,
+        ) !Objects(T) {
+            return .{
+                .allocator = core.allocator,
+                .context = context,
+                .type_index = type_index,
+                .data = try .initCapacity(core.allocator, default_capacity),
+                .objects = try .initCapacity(core.allocator, default_capacity),
+                .free = try .initCapacity(core.allocator, default_capacity),
             };
-
-            var typ = try core.object.types.addOne(core.allocator);
-            typ.name = @typeName(T);
-            typ.ptr = self;
-            typ.objects = &self.objects;
-            typ.v_new = gen.new;
-            // typ.v_load_json = gen.loadJson;
-            // typ.v_save_json = gen.saveJson;
-
-            self.allocator = core.allocator;
-            self.context = context;
-            self.data = try .initCapacity(core.allocator, default_capacity);
-            self.objects = try .initCapacity(core.allocator, default_capacity);
-            self.free = try .initCapacity(core.allocator, default_capacity);
         }
 
         pub fn deinit(self: *@This()) void {
@@ -196,95 +173,127 @@ pub fn Objects(comptime T: type) type {
     };
 }
 
-allocator: std.mem.Allocator,
-types: std.StringHashMap(ObjectType),
+pub const Module = struct {
+    allocator: std.mem.Allocator,
+    types: std.ArrayList(ObjectType),
+    name_to_index: std.StringHashMap(ObjectID.TypeIndex),
 
-pub fn init(self: *@This(), core: *nux.Core) !void {
-    self.allocator = core.allocator;
-    self.types = try .initCapacity(core.allocator, 32);
-}
-pub fn deinit(self: *@This()) void {
-    self.types.deinit(self.allocator);
-}
+    pub fn init(self: *Module, core: *nux.Core) !void {
+        self.allocator = core.allocator;
+        self.types = try .initCapacity(core.allocator, 32);
+        self.name_to_index = .init(core.allocator);
+    }
+    pub fn deinit(self: *Module) void {
+        self.types.deinit(self.allocator);
+        self.name_to_index.deinit();
+    }
 
-fn getType(self: *@This(), index: ObjectID.Index) !*ObjectType {
-    if (index >= self.types.items.len) {
+    fn getTypeByIndex(self: *Module, index: ObjectID.TypeIndex) !*ObjectType {
+        if (index >= self.types.items.len) {
+            return ObjectError.invalidType;
+        }
+        return &self.types.items[index];
+    }
+    fn getType(self: *Module, comptime T: type) !*ObjectType {
+        if (self.name_to_index.get(@typeName(T))) |index| {
+            return self.getTypeByIndex(index);
+        }
         return ObjectError.invalidType;
     }
-    return &self.types.items[index];
-}
-fn get(self: *@This(), id: ObjectID) ?*anyopaque {
-    if (id.version == 0) {
-        return ObjectError.invalidType;
+    fn getData(self: *Module, id: ObjectID) ?*anyopaque {
+        if (id.version == 0) {
+            return ObjectError.invalidType;
+        }
+        const typ = try self.getType(id.type_index);
+        if (id.index >= typ.objects.items.len) {
+            return ObjectError.invalidIndex;
+        }
+        const info = &typ.info.items[id.index];
+        if (id.version != info.version) {
+            return ObjectError.invalidVersion;
+        }
     }
-    const typ = try self.getType(id.type_index);
-    if (id.index >= typ.objects.items.len) {
-        return ObjectError.invalidIndex;
+    fn get(self: *Module, id: ObjectID) !*Object {
+        if (id.version == 0) {
+            return ObjectError.invalidType;
+        }
+        const typ = try self.getType(id.type_index);
+        if (id.index >= typ.objects.items.len) {
+            return ObjectError.invalidIndex;
+        }
+        const obj = &typ.objects.items[id.index];
+        if (id.version != obj.version) {
+            return ObjectError.invalidVersion;
+        }
+        return obj;
     }
-    const info = &typ.info.items[id.index];
-    if (id.version != info.version) {
-        return ObjectError.invalidVersion;
-    }
-}
-fn getInfo(self: *@This(), id: ObjectID) !*ObjectMeta {
-    if (id.version == 0) {
-        return ObjectError.invalidType;
-    }
-    const typ = try self.getType(id.type_index);
-    if (id.index >= typ.objects.items.len) {
-        return ObjectError.invalidIndex;
-    }
-    const info = &typ.objects.items[id.index];
-    if (id.version != info.version) {
-        return ObjectError.invalidVersion;
-    }
-    return info;
-}
 
-pub fn new(self: *@This(), index: ObjectID.Index, parent: ObjectID) !ObjectID {
-    const typ = try self.getType(index);
-    return try typ.v_new(typ.ptr, parent);
-}
-pub fn loadJson(self: *@This(), id: ObjectID, s: []const u8) !void {
-    const typ = try self.getType(id.type_index);
-    try typ.v_load_json(typ.ptr, id, s);
-}
-pub fn saveJson(self: *@This(), id: ObjectID, allocator: std.mem.Allocator) !std.ArrayList(u8) {
-    const typ = try self.getType(id.type_index);
-    return try typ.v_save_json(typ.ptr, id, allocator);
-}
-pub fn getParent(self: *@This(), id: ObjectID) !ObjectID {
-    const info = try self.getInfo(id);
-    return info.parent;
-}
-pub fn setParent(self: *@This(), id: ObjectID, parent: ObjectID) !void {
-    _ = parent;
-    const info = try self.getInfo(id);
-    return info.parent;
-}
-pub fn setName(self: *@This(), id: ObjectID, name: []const u8) void {
-    _ = self;
-    _ = id;
-    _ = name;
-}
-// pub fn findEntity(self: *@This(), id: ObjectID) !ObjectID {
-//
-// }
-fn dump_recurs(self: *@This(), id: ObjectID, depth: u32) void {
-    const info = self.getInfo(id) catch return;
-    const typ = self.getType(id.type_index) catch unreachable;
-    for (0..depth) |_| {
-        std.log.info(" ", .{});
+    pub fn register(self: *Module, comptime T: type, comptime Options: anytype) !*Objects(T) {
+        _ = Options;
+        // const gen = struct {
+        //     fn new(pointer: *anyopaque, id: ObjectID) anyerror!ObjectID {
+        //         const p: *Objects(T) = @ptrCast(@alignCast(pointer));
+        //         return try p.new(p, id);
+        //     }
+        // fn loadJson(pointer: *anyopaque, id: ObjectID, s: []const u8) anyerror!void {
+        //     const p: *Self = @ptrCast(@alignCast(pointer));
+        //     try Self.loadJson(p, id, s);
+        // }
+        // fn saveJson(pointer: *anyopaque, id: ObjectID, allocator: std.mem.Allocator) anyerror!std.ArrayList(u8) {
+        //     const p: *Self = @ptrCast(@alignCast(pointer));
+        //     return try Self.saveJson(p, id, allocator);
+        // }
+        // };
+        const type_index: ObjectID.TypeIndex = @intCast(self.types.items.len);
+        try self.name_to_index.put(@typeName(T), type_index);
+        (try self.types.addOne(self.allocator)).* = .init();
     }
-    std.debug.print("type {s}:\n", .{typ.name});
 
-    var next = info.child;
-    while (!next.isNull()) {
-        const cinfo = self.getInfo(id) catch break;
-        dump_recurs(self, next, depth + 1);
-        next = cinfo.next;
+    pub fn new(self: *Module, index: ObjectID.Index, parent: ObjectID) !ObjectID {
+        const typ = try self.getType(index);
+        return try typ.v_new(typ.ptr, parent);
     }
-}
-pub fn dump(self: *@This(), id: ObjectID) void {
-    dump_recurs(self, id, 0);
-}
+    // pub fn loadJson(self: *@This(), id: ObjectID, s: []const u8) !void {
+    //     const typ = try self.getType(id.type_index);
+    //     try typ.v_load_json(typ.ptr, id, s);
+    // }
+    // pub fn saveJson(self: *@This(), id: ObjectID, allocator: std.mem.Allocator) !std.ArrayList(u8) {
+    //     const typ = try self.getType(id.type_index);
+    //     return try typ.v_save_json(typ.ptr, id, allocator);
+    // }
+    pub fn getParent(self: *Module, id: ObjectID) !ObjectID {
+        const info = try self.get(id);
+        return info.parent;
+    }
+    pub fn setParent(self: *Module, id: ObjectID, parent: ObjectID) !void {
+        _ = parent;
+        const info = try self.get(id);
+        return info.parent;
+    }
+    pub fn setName(self: *Module, id: ObjectID, name: []const u8) void {
+        _ = self;
+        _ = id;
+        _ = name;
+    }
+    // pub fn findEntity(self: *Module, id: ObjectID) !ObjectID {
+    //
+    // }
+    fn dump_recurs(self: *Module, id: ObjectID, depth: u32) void {
+        const info = self.get(id) catch return;
+        const typ = self.getType(id.type_index) catch unreachable;
+        for (0..depth) |_| {
+            std.log.info(" ", .{});
+        }
+        std.debug.print("type {s}:\n", .{typ.name});
+
+        var next = info.child;
+        while (!next.isNull()) {
+            const cinfo = self.get(id) catch break;
+            dump_recurs(self, next, depth + 1);
+            next = cinfo.next;
+        }
+    }
+    pub fn dump(self: *Module, id: ObjectID) void {
+        dump_recurs(self, id, 0);
+    }
+};

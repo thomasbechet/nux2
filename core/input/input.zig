@@ -134,19 +134,19 @@ pub const Key = enum(u32) {
 
 pub const Module = struct {
     controllers: [Controller.max]Controller,
-};
 
-// pub fn init(self: *@This(), core: *nux.Core) !void {}
-//
-// pub fn isPressed(self: *@This(), controller: u32, name: []const u8) bool {
-//     return false;
-// }
-// pub fn isReleased(self: *@This(), controller: u32, name: []const u8) bool {
-//     return false;
-// }
-// pub fn isJustPressed(self: *@This(), controller: u32, name: []const u8) bool {
-//     return false;
-// }
-// pub fn isJustReleased(self: *@This(), controller: u32, name: []const u8) bool {
-//     return false;
-// }
+    // pub fn init(self: *Module, core: *nux.Core) !void {}
+
+    // pub fn isPressed(self: *Module, controller: u32, name: []const u8) bool {
+    //     return false;
+    // }
+    // pub fn isReleased(self: *Module, controller: u32, name: []const u8) bool {
+    //     return false;
+    // }
+    // pub fn isJustPressed(self: *Module, controller: u32, name: []const u8) bool {
+    //     return false;
+    // }
+    // pub fn isJustReleased(self: *Module, controller: u32, name: []const u8) bool {
+    //     return false;
+    // }
+};

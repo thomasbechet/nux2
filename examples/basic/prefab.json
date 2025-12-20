@@ -1,0 +1,10 @@
+{
+    "transform": {
+        "type": "transform",
+        "position": [0, 1, 2]
+    },
+    "body": {
+        "mesh": "my_mesh",
+        "transform": "transform"
+    }
+}

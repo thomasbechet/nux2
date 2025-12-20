@@ -11,8 +11,6 @@ const Controller = struct {
     prev_inputs: std.ArrayList(f32),
 };
 
-controllers: [Controller.max]Controller,
-
 pub const Key = enum(u32) {
     space = 0,
     apostrophe = 1,
@@ -132,6 +130,10 @@ pub const Key = enum(u32) {
     right_alt = 116,
     right_super = 117,
     menu = 118,
+};
+
+pub const Module = struct {
+    controllers: [Controller.max]Controller,
 };
 
 // pub fn init(self: *@This(), core: *nux.Core) !void {}

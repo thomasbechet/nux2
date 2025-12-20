@@ -11,40 +11,35 @@ const MyObject = struct {
     const Properties = struct {
         value: ?u32 = null,
     };
-
-    value: u32,
-
-    pub fn load(self: *@This(), _: *Module, props: Properties) !void {
-        if (props.value) |v| self.value = v;
-    }
-    pub fn save(self: *@This(), _: *Module) !Properties {
-        return .{ .value = self.value };
-    }
 };
 
 const Module = struct {
     const Self = @This();
 
-    objects: nux.Objects(MyObject, MyObject.Properties, Self),
+    objects: nux.Objects(struct {
+        value: u32,
+    }),
     object: *nux.object,
 
     pub fn init(self: *Self, core: *nux.Core) !void {
         try self.objects.init(core, self);
-        self.object = try core.findModule(nux.object);
+        self.object = try core.getModule(nux.object);
 
-        const id = try self.objects.new(.null);
-        const s =
-            \\{ "value": 666 }
-        ;
-        // try self.objects.loadJson(id, s);
-        std.log.info("{any}", .{id});
-        try self.object.loadJson(id, s);
-        std.log.info("{any}", .{try self.objects.get(id)});
-
-        var buf: [2048]u8 = undefined;
-        var fba = std.heap.FixedBufferAllocator.init(&buf);
-        const json = try self.object.saveJson(id, fba.allocator());
-        std.log.info("{s}", .{json.items});
+        const root = try self.objects.new(.null);
+        _ = try self.objects.new(root);
+        self.object.dump(root);
+        // const s =
+        //     \\{ "value": 666 }
+        // ;
+        // // try self.objects.loadJson(id, s);
+        // std.log.info("{any}", .{id});
+        // try self.object.loadJson(id, s);
+        // std.log.info("{any}", .{try self.objects.get(id)});
+        //
+        // var buf: [2048]u8 = undefined;
+        // var fba = std.heap.FixedBufferAllocator.init(&buf);
+        // const json = try self.object.saveJson(id, fba.allocator());
+        // std.log.info("{s}", .{json.items});
     }
 };
 

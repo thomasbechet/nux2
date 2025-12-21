@@ -2,14 +2,15 @@ const nux = @import("../core.zig");
 const zlua = @import("zlua");
 
 pub const Module = struct {
-    vm: *zlua.Lua,
-    transform: *@import("../base/transform.zig"),
+    lua: *zlua.Lua,
+    transform: *nux.transform.Module,
 
     pub fn init(self: *Module, core: *nux.Core) !void {
-        self.transform = try core.getModule();
+        self.transform = try core.findModule(nux.transform.Module);
         self.lua = try zlua.Lua.init(core.allocator);
-        defer self.lua.deinit();
     }
 
-    pub fn deinit(_: *Module) void {}
+    pub fn deinit(self: *Module) void {
+        self.lua.deinit();
+    }
 };

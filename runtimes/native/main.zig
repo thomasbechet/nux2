@@ -7,23 +7,19 @@ const Config = struct {
     root: []const u8 = "/tmp/demo",
 };
 
-const MyObject = struct {
-    const Properties = struct {
-        value: ?u32 = null,
-    };
-};
-
 const Module = struct {
     const Self = @This();
 
-    objects: nux.Objects(struct {
+    const MyObject = struct {
         value: u32,
-    }),
-    object: *nux.object,
+    };
+
+    objects: *nux.Objects(MyObject),
+    object: *nux.object.Module,
 
     pub fn init(self: *Self, core: *nux.Core) !void {
-        try self.objects.init(core, self);
-        self.object = try core.getModule(nux.object);
+        self.object = core.object;
+        self.objects = try core.object.register(MyObject, self, .{});
 
         const root = try self.objects.new(.null);
         _ = try self.objects.new(root);

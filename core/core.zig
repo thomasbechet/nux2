@@ -6,7 +6,7 @@ pub const object = @import("base/object.zig");
 pub const transform = @import("base/transform.zig");
 
 pub const ObjectID = object.ObjectID;
-pub const Objects = object.Objects;
+pub const Objects = object.ObjectPool;
 pub const vec = @import("math/vec.zig");
 pub const Vec2 = vec.Vec2;
 pub const Vec3 = vec.Vec3;
@@ -22,7 +22,7 @@ pub const Module = struct {
     v_init: ?*const fn (*anyopaque, core: *Core) anyerror!void,
     v_deinit: ?*const fn (*anyopaque) void,
     v_update: ?*const fn (*anyopaque) anyerror!void,
-    v_destroy: *const fn (std.mem.Allocator, *anyopaque) void,
+    v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
 
     pub fn init(comptime T: type, allocator: std.mem.Allocator) !@This() {
         const mod: *T = try allocator.create(T);
@@ -50,7 +50,10 @@ pub const Module = struct {
                     return PT.update(self);
                 }
             }
-            fn free(alloc: std.mem.Allocator, pointer: *anyopaque) void {
+            fn free(
+                pointer: *anyopaque,
+                alloc: std.mem.Allocator,
+            ) void {
                 const self: *T = @ptrCast(@alignCast(pointer));
                 alloc.destroy(self);
             }
@@ -67,7 +70,7 @@ pub const Module = struct {
         };
     }
     pub fn deinit(self: *@This()) void {
-        self.v_destroy(self.allocator, self.v_ptr);
+        self.v_destroy(self.v_ptr, self.allocator);
     }
     pub fn call_init(self: *@This(), core: *Core) !void {
         if (self.v_init) |call| {
@@ -135,7 +138,6 @@ pub const Core = struct {
             entry.value_ptr.deinit();
         }
         self.modules.deinit();
-        self.module.deinit();
         self.allocator.destroy(self);
     }
 

@@ -3,32 +3,33 @@ const nux = @import("../core.zig");
 
 pub const ObjectError = error{
     invalidIndex,
-    invalidType,
     invalidVersion,
+    nullId,
+    unknownType,
 };
 
-pub const ObjectID = packed struct(u64) {
-    pub const @"null" = @This(){ .type_index = 0, .version = 0, .index = 0 };
-    pub const TypeIndex = u16;
-    pub const Version = u16;
-    pub const Index = u32;
+pub const ObjectID = packed struct(u32) {
+    pub const @"null" = @This(){ .version = 0, .index = 0 };
 
     pub fn isNull(self: *const @This()) bool {
-        return self.version == 0;
+        return self.index == 0;
     }
     pub fn setNull(self: *@This()) void {
-        self.version = 0;
+        self.index = 0;
     }
 
-    type_index: TypeIndex,
-    version: Version,
-    index: Index,
+    version: Object.Version,
+    index: Object.Index,
 };
 
 const Object = struct {
+    pub const Version = u8;
+    pub const Index = u24;
+
     version: u8,
-    hash: u32,
-    alive: bool,
+    pool_index: u24,
+    type_index: ObjectType.Index,
+
     parent: ObjectID,
     prev: ObjectID,
     next: ObjectID,
@@ -36,102 +37,56 @@ const Object = struct {
 };
 
 pub const ObjectType = struct {
-    objects: *std.ArrayList(Object),
+    const Index = u32;
+
     name: []const u8,
-    ptr: *anyopaque,
-    v_new: *const fn (*anyopaque, id: ObjectID) anyerror!ObjectID,
-    v_load_json: *const fn (*anyopaque, id: ObjectID, s: []const u8) anyerror!void,
-    v_save_json: *const fn (*anyopaque, id: ObjectID, allocator: std.mem.Allocator) anyerror!std.ArrayList(u8),
+    v_ptr: *anyopaque,
+    v_new: *const fn (*anyopaque, parent: ObjectID) anyerror!ObjectID,
+    v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
+    // v_load_json: *const fn (*anyopaque, id: ObjectID, s: []const u8) anyerror!void,
+    // v_save_json: *const fn (*anyopaque, id: ObjectID, allocator: std.mem.Allocator) anyerror!std.ArrayList(u8),
 };
 
-pub fn Objects(comptime T: type) type {
+pub fn ObjectPool(comptime T: type) type {
     return struct {
         const default_capacity = 1000;
 
         allocator: std.mem.Allocator,
         context: *anyopaque,
-        type_index: ObjectID.TypeIndex,
+        object: *Module,
+        type_index: ObjectType.Index,
         data: std.ArrayList(T),
-        objects: std.ArrayList(Object),
-        free: std.ArrayList(ObjectID.Index),
-
-        pub fn init(
-            core: *nux.Core,
-            context: *anyopaque,
-            type_index: ObjectID.TypeIndex,
-        ) !Objects(T) {
-            return .{
-                .allocator = core.allocator,
-                .context = context,
-                .type_index = type_index,
-                .data = try .initCapacity(core.allocator, default_capacity),
-                .objects = try .initCapacity(core.allocator, default_capacity),
-                .free = try .initCapacity(core.allocator, default_capacity),
-            };
-        }
-
-        pub fn deinit(self: *@This()) void {
-            self.data.deinit(self.allocator);
-            self.objects.deinit(self.allocator);
-            self.free.deinit(self.allocator);
-        }
+        ids: std.ArrayList(ObjectID),
 
         pub fn new(self: *@This(), parent: ObjectID) !ObjectID {
-            var index: ObjectID.Index = undefined;
-            if (self.free.pop()) |idx| {
-                index = idx;
-            } else {
-                index = @intCast(self.data.items.len);
-                _ = try self.data.addOne(self.allocator);
-                const info = try self.objects.addOne(self.allocator);
-                info.version = 0;
-            }
-            const data = &self.data.items[index];
-            var info = &self.objects.items[index];
-            info.version += 1;
-            info.alive = true;
-            info.parent = parent;
-            info.child = .null;
-            info.next = .null;
-            info.prev = .null;
+            const pool_index = self.data.items.len;
+            const data = try self.data.addOne(self.allocator);
+            const id = try self.object.add(parent, @intCast(pool_index), self.type_index);
+            (try self.ids.addOne(self.allocator)).* = id;
             if (@hasDecl(T, "init")) {
-                try T.init(data, self.context);
+                try T.init(data, @ptrCast(@alignCast(self.context)));
             }
-            return .{
-                .index = index,
-                .type_index = self.type_index,
-                .version = info.version,
-            };
+            return id;
         }
-
-        pub fn getID(self: *@This(), ptr: *T) ObjectID {
-            const index = @intFromPtr(ptr) - @intFromPtr(&self.data.items[0]);
-            return .{
-                .type_index = self.type_index,
-                .index = @intCast(index),
-                .version = self.objects.items[index].version,
-            };
-        }
-
-        pub fn delete(self: *@This(), id: ObjectID) void {
-            if (self.get(id)) |data| {
-                if (@hasDecl(data, "deinit")) {
-                    T.deinit(data, self.context);
-                }
+        pub fn delete(self: *@This(), id: ObjectID) !void {
+            const obj = try self.object.get(id);
+            // deinit object
+            const data = &self.data.items[obj.pool_index];
+            if (@hasDecl(data, "deinit")) {
+                T.deinit(data, self.context);
             }
+            // remove object from graph
+            try self.object.removeUnchecked(id);
+            // update last item before swap remove
+            self.object.updatePoolIndex(self.ids.items[obj.pool_index], obj.pool_index);
+            // remove from array
+            self.data.swapRemove(obj.pool_index);
+            self.ids.swapRemove(obj.pool_index);
         }
 
         pub fn get(self: *@This(), id: ObjectID) !*T {
-            if (self.type_index != id.type_index) {
-                return ObjectError.invalidType;
-            }
-            if (id.index >= self.objects.items.len or !self.objects.items[id.index].alive) {
-                return ObjectError.invalidIndex;
-            }
-            if (self.objects.items[id.index].version != id.version) {
-                return ObjectError.invalidVersion;
-            }
-            return &self.data.items[id.index];
+            const obj = try self.object.get(id);
+            return &self.data.items[obj.pool_index];
         }
 
         // pub fn load(self: *@This(), id: ObjectID, comptime data: anytype) !void {
@@ -175,83 +130,105 @@ pub fn Objects(comptime T: type) type {
 
 pub const Module = struct {
     allocator: std.mem.Allocator,
+    objects: std.ArrayList(Object),
+    free: std.ArrayList(Object.Index),
     types: std.ArrayList(ObjectType),
-    name_to_index: std.StringHashMap(ObjectID.TypeIndex),
 
     pub fn init(self: *Module, core: *nux.Core) !void {
         self.allocator = core.allocator;
-        self.types = try .initCapacity(core.allocator, 32);
-        self.name_to_index = .init(core.allocator);
+        self.objects = try .initCapacity(core.allocator, 1024);
+        self.free = try .initCapacity(core.allocator, 1024);
+        self.types = try .initCapacity(core.allocator, 64);
     }
     pub fn deinit(self: *Module) void {
+        self.objects.deinit(self.allocator);
+        self.free.deinit(self.allocator);
         self.types.deinit(self.allocator);
-        self.name_to_index.deinit();
     }
 
-    fn getTypeByIndex(self: *Module, index: ObjectID.TypeIndex) !*ObjectType {
-        if (index >= self.types.items.len) {
-            return ObjectError.invalidType;
+    fn add(self: *Module, parent: ObjectID, pool_index: Object.Index, type_index: ObjectType.Index) !ObjectID {
+        var index: Object.Index = undefined;
+        if (self.free.pop()) |idx| {
+            index = idx;
+        } else {
+            index = @intCast(self.objects.items.len);
+            const object = try self.objects.addOne(self.allocator);
+            object.version = 0;
         }
-        return &self.types.items[index];
+        var object = &self.objects.items[index];
+        object.pool_index = pool_index;
+        object.type_index = type_index;
+        object.parent = parent;
+        object.child = .null;
+        object.next = .null;
+        object.prev = .null;
+        return .{
+            .index = index,
+            .version = object.version,
+        };
     }
-    fn getType(self: *Module, comptime T: type) !*ObjectType {
-        if (self.name_to_index.get(@typeName(T))) |index| {
-            return self.getTypeByIndex(index);
-        }
-        return ObjectError.invalidType;
+    fn removeUnchecked(self: *Module, id: ObjectID) !void {
+        var obj = &self.objects.items[id.index];
+        obj.version += 1;
+        obj.pool_index(try self.free.addOne(self.allocator)).* = id.index;
     }
-    fn getData(self: *Module, id: ObjectID) ?*anyopaque {
-        if (id.version == 0) {
-            return ObjectError.invalidType;
-        }
-        const typ = try self.getType(id.type_index);
-        if (id.index >= typ.objects.items.len) {
-            return ObjectError.invalidIndex;
-        }
-        const info = &typ.info.items[id.index];
-        if (id.version != info.version) {
-            return ObjectError.invalidVersion;
-        }
+    fn updatePoolIndex(self: *Module, id: ObjectID, pool_index: ObjectID.Index) void {
+        self.objects.items[id.index].pool_index = pool_index;
     }
     fn get(self: *Module, id: ObjectID) !*Object {
-        if (id.version == 0) {
-            return ObjectError.invalidType;
+        if (id.isNull()) {
+            return ObjectError.nullId;
         }
-        const typ = try self.getType(id.type_index);
-        if (id.index >= typ.objects.items.len) {
+        if (id.index >= self.objects.items.len) {
             return ObjectError.invalidIndex;
         }
-        const obj = &typ.objects.items[id.index];
-        if (id.version != obj.version) {
+        const obj = &self.objects.items[id.index];
+        if (obj.version != id.version) {
             return ObjectError.invalidVersion;
         }
         return obj;
     }
 
-    pub fn register(self: *Module, comptime T: type, comptime Options: anytype) !*Objects(T) {
+    pub fn register(self: *Module, comptime T: type, context: *anyopaque, comptime Options: anytype) !*ObjectPool(T) {
         _ = Options;
-        // const gen = struct {
-        //     fn new(pointer: *anyopaque, id: ObjectID) anyerror!ObjectID {
-        //         const p: *Objects(T) = @ptrCast(@alignCast(pointer));
-        //         return try p.new(p, id);
-        //     }
-        // fn loadJson(pointer: *anyopaque, id: ObjectID, s: []const u8) anyerror!void {
-        //     const p: *Self = @ptrCast(@alignCast(pointer));
-        //     try Self.loadJson(p, id, s);
-        // }
-        // fn saveJson(pointer: *anyopaque, id: ObjectID, allocator: std.mem.Allocator) anyerror!std.ArrayList(u8) {
-        //     const p: *Self = @ptrCast(@alignCast(pointer));
-        //     return try Self.saveJson(p, id, allocator);
-        // }
-        // };
-        const type_index: ObjectID.TypeIndex = @intCast(self.types.items.len);
-        try self.name_to_index.put(@typeName(T), type_index);
-        (try self.types.addOne(self.allocator)).* = .init();
+        std.log.info("register object {s}...", .{@typeName(T)});
+        const gen = struct {
+            fn new(pointer: *anyopaque, parent: ObjectID) !ObjectID {
+                const objects: *ObjectPool(T) = @ptrCast(@alignCast(pointer));
+                return objects.new(parent);
+            }
+            fn destroy(pointer: *anyopaque, alloc: std.mem.Allocator) void {
+                const objects: *ObjectPool(T) = @ptrCast(@alignCast(pointer));
+                objects.data.deinit(objects.allocator);
+                objects.ids.deinit(objects.allocator);
+                alloc.destroy(objects);
+            }
+        };
+        const type_index: ObjectType.Index = @intCast(self.types.items.len);
+        const pool = try self.allocator.create(ObjectPool(T));
+        pool.* = .{
+            .allocator = self.allocator,
+            .context = context,
+            .type_index = type_index,
+            .object = self,
+            .data = try .initCapacity(self.allocator, 1000),
+            .ids = try .initCapacity(self.allocator, 1000),
+        };
+        const typ = try self.types.addOne(self.allocator);
+        typ.* = .{
+            .name = @typeName(T),
+            .v_ptr = pool,
+            .v_new = gen.new,
+            .v_destroy = gen.destroy,
+        };
+        return pool;
     }
 
-    pub fn new(self: *Module, index: ObjectID.Index, parent: ObjectID) !ObjectID {
-        const typ = try self.getType(index);
-        return try typ.v_new(typ.ptr, parent);
+    pub fn new(self: *Module, name: []const u8, parent: ObjectID) !ObjectID {
+        if (self.types.getPtr(name)) |typ| {
+            return try typ.v_new(typ.ptr, parent);
+        }
+        return ObjectError.unknownType;
     }
     // pub fn loadJson(self: *@This(), id: ObjectID, s: []const u8) !void {
     //     const typ = try self.getType(id.type_index);
@@ -262,31 +239,35 @@ pub const Module = struct {
     //     return try typ.v_save_json(typ.ptr, id, allocator);
     // }
     pub fn getParent(self: *Module, id: ObjectID) !ObjectID {
-        const info = try self.get(id);
-        return info.parent;
+        const obj = try self.get(id);
+        return obj.parent;
     }
     pub fn setParent(self: *Module, id: ObjectID, parent: ObjectID) !void {
         _ = parent;
-        const info = try self.get(id);
-        return info.parent;
+        const obj = try self.get(id);
+        _ = obj;
     }
     pub fn setName(self: *Module, id: ObjectID, name: []const u8) void {
         _ = self;
         _ = id;
         _ = name;
     }
+    pub fn getType(self: *Module, id: ObjectID) !*ObjectType {
+        const obj = try self.get(id);
+        return &self.types.items[obj.type_index];
+    }
     // pub fn findEntity(self: *Module, id: ObjectID) !ObjectID {
     //
     // }
     fn dump_recurs(self: *Module, id: ObjectID, depth: u32) void {
-        const info = self.get(id) catch return;
-        const typ = self.getType(id.type_index) catch unreachable;
+        const obj = self.get(id) catch return;
+        const typ = self.getType(id) catch unreachable;
         for (0..depth) |_| {
             std.log.info(" ", .{});
         }
         std.debug.print("type {s}:\n", .{typ.name});
 
-        var next = info.child;
+        var next = obj.child;
         while (!next.isNull()) {
             const cinfo = self.get(id) catch break;
             dump_recurs(self, next, depth + 1);

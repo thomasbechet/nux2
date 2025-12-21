@@ -32,9 +32,9 @@ pub const Module = struct {
 
     pub fn init(self: *@This(), core: *nux.Core) !void {
         self.object = core.object;
-        self.transforms = try core.object.register(Transform, .{});
+        self.transforms = try core.object.register(Transform, self, .{});
     }
-    pub fn deinit(_: *@This()) !void {}
+    pub fn deinit(_: *@This()) void {}
 
     pub fn new(self: *@This()) !nux.ObjectID {
         return try self.transforms.new(.null);

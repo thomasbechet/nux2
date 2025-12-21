@@ -25,10 +25,12 @@ pub const ObjectID = packed struct(u32) {
 const Object = struct {
     pub const Version = u8;
     pub const Index = u24;
+    pub const PoolIndex = u32;
+    pub const TypeIndex = u32;
 
-    version: u8,
-    pool_index: u24,
-    type_index: ObjectType.Index,
+    version: Version,
+    pool_index: PoolIndex,
+    type_index: TypeIndex,
 
     parent: ObjectID,
     prev: ObjectID,
@@ -37,8 +39,6 @@ const Object = struct {
 };
 
 pub const ObjectType = struct {
-    const Index = u32;
-
     name: []const u8,
     v_ptr: *anyopaque,
     v_new: *const fn (*anyopaque, parent: ObjectID) anyerror!ObjectID,
@@ -54,7 +54,7 @@ pub fn ObjectPool(comptime T: type) type {
         allocator: std.mem.Allocator,
         context: *anyopaque,
         object: *Module,
-        type_index: ObjectType.Index,
+        type_index: Object.TypeIndex,
         data: std.ArrayList(T),
         ids: std.ArrayList(ObjectID),
 
@@ -72,16 +72,16 @@ pub fn ObjectPool(comptime T: type) type {
             const obj = try self.object.get(id);
             // deinit object
             const data = &self.data.items[obj.pool_index];
-            if (@hasDecl(data, "deinit")) {
-                T.deinit(data, self.context);
+            if (@hasDecl(T, "deinit")) {
+                T.deinit(data, @ptrCast(@alignCast(self.context)));
             }
             // remove object from graph
             try self.object.removeUnchecked(id);
             // update last item before swap remove
             self.object.updatePoolIndex(self.ids.items[obj.pool_index], obj.pool_index);
             // remove from array
-            self.data.swapRemove(obj.pool_index);
-            self.ids.swapRemove(obj.pool_index);
+            _ = self.data.swapRemove(obj.pool_index);
+            _ = self.ids.swapRemove(obj.pool_index);
         }
 
         pub fn get(self: *@This(), id: ObjectID) !*T {
@@ -139,6 +139,8 @@ pub const Module = struct {
         self.objects = try .initCapacity(core.allocator, 1024);
         self.free = try .initCapacity(core.allocator, 1024);
         self.types = try .initCapacity(core.allocator, 64);
+        // reserve index 0 for null object id
+        _ = try self.objects.addOne(self.allocator);
     }
     pub fn deinit(self: *Module) void {
         self.objects.deinit(self.allocator);
@@ -146,7 +148,7 @@ pub const Module = struct {
         self.types.deinit(self.allocator);
     }
 
-    fn add(self: *Module, parent: ObjectID, pool_index: Object.Index, type_index: ObjectType.Index) !ObjectID {
+    fn add(self: *Module, parent: ObjectID, pool_index: Object.Index, type_index: Object.TypeIndex) !ObjectID {
         var index: Object.Index = undefined;
         if (self.free.pop()) |idx| {
             index = idx;
@@ -170,9 +172,9 @@ pub const Module = struct {
     fn removeUnchecked(self: *Module, id: ObjectID) !void {
         var obj = &self.objects.items[id.index];
         obj.version += 1;
-        obj.pool_index(try self.free.addOne(self.allocator)).* = id.index;
+        (try self.free.addOne(self.allocator)).* = id.index;
     }
-    fn updatePoolIndex(self: *Module, id: ObjectID, pool_index: ObjectID.Index) void {
+    fn updatePoolIndex(self: *Module, id: ObjectID, pool_index: Object.PoolIndex) void {
         self.objects.items[id.index].pool_index = pool_index;
     }
     fn get(self: *Module, id: ObjectID) !*Object {
@@ -204,7 +206,7 @@ pub const Module = struct {
                 alloc.destroy(objects);
             }
         };
-        const type_index: ObjectType.Index = @intCast(self.types.items.len);
+        const type_index: Object.TypeIndex = @intCast(self.types.items.len);
         const pool = try self.allocator.create(ObjectPool(T));
         pool.* = .{
             .allocator = self.allocator,

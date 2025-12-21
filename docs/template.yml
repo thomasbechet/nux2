@@ -1,9 +1,0 @@
-player:
-  type: entity
-  transform:
-    type: transform
-    position: [0, 0, 0]
-  body:
-    type: staticmesh
-    mesh: player_body_mesh
-    transform: player.transform

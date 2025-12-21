@@ -33,6 +33,19 @@ pub const Module = struct {
     pub fn init(self: *@This(), core: *nux.Core) !void {
         self.object = core.object;
         self.transforms = try core.object.register(Transform, self, .{});
+
+        var toremove: nux.ObjectID = undefined;
+        for (0..100) |i| {
+            const id = try self.transforms.new(.null);
+            if (i == 54) {
+                toremove = id;
+            }
+        }
+        try self.transforms.delete(toremove);
+        _ = try self.transforms.new(.null);
+        for (self.transforms.ids.items) |id| {
+            std.log.info("{}", .{id});
+        }
     }
     pub fn deinit(_: *@This()) void {}
 

@@ -25,21 +25,24 @@ pub const Module = struct {
 
         var toremove: nux.ObjectID = undefined;
         for (0..100) |i| {
-            const id, _ = try self.transforms.new(.null);
+            // const id = try self.new(.null);
+            const id = try self.object.new(@typeName(Transform), .null);
             if (i == 54) {
                 toremove = id;
             }
         }
-        try self.transforms.delete(toremove);
-        _ = try self.transforms.new(.null);
+        try self.transforms.remove(toremove);
+        _ = try self.transforms.add(.null);
         for (self.transforms.ids.items) |id| {
             std.log.info("{}", .{id});
         }
     }
     pub fn deinit(_: *Module) void {}
 
-    pub fn new(self: *Module) !nux.ObjectID {
-        return try self.transforms.new(.null);
+    pub fn new(self: *Module, parent: nux.ObjectID) !nux.ObjectID {
+        const id, _ = try self.transforms.add(parent);
+        std.log.info("hello world", .{});
+        return id;
     }
     pub fn delete(_: *Module, _: nux.ObjectID) !void {}
     pub fn load(self: *Module, id: nux.ObjectID, data: *Transform.Data) !void {

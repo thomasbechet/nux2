@@ -20,11 +20,6 @@ pub const Module = struct {
                 if (std.mem.eql(u8, name, entry.name)) break entry;
             };
         }
-
-        pub fn load(_: *@This(), _: *Self, _: DTO) !void {}
-        pub fn save(_: *@This(), _: *Self) !DTO {
-            return .{};
-        }
     }),
 
     pub fn init(self: *Self, core: *nux.Core) !void {
@@ -32,7 +27,7 @@ pub const Module = struct {
     }
 
     pub fn new(self: *Self, parent: nux.ObjectID) !nux.ObjectID {
-        var map = try self.inputmaps.new(parent);
+        var map = try self.inputmaps.add(parent);
         map.entries = try .initCapacity(self.allocator, 10);
         return self.inputmaps.getID(map);
     }

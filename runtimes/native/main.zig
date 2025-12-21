@@ -27,8 +27,8 @@ const Module = struct {
         std.log.info("{any}", .{id});
         try self.object.delete(id);
 
-        const root, _ = try self.objects.new(.null);
-        _, _ = try self.objects.new(root);
+        const root, _ = try self.objects.add(.null);
+        _, _ = try self.objects.add(root);
         self.object.dump(root);
         // const s =
         //     \\{ "value": 666 }

@@ -41,7 +41,7 @@ const Object = struct {
 pub const ObjectType = struct {
     name: []const u8,
     v_ptr: *anyopaque,
-    v_new: *const fn (*anyopaque, parent: ObjectID) anyerror!struct { ObjectID, *anyopaque },
+    v_new: *const fn (*anyopaque, parent: ObjectID) anyerror!ObjectID,
     v_delete: *const fn (*anyopaque, id: ObjectID) anyerror!void,
     v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
     // v_load_json: *const fn (*anyopaque, id: ObjectID, s: []const u8) anyerror!void,
@@ -59,14 +59,14 @@ pub fn ObjectPool(comptime T: type) type {
         data: std.ArrayList(T),
         ids: std.ArrayList(ObjectID),
 
-        pub fn new(self: *@This(), parent: ObjectID) !struct { ObjectID, *T } {
+        pub fn add(self: *@This(), parent: ObjectID) !struct { ObjectID, *T } {
             const pool_index = self.data.items.len;
             const data = try self.data.addOne(self.allocator);
             const id = try self.object.add(parent, @intCast(pool_index), self.type_index);
             (try self.ids.addOne(self.allocator)).* = id;
             return .{ id, data };
         }
-        pub fn delete(self: *@This(), id: ObjectID) !void {
+        pub fn remove(self: *@This(), id: ObjectID) !void {
             const obj = try self.object.get(id);
             // remove object from graph
             try self.object.removeUnchecked(id);
@@ -190,20 +190,24 @@ pub const Module = struct {
         }
         std.log.info("register object {s}...", .{@typeName(Options.type)});
         const gen = struct {
-            fn new(pointer: *anyopaque, parent: ObjectID) !struct { ObjectID, *anyopaque } {
-                const objects: *ObjectPool(Options.type) = @ptrCast(@alignCast(pointer));
-                const id, const data = try objects.new(parent);
-                return .{ id, @ptrCast(@alignCast(data)) };
+            fn new(pointer: *anyopaque, parent: ObjectID) !ObjectID {
+                const pool: *ObjectPool(Options.type) = @ptrCast(@alignCast(pointer));
+                if (@hasField(@TypeOf(Options), "new")) {
+                    return Options.new(@ptrCast(@alignCast(pool.context)), parent);
+                } else {
+                    const id, _ = try pool.add(parent);
+                    return id;
+                }
             }
             fn delete(pointer: *anyopaque, id: ObjectID) !void {
-                const objects: *ObjectPool(Options.type) = @ptrCast(@alignCast(pointer));
-                return objects.delete(id);
+                const pool: *ObjectPool(Options.type) = @ptrCast(@alignCast(pointer));
+                return pool.remove(id);
             }
             fn destroy(pointer: *anyopaque, alloc: std.mem.Allocator) void {
-                const objects: *ObjectPool(Options.type) = @ptrCast(@alignCast(pointer));
-                objects.data.deinit(objects.allocator);
-                objects.ids.deinit(objects.allocator);
-                alloc.destroy(objects);
+                const pool: *ObjectPool(Options.type) = @ptrCast(@alignCast(pointer));
+                pool.data.deinit(pool.allocator);
+                pool.ids.deinit(pool.allocator);
+                alloc.destroy(pool);
             }
         };
         const type_index: Object.TypeIndex = @intCast(self.types.items.len);
@@ -229,8 +233,7 @@ pub const Module = struct {
 
     pub fn new(self: *Module, name: []const u8, parent: ObjectID) !ObjectID {
         const typ = try self.findType(name);
-        const id, _ = try typ.v_new(typ.v_ptr, parent);
-        return id;
+        return typ.v_new(typ.v_ptr, parent);
     }
     pub fn delete(self: *Module, id: ObjectID) !void {
         const typ = try self.getType(id);

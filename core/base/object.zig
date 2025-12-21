@@ -41,7 +41,8 @@ const Object = struct {
 pub const ObjectType = struct {
     name: []const u8,
     v_ptr: *anyopaque,
-    v_new: *const fn (*anyopaque, parent: ObjectID) anyerror!ObjectID,
+    v_new: *const fn (*anyopaque, parent: ObjectID) anyerror!struct { ObjectID, *anyopaque },
+    v_delete: *const fn (*anyopaque, id: ObjectID) anyerror!void,
     v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
     // v_load_json: *const fn (*anyopaque, id: ObjectID, s: []const u8) anyerror!void,
     // v_save_json: *const fn (*anyopaque, id: ObjectID, allocator: std.mem.Allocator) anyerror!std.ArrayList(u8),
@@ -58,23 +59,15 @@ pub fn ObjectPool(comptime T: type) type {
         data: std.ArrayList(T),
         ids: std.ArrayList(ObjectID),
 
-        pub fn new(self: *@This(), parent: ObjectID) !ObjectID {
+        pub fn new(self: *@This(), parent: ObjectID) !struct { ObjectID, *T } {
             const pool_index = self.data.items.len;
             const data = try self.data.addOne(self.allocator);
             const id = try self.object.add(parent, @intCast(pool_index), self.type_index);
             (try self.ids.addOne(self.allocator)).* = id;
-            if (@hasDecl(T, "init")) {
-                try T.init(data, @ptrCast(@alignCast(self.context)));
-            }
-            return id;
+            return .{ id, data };
         }
         pub fn delete(self: *@This(), id: ObjectID) !void {
             const obj = try self.object.get(id);
-            // deinit object
-            const data = &self.data.items[obj.pool_index];
-            if (@hasDecl(T, "deinit")) {
-                T.deinit(data, @ptrCast(@alignCast(self.context)));
-            }
             // remove object from graph
             try self.object.removeUnchecked(id);
             // update last item before swap remove
@@ -191,23 +184,30 @@ pub const Module = struct {
         return obj;
     }
 
-    pub fn register(self: *Module, comptime T: type, context: *anyopaque, comptime Options: anytype) !*ObjectPool(T) {
-        _ = Options;
-        std.log.info("register object {s}...", .{@typeName(T)});
+    pub fn register(self: *Module, context: *anyopaque, comptime Options: anytype) !*ObjectPool(Options.type) {
+        if (!@hasField(@TypeOf(Options), "type")) {
+            @compileError("missing 'type' field for object registration options");
+        }
+        std.log.info("register object {s}...", .{@typeName(Options.type)});
         const gen = struct {
-            fn new(pointer: *anyopaque, parent: ObjectID) !ObjectID {
-                const objects: *ObjectPool(T) = @ptrCast(@alignCast(pointer));
-                return objects.new(parent);
+            fn new(pointer: *anyopaque, parent: ObjectID) !struct { ObjectID, *anyopaque } {
+                const objects: *ObjectPool(Options.type) = @ptrCast(@alignCast(pointer));
+                const id, const data = try objects.new(parent);
+                return .{ id, @ptrCast(@alignCast(data)) };
+            }
+            fn delete(pointer: *anyopaque, id: ObjectID) !void {
+                const objects: *ObjectPool(Options.type) = @ptrCast(@alignCast(pointer));
+                return objects.delete(id);
             }
             fn destroy(pointer: *anyopaque, alloc: std.mem.Allocator) void {
-                const objects: *ObjectPool(T) = @ptrCast(@alignCast(pointer));
+                const objects: *ObjectPool(Options.type) = @ptrCast(@alignCast(pointer));
                 objects.data.deinit(objects.allocator);
                 objects.ids.deinit(objects.allocator);
                 alloc.destroy(objects);
             }
         };
         const type_index: Object.TypeIndex = @intCast(self.types.items.len);
-        const pool = try self.allocator.create(ObjectPool(T));
+        const pool = try self.allocator.create(ObjectPool(Options.type));
         pool.* = .{
             .allocator = self.allocator,
             .context = context,
@@ -218,19 +218,23 @@ pub const Module = struct {
         };
         const typ = try self.types.addOne(self.allocator);
         typ.* = .{
-            .name = @typeName(T),
+            .name = @typeName(Options.type),
             .v_ptr = pool,
             .v_new = gen.new,
+            .v_delete = gen.delete,
             .v_destroy = gen.destroy,
         };
         return pool;
     }
 
     pub fn new(self: *Module, name: []const u8, parent: ObjectID) !ObjectID {
-        if (self.types.getPtr(name)) |typ| {
-            return try typ.v_new(typ.ptr, parent);
-        }
-        return ObjectError.unknownType;
+        const typ = try self.findType(name);
+        const id, _ = try typ.v_new(typ.v_ptr, parent);
+        return id;
+    }
+    pub fn delete(self: *Module, id: ObjectID) !void {
+        const typ = try self.getType(id);
+        return typ.v_delete(typ.v_ptr, id);
     }
     // pub fn loadJson(self: *@This(), id: ObjectID, s: []const u8) !void {
     //     const typ = try self.getType(id.type_index);
@@ -257,6 +261,14 @@ pub const Module = struct {
     pub fn getType(self: *Module, id: ObjectID) !*ObjectType {
         const obj = try self.get(id);
         return &self.types.items[obj.type_index];
+    }
+    pub fn findType(self: *Module, name: []const u8) !*ObjectType {
+        for (self.types.items) |*typ| {
+            if (std.mem.eql(u8, name, typ.name)) {
+                return typ;
+            }
+        }
+        return ObjectError.unknownType;
     }
     // pub fn findEntity(self: *Module, id: ObjectID) !ObjectID {
     //

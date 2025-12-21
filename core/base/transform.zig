@@ -2,28 +2,10 @@ const nux = @import("../core.zig");
 const std = @import("std");
 
 const Transform = struct {
-    const Context = Module;
-    const Self = @This();
     const Data = struct {
         position: ?[3]f32 = null,
     };
-
     position: nux.Vec3,
-
-    pub fn init(self: *Self, _: *Context) !void {
-        self.position = .zero();
-    }
-    pub fn deinit(_: *Self, _: *Context) void {}
-    pub fn load(self: *Self, _: *Module, data: Data) !void {
-        if (data.position) |position| {
-            self.position.data[0] = position[0];
-            self.position.data[1] = position[1];
-            self.position.data[2] = position[2];
-        }
-    }
-    pub fn save(_: *Self, _: *Module) !Data {
-        return .{};
-    }
 };
 
 pub const Module = struct {
@@ -32,11 +14,18 @@ pub const Module = struct {
 
     pub fn init(self: *@This(), core: *nux.Core) !void {
         self.object = core.object;
-        self.transforms = try core.object.register(Transform, self, .{});
+        self.transforms = try core.object.register(self, .{
+            .type = Transform,
+            .data = Transform.Data,
+            .new = Module.new,
+            .delete = Module.delete,
+            .load = Module.load,
+            .save = Module.save,
+        });
 
         var toremove: nux.ObjectID = undefined;
         for (0..100) |i| {
-            const id = try self.transforms.new(.null);
+            const id, _ = try self.transforms.new(.null);
             if (i == 54) {
                 toremove = id;
             }
@@ -47,13 +36,24 @@ pub const Module = struct {
             std.log.info("{}", .{id});
         }
     }
-    pub fn deinit(_: *@This()) void {}
+    pub fn deinit(_: *Module) void {}
 
-    pub fn new(self: *@This()) !nux.ObjectID {
+    pub fn new(self: *Module) !nux.ObjectID {
         return try self.transforms.new(.null);
     }
-    pub fn delete(_: *@This(), _: nux.ObjectID) !void {}
-    pub fn getPosition(self: *@This(), id: nux.ObjectID) nux.Vec3 {
+    pub fn delete(_: *Module, _: nux.ObjectID) !void {}
+    pub fn load(self: *Module, id: nux.ObjectID, data: *Transform.Data) !void {
+        var obj = try self.transforms.get(id);
+        if (data.position) |position| {
+            obj.position.data[0] = position[0];
+            obj.position.data[1] = position[1];
+            obj.position.data[2] = position[2];
+        }
+    }
+    pub fn save(_: *Module, _: nux.ObjectID) !Transform.Data {
+        return .{};
+    }
+    pub fn getPosition(self: *Module, id: nux.ObjectID) nux.Vec3 {
         return self.transforms.get(id).position;
     }
 };

@@ -19,10 +19,16 @@ const Module = struct {
 
     pub fn init(self: *Self, core: *nux.Core) !void {
         self.object = core.object;
-        self.objects = try core.object.register(MyObject, self, .{});
+        self.objects = try core.object.register(self, .{
+            .type = MyObject,
+        });
 
-        const root = try self.objects.new(.null);
-        _ = try self.objects.new(root);
+        const id = try self.object.new(@typeName(MyObject), .null);
+        std.log.info("{any}", .{id});
+        try self.object.delete(id);
+
+        const root, _ = try self.objects.new(.null);
+        _, _ = try self.objects.new(root);
         self.object.dump(root);
         // const s =
         //     \\{ "value": 666 }

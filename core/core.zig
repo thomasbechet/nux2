@@ -3,6 +3,7 @@ const zlua = @import("zlua");
 const zigimg = @import("zigimg");
 
 pub const object = @import("base/object.zig");
+pub const logger = @import("base/logger.zig");
 pub const transform = @import("base/transform.zig");
 
 pub const ObjectID = object.ObjectID;
@@ -99,6 +100,7 @@ pub const Core = struct {
         // Register core modules
         core.object = try core.registerModule(object.Module);
         try core.registerModules(.{
+            @import("base/logger.zig").Module,
             @import("base/transform.zig").Module,
             @import("input/input.zig").Module,
             @import("input/inputmap.zig").Module,

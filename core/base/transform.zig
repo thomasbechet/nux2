@@ -11,9 +11,11 @@ const Transform = struct {
 pub const Module = struct {
     object: *nux.object.Module,
     transforms: *nux.Objects(Transform),
+    logger: *nux.logger.Module,
 
     pub fn init(self: *@This(), core: *nux.Core) !void {
         self.object = core.object;
+        self.logger = try core.findModule(nux.logger.Module);
         self.transforms = try core.object.register(self, .{
             .type = Transform,
             .data = Transform.Data,
@@ -36,6 +38,7 @@ pub const Module = struct {
         for (self.transforms.ids.items) |id| {
             std.log.info("{}", .{id});
         }
+        self.logger.info("Hello", .{});
     }
     pub fn deinit(_: *Module) void {}
 

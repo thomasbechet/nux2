@@ -1,16 +1,32 @@
 const nux = @import("../core.zig");
 const zlua = @import("zlua");
 
-pub const Module = struct {
-    lua: *zlua.Lua,
-    transform: *nux.transform.Module,
+const Self = @This();
+const hello_file = @embedFile("hello.lua");
 
-    pub fn init(self: *Module, core: *nux.Core) !void {
-        self.transform = try core.findModule(nux.transform.Module);
-        self.lua = try zlua.Lua.init(core.allocator);
-    }
+lua: *zlua.Lua,
+transform: *nux.Transform,
+logger: *nux.Logger,
 
-    pub fn deinit(self: *Module) void {
-        self.lua.deinit();
-    }
-};
+fn adder(lua: *zlua.Lua) i32 {
+    const a = lua.toInteger(1) catch 0;
+    const b = lua.toInteger(2) catch 0;
+    lua.pushInteger(a + b);
+    return 1;
+}
+
+pub fn init(self: *Self, core: *nux.Core) !void {
+    self.lua = try zlua.Lua.init(core.allocator);
+    self.lua.openBase();
+
+    self.lua.pushFunction(zlua.wrap(adder));
+    self.lua.setGlobal("add");
+
+    try self.lua.doString(hello_file);
+
+    self.logger.info("{}", .{try self.lua.toInteger(-1)});
+}
+
+pub fn deinit(self: *Self) void {
+    self.lua.deinit();
+}

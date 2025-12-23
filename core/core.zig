@@ -13,10 +13,6 @@ pub const Vec2 = vec.Vec2;
 pub const Vec3 = vec.Vec3;
 
 pub const Module = struct {
-    pub const Error = error{
-        moduleNotFound,
-    };
-
     allocator: std.mem.Allocator,
     name: []const u8,
     v_ptr: *anyopaque,
@@ -172,7 +168,7 @@ pub const Core = struct {
 
     pub fn registerModule(self: *Core, comptime T: anytype) !*T {
         try self.registerModules(.{T});
-        return self.findModule(T) orelse return Module.Error.moduleNotFound;
+        return self.findModule(T) orelse return undefined;
     }
 
     fn findModule(self: *@This(), comptime T: type) ?*T {
@@ -181,7 +177,6 @@ pub const Core = struct {
                 return @ptrCast(@alignCast(module.v_ptr));
             }
         }
-        std.log.err("module {s} not found", .{@typeName(T)});
         return null;
     }
 };

@@ -2,12 +2,12 @@ const std = @import("std");
 const zlua = @import("zlua");
 const zigimg = @import("zigimg");
 
-pub const object = @import("base/object.zig");
-pub const logger = @import("base/logger.zig");
-pub const transform = @import("base/transform.zig");
+pub const Logger = @import("base/Logger.zig");
+pub const Object = @import("base/Object.zig");
+pub const Transform = @import("base/Transform.zig");
 
-pub const ObjectID = object.ObjectID;
-pub const Objects = object.ObjectPool;
+pub const ObjectID = Object.ObjectID;
+pub const ObjectPool = Object.ObjectPool;
 pub const vec = @import("math/vec.zig");
 pub const Vec2 = vec.Vec2;
 pub const Vec3 = vec.Vec3;
@@ -29,23 +29,36 @@ pub const Module = struct {
         const mod: *T = try allocator.create(T);
 
         const gen = struct {
-            const PT = @typeInfo(*T).pointer.child;
-            fn call_init(pointer: *anyopaque, c: *Core) anyerror!void {
+            fn call_init(pointer: *anyopaque, core: *Core) anyerror!void {
                 const self: *T = @ptrCast(@alignCast(pointer));
-                if (@hasDecl(PT, "init")) {
-                    return PT.init(self, c);
+                // dependency injection
+                inline for (@typeInfo(T).@"struct".fields) |field| {
+                    switch (@typeInfo(field.type)) {
+                        .pointer => |info| {
+                            if (core.findModule(info.child)) |dependency| {
+                                std.log.info("inject {s} to {s}", .{ @typeName(info.child), @typeName(T) });
+                                @field(self, field.name) = dependency;
+                            }
+                        },
+                        else => {},
+                    }
+                }
+                // objects initialization
+                try core.object.initModuleObjects(T, self);
+                if (@hasDecl(T, "init")) {
+                    return self.init(core);
                 }
             }
             fn call_deinit(pointer: *anyopaque) void {
                 const self: *T = @ptrCast(@alignCast(pointer));
-                if (@hasDecl(PT, "deinit")) {
-                    PT.deinit(self);
+                if (@hasDecl(T, "deinit")) {
+                    self.deinit();
                 }
             }
             fn call_update(pointer: *anyopaque) anyerror!void {
                 const self: *T = @ptrCast(@alignCast(pointer));
-                if (@hasDecl(PT, "update")) {
-                    return PT.update(self);
+                if (@hasDecl(T, "update")) {
+                    return self.update();
                 }
             }
             fn destroy(
@@ -90,7 +103,7 @@ pub const Module = struct {
 pub const Core = struct {
     allocator: std.mem.Allocator,
     modules: std.ArrayList(Module),
-    object: *object.Module,
+    object: *Object,
 
     pub fn init(allocator: std.mem.Allocator, comptime mods: anytype) !*Core {
         var core = try allocator.create(@This());
@@ -98,13 +111,13 @@ pub const Core = struct {
         core.modules = try .initCapacity(allocator, 32);
 
         // Register core modules
-        core.object = try core.registerModule(object.Module);
+        core.object = try core.registerModule(Object);
         try core.registerModules(.{
-            @import("base/logger.zig").Module,
-            @import("base/transform.zig").Module,
-            @import("input/input.zig").Module,
-            @import("input/inputmap.zig").Module,
-            @import("lua/lua.zig").Module,
+            @import("base/Logger.zig"),
+            @import("base/Transform.zig"),
+            @import("input/Input.zig"),
+            @import("input/InputMap.zig"),
+            @import("lua/Lua.zig"),
         });
         // Register user modules
         try core.registerModules(mods);
@@ -159,22 +172,23 @@ pub const Core = struct {
 
     pub fn registerModule(self: *Core, comptime T: anytype) !*T {
         try self.registerModules(.{T});
-        return self.findModule(T);
+        return self.findModule(T) orelse return Module.Error.moduleNotFound;
     }
 
-    pub fn findModule(self: *@This(), comptime T: type) !*T {
+    fn findModule(self: *@This(), comptime T: type) ?*T {
         for (self.modules.items) |*module| {
             if (std.mem.eql(u8, @typeName(T), module.name)) {
                 return @ptrCast(@alignCast(module.v_ptr));
             }
         }
-        return Module.Error.moduleNotFound;
+        std.log.err("module {s} not found", .{@typeName(T)});
+        return null;
     }
 };
 
 test "core" {
     const ModA = struct {
-        objs: Objects(u32),
+        objs: ObjectPool(u32),
         pub fn init(self: *@This(), core: *Core) !void {
             try self.objs.init(core);
         }

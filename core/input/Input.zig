@@ -1,6 +1,8 @@
 const std = @import("std");
 const nux = @import("../core.zig");
 
+const Self = @This();
+
 const Controller = struct {
     const max: u32 = 4;
 
@@ -132,21 +134,19 @@ pub const Key = enum(u32) {
     menu = 118,
 };
 
-pub const Module = struct {
-    controllers: [Controller.max]Controller,
+controllers: [Controller.max]Controller,
 
-    // pub fn init(self: *Module, core: *nux.Core) !void {}
+// pub fn init(self: *Module, core: *nux.Core) !void {}
 
-    // pub fn isPressed(self: *Module, controller: u32, name: []const u8) bool {
-    //     return false;
-    // }
-    // pub fn isReleased(self: *Module, controller: u32, name: []const u8) bool {
-    //     return false;
-    // }
-    // pub fn isJustPressed(self: *Module, controller: u32, name: []const u8) bool {
-    //     return false;
-    // }
-    // pub fn isJustReleased(self: *Module, controller: u32, name: []const u8) bool {
-    //     return false;
-    // }
-};
+// pub fn isPressed(self: *Module, controller: u32, name: []const u8) bool {
+//     return false;
+// }
+// pub fn isReleased(self: *Module, controller: u32, name: []const u8) bool {
+//     return false;
+// }
+// pub fn isJustPressed(self: *Module, controller: u32, name: []const u8) bool {
+//     return false;
+// }
+// pub fn isJustReleased(self: *Module, controller: u32, name: []const u8) bool {
+//     return false;
+// }

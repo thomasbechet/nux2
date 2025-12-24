@@ -1,5 +1,20 @@
 const std = @import("std");
 
+fn checkNode(ast: *std.zig.Ast, index: usize) void {
+    const nodes = &ast.nodes;
+    const node = nodes.get(index);
+    if (node.tag == .fn_decl) {
+        const lhs = nodes.get(@intFromEnum(node.data.node_and_node.@"0"));
+        if (lhs.tag == .fn_proto_simple) {
+            std.log.info("{}", .{lhs});
+            // ast.fnProtoSimple(node.data.node_and_node.@"0");
+        } else if (lhs.tag == .fn_proto_multi) {
+            std.log.info("{}", .{ast.fnProtoMulti(lhs.data.node)});
+        }
+        std.log.info("{}", .{lhs.tag});
+    }
+}
+
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
     var args = try std.process.argsWithAllocator(allocator);
@@ -25,12 +40,19 @@ pub fn main() !void {
         \\        std.debug.print("player: {}\n", .{self.score});
         \\    }
         \\};
+        \\pub fn helloWorld() void {}
+        \\pub fn func2(v: u32, v2: u32) ?void { _ = v; _ = v2; return null; }
     ;
     var ast = std.zig.Ast.parse(gpa.allocator(), src, .zig) catch {
         std.debug.print("failed to parse source file.", .{});
         return;
     };
     defer ast.deinit(gpa.allocator());
+
+    std.log.info("node count : {}", .{ast.nodes.len});
+    for (ast.rootDecls()) |index| {
+        checkNode(&ast, @intFromEnum(index));
+    }
 
     var buffer: [1024]u8 = undefined;
     var writer = file.writer(&buffer);

@@ -1,5 +1,6 @@
 const nux = @import("../core.zig");
 const zlua = @import("zlua");
+const bindings = @import("bindings");
 
 const Self = @This();
 const hello_file = @embedFile("hello.lua");
@@ -25,6 +26,7 @@ pub fn init(self: *Self, core: *nux.Core) !void {
     try self.lua.doString(hello_file);
 
     self.logger.info("{}", .{try self.lua.toInteger(-1)});
+    self.logger.info("{s}", .{bindings.string});
 }
 
 pub fn deinit(self: *Self) void {

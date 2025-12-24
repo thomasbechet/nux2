@@ -12,19 +12,19 @@ pub fn build(b: *std.Build) void {
     const zgltf_dep = b.dependency("zgltf", .{ .target = target, .optimize = optimize });
     // zigimg
     const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
-    // lua bindings
-    const lua_gen_exe = b.addExecutable(.{ .name = "lua_gen", .root_module = b.createModule(.{
+    // bindings
+    const bindings_exe = b.addExecutable(.{ .name = "gen", .root_module = b.createModule(.{
         .target = target,
         .root_source_file = b.path("core/lua/gen.zig"),
     }) });
-    const run_lua_gen_exe = b.addRunArtifact(lua_gen_exe);
-    // run_lua_gen_exe.dependOn(&lua_gen_exe.step);
-    const lua_gen_output = run_lua_gen_exe.addOutputFileArg("lua_bindings.zig");
-    //run_lua_gen_exe.addArg(...);
-    const lua_write_files = b.addWriteFiles();
-    _ = lua_write_files.addCopyFile(lua_gen_output, "core/lua/bindings.zig");
+    const run_bindings_exe = b.addRunArtifact(bindings_exe);
+    run_bindings_exe.step.dependOn(&bindings_exe.step);
+    const bindings_output = run_bindings_exe.addOutputFileArg("bindings.zig");
+    // run_bindings_exe.addArg(...);
+
     // core
     const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{ .{ .name = "zlua", .module = ziglua_dep.module("zlua") }, .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") }, .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") } } });
+    core.addAnonymousImport("bindings", .{ .root_source_file = bindings_output });
 
     // glfw
     const glfw_dep = b.dependency("glfw", .{ .target = target, .optimize = optimize });
@@ -50,7 +50,6 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    runtime.step.dependOn(&lua_write_files.step);
     b.installArtifact(runtime);
     runtime.linkLibrary(glfw_lib);
     runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));

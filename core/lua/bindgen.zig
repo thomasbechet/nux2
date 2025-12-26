@@ -135,7 +135,8 @@ const ModuleJson = struct {
 };
 
 const Module = struct {
-    source: []const u8,
+    source: [:0]const u8,
+    ast: Ast,
     functions: ArrayList(FunctionIter.FunctionProto),
 
     fn deinit(self: *Module, alloc: Allocator) void {
@@ -143,6 +144,7 @@ const Module = struct {
             proto.deinit();
         }
         self.functions.deinit(alloc);
+        self.ast.deinit(alloc);
         alloc.free(self.source);
     }
 };
@@ -173,27 +175,35 @@ const Modules = struct {
             defer file.close();
             var reader = file.reader(&buffer);
             const source = try reader.interface.allocRemaining(alloc, .unlimited);
-            errdefer alloc.free(source);
+            defer alloc.free(source);
             const sourceZ = try alloc.dupeZ(u8, source);
-            defer alloc.free(sourceZ);
+            errdefer alloc.free(sourceZ);
             // parse ast
             var ast = try std.zig.Ast.parse(alloc, sourceZ, .zig);
-            defer ast.deinit(alloc);
+            errdefer ast.deinit(alloc);
             // parse functions
             var functions = try ArrayList(FunctionIter.FunctionProto).initCapacity(alloc, 32);
             errdefer functions.deinit(alloc);
             var it = try FunctionIter.init(alloc, &ast);
             while (try it.next()) |proto| {
-                errdefer proto.deinit();
-                try functions.append(alloc, proto);
-                std.log.info("{s}({s})", .{ proto.name, proto.ret });
-                for (proto.params) |param| {
-                    std.log.info("  {s}({s})", .{ param.ident, param.typ });
+                var skip = false;
+                if (module.skip) |skips| {
+                    for (skips) |s| {
+                        if (std.mem.eql(u8, s, proto.name)) {
+                            skip = true;
+                            proto.deinit();
+                            break;
+                        }
+                    }
+                }
+                if (!skip) {
+                    try functions.append(alloc, proto);
                 }
             }
             // add new module
             try modules.append(alloc, .{
-                .source = source,
+                .source = sourceZ,
+                .ast = ast,
                 .functions = functions,
             });
         }
@@ -229,6 +239,15 @@ pub fn main() !void {
     // load modules
     var modules: Modules = try .load(alloc, inputs);
     defer modules.deinit();
+    for (modules.modules.items) |*module| {
+        // std.log.info("MODULE {s}", .{module.path});
+        for (module.functions.items) |*function| {
+            std.log.info("{s}({s})", .{ function.name, function.ret });
+            for (function.params) |param| {
+                std.log.info("  {s}({s})", .{ param.ident, param.typ });
+            }
+        }
+    }
 
     // open bindings file
     const out_file = try std.fs.cwd().createFile(output, .{});

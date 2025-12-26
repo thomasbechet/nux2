@@ -6,6 +6,9 @@
         "path": "core/input/Input.zig"
     },
     {
-        "path": "core/input/InputMap.zig"
+        "path": "core/input/InputMap.zig",
+        "skip": [
+            "init"
+        ]
     }
 ]

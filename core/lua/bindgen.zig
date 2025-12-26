@@ -136,6 +136,7 @@ const ModuleJson = struct {
 
 const Module = struct {
     source: [:0]const u8,
+    path: []const u8,
     ast: Ast,
     functions: ArrayList(FunctionIter.FunctionProto),
 
@@ -145,6 +146,7 @@ const Module = struct {
         }
         self.functions.deinit(alloc);
         self.ast.deinit(alloc);
+        alloc.free(self.path);
         alloc.free(self.source);
     }
 };
@@ -169,7 +171,6 @@ const Modules = struct {
 
         // iter files and generate bindings
         for (modules_json.value) |module| {
-            std.log.info("open {s}", .{module.path});
             // read file
             const file = try std.fs.cwd().openFile(module.path, .{});
             defer file.close();
@@ -205,6 +206,7 @@ const Modules = struct {
                 .source = sourceZ,
                 .ast = ast,
                 .functions = functions,
+                .path = try alloc.dupe(u8, module.path),
             });
         }
 
@@ -224,6 +226,38 @@ const Modules = struct {
     }
 };
 
+fn toSnakeCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
+    var out: ArrayList(u8) = try .initCapacity(alloc, s.len);
+    for (s, 0..) |c, i| {
+        if (std.ascii.isUpper(c)) {
+            if (i != 0) {
+                try out.append(alloc, '_');
+            }
+            try out.append(alloc, std.ascii.toLower(c));
+        } else {
+            try out.append(alloc, c);
+        }
+    }
+    return out;
+}
+
+fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
+    _ = writer;
+    for (modules.modules.items) |*module| {
+        var module_name = try toSnakeCase(alloc, std.fs.path.stem(module.path));
+        defer module_name.deinit(alloc);
+        std.log.info("{s}", .{module_name.items});
+        for (module.functions.items) |*function| {
+            var func_name = try toSnakeCase(alloc, function.name);
+            defer func_name.deinit(alloc);
+            std.log.info("{s}({s})", .{ func_name.items, function.ret });
+            for (function.params) |param| {
+                std.log.info("  {s}({s})", .{ param.ident, param.typ });
+            }
+        }
+    }
+}
+
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
     var args = try std.process.argsWithAllocator(allocator);
@@ -239,21 +273,11 @@ pub fn main() !void {
     // load modules
     var modules: Modules = try .load(alloc, inputs);
     defer modules.deinit();
-    for (modules.modules.items) |*module| {
-        // std.log.info("MODULE {s}", .{module.path});
-        for (module.functions.items) |*function| {
-            std.log.info("{s}({s})", .{ function.name, function.ret });
-            for (function.params) |param| {
-                std.log.info("  {s}({s})", .{ param.ident, param.typ });
-            }
-        }
-    }
 
-    // open bindings file
+    // generate bindings
     const out_file = try std.fs.cwd().createFile(output, .{});
     defer out_file.close();
     var writer = out_file.writer(&buffer);
-    var out = &writer.interface;
-
-    try out.flush();
+    try generateBindings(alloc, &writer.interface, &modules);
+    try writer.interface.flush();
 }

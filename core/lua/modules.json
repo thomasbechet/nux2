@@ -1,0 +1,11 @@
+[
+    {
+        "path": "core/base/Transform.zig"
+    },
+    {
+        "path": "core/input/Input.zig"
+    },
+    {
+        "path": "core/input/InputMap.zig"
+    }
+]

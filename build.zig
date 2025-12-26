@@ -13,14 +13,14 @@ pub fn build(b: *std.Build) void {
     // zigimg
     const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
     // bindings
-    const bindings_exe = b.addExecutable(.{ .name = "gen", .root_module = b.createModule(.{
+    const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
         .target = target,
-        .root_source_file = b.path("core/lua/gen.zig"),
+        .root_source_file = b.path("core/lua/bindgen.zig"),
     }) });
     const run_bindings_exe = b.addRunArtifact(bindings_exe);
     run_bindings_exe.step.dependOn(&bindings_exe.step);
     const bindings_output = run_bindings_exe.addOutputFileArg("bindings.zig");
-    // run_bindings_exe.addArg(...);
+    run_bindings_exe.addFileArg(b.path("core/lua/modules.json"));
 
     // core
     const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{ .{ .name = "zlua", .module = ziglua_dep.module("zlua") }, .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") }, .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") } } });

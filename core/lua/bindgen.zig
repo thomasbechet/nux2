@@ -1,6 +1,7 @@
 const std = @import("std");
 const Ast = std.zig.Ast;
 const Allocator = std.mem.Allocator;
+const ArrayList = std.ArrayList;
 
 const FunctionIter = struct {
     alloc: Allocator,
@@ -128,44 +129,112 @@ const FunctionIter = struct {
     }
 };
 
+const ModuleJson = struct {
+    path: []const u8,
+    skip: ?[][]const u8 = null,
+};
+
+const Module = struct {
+    source: []const u8,
+    functions: ArrayList(FunctionIter.FunctionProto),
+
+    fn deinit(self: *Module, alloc: Allocator) void {
+        for (self.functions.items) |proto| {
+            proto.deinit();
+        }
+        self.functions.deinit(alloc);
+        alloc.free(self.source);
+    }
+};
+
+const Modules = struct {
+    allocator: Allocator,
+    modules: ArrayList(Module),
+    source: []const u8,
+
+    fn load(alloc: Allocator, modules_path: []const u8) !Modules {
+        // parse modules.json
+        var buffer: [1024]u8 = undefined;
+        const modules_file = try std.fs.cwd().openFile(modules_path, .{});
+        defer modules_file.close();
+        var modules_reader = modules_file.reader(&buffer);
+        const modules_source = try modules_reader.interface.allocRemaining(alloc, .unlimited);
+        errdefer alloc.free(modules_source);
+        const modules_json = try std.json.parseFromSlice([]ModuleJson, alloc, modules_source, .{});
+        defer modules_json.deinit();
+        var modules: ArrayList(Module) = try .initCapacity(alloc, modules_json.value.len);
+        errdefer modules.deinit(alloc);
+
+        // iter files and generate bindings
+        for (modules_json.value) |module| {
+            std.log.info("open {s}", .{module.path});
+            // read file
+            const file = try std.fs.cwd().openFile(module.path, .{});
+            defer file.close();
+            var reader = file.reader(&buffer);
+            const source = try reader.interface.allocRemaining(alloc, .unlimited);
+            errdefer alloc.free(source);
+            const sourceZ = try alloc.dupeZ(u8, source);
+            defer alloc.free(sourceZ);
+            // parse ast
+            var ast = try std.zig.Ast.parse(alloc, sourceZ, .zig);
+            defer ast.deinit(alloc);
+            // parse functions
+            var functions = try ArrayList(FunctionIter.FunctionProto).initCapacity(alloc, 32);
+            errdefer functions.deinit(alloc);
+            var it = try FunctionIter.init(alloc, &ast);
+            while (try it.next()) |proto| {
+                errdefer proto.deinit();
+                try functions.append(alloc, proto);
+                std.log.info("{s}({s})", .{ proto.name, proto.ret });
+                for (proto.params) |param| {
+                    std.log.info("  {s}({s})", .{ param.ident, param.typ });
+                }
+            }
+            // add new module
+            try modules.append(alloc, .{
+                .source = source,
+                .functions = functions,
+            });
+        }
+
+        return .{
+            .allocator = alloc,
+            .source = modules_source,
+            .modules = modules,
+        };
+    }
+
+    fn deinit(self: *Modules) void {
+        for (self.modules.items) |*module| {
+            module.deinit(self.allocator);
+        }
+        self.modules.deinit(self.allocator);
+        self.allocator.free(self.source);
+    }
+};
+
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
     var args = try std.process.argsWithAllocator(allocator);
-    _ = args.next();
+    _ = args.next(); // skip program
     const output = args.next().?;
+    const inputs = args.next().?;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
-
-    const file = try std.fs.cwd().createFile(output, .{});
-    defer file.close();
-
-    const src =
-        \\const std = @import("std");
-        \\const nux = @import("nux");
-        \\
-        \\pub const Player = struct {};
-        \\pub fn func2(v: u32, v2: u32) ?void { _ = v; _ = v2; return null; }
-        \\pub fn func3(self: *Player) ?void { _ = self; }
-        \\pub fn func4(self: *Player, id: nux.ObjectID) void { _ = self; _ = id; }
-        \\pub fn func5(self: *Player, id: nux.ObjectID, v: Vec3) void { _ = self; _ = id; }
-        \\pub fn func6(self: *Player, name: []const u8) void {}
-    ;
-    var ast = try std.zig.Ast.parse(alloc, src, .zig);
-    defer ast.deinit(alloc);
-
-    var it = try FunctionIter.init(alloc, &ast);
-    while (try it.next()) |proto| {
-        defer proto.deinit();
-        std.log.info("{s}({s})", .{ proto.name, proto.ret });
-        for (proto.params) |param| {
-            std.log.info("  {s}({s})", .{ param.ident, param.typ });
-        }
-    }
-
     var buffer: [1024]u8 = undefined;
-    var writer = file.writer(&buffer);
-    const out: *std.Io.Writer = &writer.interface;
+
+    // load modules
+    var modules: Modules = try .load(alloc, inputs);
+    defer modules.deinit();
+
+    // open bindings file
+    const out_file = try std.fs.cwd().createFile(output, .{});
+    defer out_file.close();
+    var writer = out_file.writer(&buffer);
+    var out = &writer.interface;
+
     try out.flush();
 }

@@ -1,15 +1,6 @@
 const std = @import("std");
 
-// fn buildCore(b: *std.Build) void {
-//
-// }
-
-pub fn build(b: *std.Build) void {
-
-    // configuration
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
+fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
     // ziglua
     const ziglua_dep = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua52 });
     // zgltf
@@ -30,6 +21,15 @@ pub fn build(b: *std.Build) void {
     const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{ .{ .name = "ziglua", .module = ziglua_dep.module("zlua") }, .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") }, .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") } } });
     core.addAnonymousImport("bindings", .{ .root_source_file = bindings_output, .imports = &.{.{ .name = "ziglua", .module = ziglua_dep.module("zlua") }} });
 
+    return core;
+}
+
+pub fn build(b: *std.Build) void {
+
+    // configuration
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+
     // glfw
     const glfw_dep = b.dependency("glfw", .{ .target = target, .optimize = optimize });
     const glfw_lib = glfw_dep.artifact("glfw");
@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "core", .module = core },
+                .{ .name = "core", .module = buildCore(b, target, optimize) },
                 .{ .name = "gl", .module = zigglgen },
             },
         }),
@@ -59,17 +59,19 @@ pub fn build(b: *std.Build) void {
     native_runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
 
     // web
+    const wasm_target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .os_tag = .wasi,
+    });
+    const wasm_optimize = .ReleaseSmall;
     const wasm_runtime = b.addExecutable(.{
         .name = "nux",
         .root_module = b.createModule(.{
             .root_source_file = b.path("runtimes/web/main.zig"),
-            .target = b.resolveTargetQuery(.{
-                .cpu_arch = .wasm32,
-                .os_tag = .wasi,
-            }),
-            .optimize = .ReleaseSmall,
+            .target = wasm_target,
+            .optimize = wasm_optimize,
             .imports = &.{
-                .{ .name = "core", .module = core },
+                .{ .name = "core", .module = buildCore(b, wasm_target, wasm_optimize) },
             },
         }),
     });
@@ -106,7 +108,7 @@ pub fn build(b: *std.Build) void {
 
     // tests
     const nux_tests = b.addTest(.{
-        .root_module = core,
+        .root_module = buildCore(b, target, optimize),
     });
     const run_mod_tests = b.addRunArtifact(nux_tests);
     const exe_tests = b.addTest(.{

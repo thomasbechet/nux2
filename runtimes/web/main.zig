@@ -1,11 +1,5 @@
 const std = @import("std");
 const core = @import("core");
-const window = @import("window.zig");
-const api = @import("api.zig");
-
-const Config = struct {
-    root: []const u8 = "/tmp/demo",
-};
 
 const Module = struct {
     const Self = @This();
@@ -55,6 +49,4 @@ pub fn main() !void {
     var c = try core.Core.init(allocator, .{Module});
     defer c.deinit();
     try c.update();
-    var context = window.Context{};
-    try context.run(c);
 }

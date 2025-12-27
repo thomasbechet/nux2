@@ -1,7 +1,7 @@
 const c = @cImport({
     @cInclude("glfw3.h");
 });
-const nux = @import("nux");
+const Core = @import("core").Core;
 const gl = @import("gl");
 
 var procs: gl.ProcTable = undefined;
@@ -9,7 +9,7 @@ var procs: gl.ProcTable = undefined;
 pub const Context = struct {
     running: bool = true,
 
-    pub fn run(self: *@This(), core: *nux.Core) !void {
+    pub fn run(self: *@This(), core: *Core) !void {
         if (c.glfwInit() == 0) {
             @panic("Failed to initialize GLFW");
         }

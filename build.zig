@@ -1,5 +1,9 @@
 const std = @import("std");
 
+// fn buildCore(b: *std.Build) void {
+//
+// }
+
 pub fn build(b: *std.Build) void {
 
     // configuration
@@ -12,7 +16,7 @@ pub fn build(b: *std.Build) void {
     const zgltf_dep = b.dependency("zgltf", .{ .target = target, .optimize = optimize });
     // zigimg
     const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
-    // bindings
+    // bindgen
     const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
         .target = target,
         .root_source_file = b.path("core/lua/bindgen.zig"),
@@ -36,8 +40,8 @@ pub fn build(b: *std.Build) void {
         .profile = .core,
         .extensions = &.{},
     });
-    // runtime
-    const runtime = b.addExecutable(.{
+    // native
+    const native_runtime = b.addExecutable(.{
         .name = "nux",
         .use_llvm = true,
         .root_module = b.createModule(.{
@@ -45,23 +49,60 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "nux", .module = core },
+                .{ .name = "core", .module = core },
                 .{ .name = "gl", .module = zigglgen },
             },
         }),
     });
-    b.installArtifact(runtime);
-    runtime.linkLibrary(glfw_lib);
-    runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
+    b.installArtifact(native_runtime);
+    native_runtime.linkLibrary(glfw_lib);
+    native_runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
+
+    // web
+    const wasm_runtime = b.addExecutable(.{
+        .name = "nux",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("runtimes/web/main.zig"),
+            .target = b.resolveTargetQuery(.{
+                .cpu_arch = .wasm32,
+                .os_tag = .wasi,
+            }),
+            .optimize = .ReleaseSmall,
+            .imports = &.{
+                .{ .name = "core", .module = core },
+            },
+        }),
+    });
+    wasm_runtime.entry = .disabled;
+    wasm_runtime.rdynamic = true;
+    const wasm_cmd = b.addRunArtifact(wasm_runtime);
+    wasm_cmd.step.dependOn(b.getInstallStep());
+    const wasm_step = b.step("wasm", "build wasm");
+    wasm_step.dependOn(&wasm_cmd.step);
 
     // run
     const run_step = b.step("run", "run the app");
-    const run_cmd = b.addRunArtifact(runtime);
+    const run_cmd = b.addRunArtifact(native_runtime);
     run_step.dependOn(&run_cmd.step);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
         run_cmd.addArgs(args);
     }
+
+    // debug
+    const lldb = b.addSystemCommand(&.{
+        "lldb",
+        "--",
+    });
+    lldb.addArtifactArg(native_runtime);
+    const lldb_step = b.step("debug", "run the tests under lldb");
+    lldb_step.dependOn(&lldb.step);
+
+    // valgrind
+    const valgrind = b.addSystemCommand(&.{"valgrind"});
+    valgrind.addArtifactArg(native_runtime);
+    const valgrind_step = b.step("valgrind", "run the runtime with valgrind");
+    valgrind_step.dependOn(&valgrind.step);
 
     // tests
     const nux_tests = b.addTest(.{
@@ -69,25 +110,10 @@ pub fn build(b: *std.Build) void {
     });
     const run_mod_tests = b.addRunArtifact(nux_tests);
     const exe_tests = b.addTest(.{
-        .root_module = runtime.root_module,
+        .root_module = native_runtime.root_module,
     });
     const run_exe_tests = b.addRunArtifact(exe_tests);
     const test_step = b.step("test", "run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
-
-    // lldb
-    const lldb = b.addSystemCommand(&.{
-        "lldb",
-        "--",
-    });
-    lldb.addArtifactArg(runtime);
-    const lldb_step = b.step("debug", "run the tests under lldb");
-    lldb_step.dependOn(&lldb.step);
-
-    // valgrind
-    const valgrind = b.addSystemCommand(&.{"valgrind"});
-    valgrind.addArtifactArg(runtime);
-    const valgrind_step = b.step("valgrind", "run the runtime with valgrind");
-    valgrind_step.dependOn(&valgrind.step);
 }

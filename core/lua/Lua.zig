@@ -1,6 +1,6 @@
 const nux = @import("../core.zig");
-const ziglua = @import("zlua");
-// const bindings = @import("bindings");
+const ziglua = @import("ziglua");
+const bindings = @import("bindings");
 
 const Self = @This();
 const hello_file = @embedFile("hello.lua");
@@ -11,25 +11,19 @@ logger: *nux.Logger,
 
 const Context = struct {};
 
-fn adder(lua: *ziglua.Lua) i32 {
-    const a = lua.toInteger(1) catch 0;
-    const b = lua.toInteger(2) catch 0;
-    lua.pushInteger(a + b);
-    return 1;
-}
-
 pub fn init(self: *Self, core: *nux.Core) !void {
     self.lua = try ziglua.Lua.init(core.allocator);
     self.lua.openBase();
 
-    // self.lua.ref
+    bindings.openModules(self.lua);
 
-    self.lua.newTable();
-    self.lua.setFuncs(&.{.{ .name = "add", .func = ziglua.wrap(adder) }}, 0);
-    self.lua.setGlobal("transform");
+    // self.lua.protectedCall(.{}) catch {
+    //     self.logger.info("ERROR: {s}", .{self.lua.toString(-1)});
+    // };
 
-    try self.lua.doString(hello_file);
-
+    self.lua.doString(hello_file) catch {
+        self.logger.info("ERROR: {s}", .{try self.lua.toString(-1)});
+    };
     self.logger.info("{}", .{try self.lua.toInteger(-1)});
 }
 

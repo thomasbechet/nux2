@@ -1,2 +1,3 @@
 print("Hello World !")
-return transform.add(1, 2)
+print(Transform.new())
+return 1

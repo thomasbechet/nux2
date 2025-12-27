@@ -7,7 +7,7 @@
     },
     {
         "path": "core/input/InputMap.zig",
-        "skip": [
+        "ignore": [
             "init"
         ]
     }

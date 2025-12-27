@@ -106,7 +106,11 @@ const FunctionIter = struct {
         }
 
         // parse return type
-        const return_type = self.ast.tokenSlice(self.ast.nodes.get(@intFromEnum(proto.ast.return_type)).main_token);
+        const ret_token = self.ast.nodes.get(@intFromEnum(proto.ast.return_type)).main_token;
+        var return_type = self.ast.tokenSlice(ret_token);
+        if (std.mem.eql(u8, return_type, ".")) {
+            return_type = self.ast.tokenSlice(ret_token + 1);
+        }
 
         return FunctionProto{
             .alloc = self.alloc,
@@ -131,7 +135,7 @@ const FunctionIter = struct {
 
 const ModuleJson = struct {
     path: []const u8,
-    skip: ?[][]const u8 = null,
+    ignore: ?[][]const u8 = null,
 };
 
 const Module = struct {
@@ -187,17 +191,17 @@ const Modules = struct {
             errdefer functions.deinit(alloc);
             var it = try FunctionIter.init(alloc, &ast);
             while (try it.next()) |proto| {
-                var skip = false;
-                if (module.skip) |skips| {
-                    for (skips) |s| {
+                var ignore = false;
+                if (module.ignore) |list| {
+                    for (list) |s| {
                         if (std.mem.eql(u8, s, proto.name)) {
-                            skip = true;
+                            ignore = true;
                             proto.deinit();
                             break;
                         }
                     }
                 }
-                if (!skip) {
+                if (!ignore) {
                     try functions.append(alloc, proto);
                 }
             }
@@ -224,6 +228,20 @@ const Modules = struct {
         self.modules.deinit(self.allocator);
         self.allocator.free(self.source);
     }
+
+    fn print(self: *const Modules) !void {
+        for (self.modules.items) |*module| {
+            const module_name = std.fs.path.stem(module.path);
+            for (module.functions.items) |*function| {
+                var func_name = try toSnakeCase(self.allocator, function.name);
+                defer func_name.deinit(self.allocator);
+                std.log.info("{s}.{s} {s}", .{ module_name, function.name, function.ret });
+                for (function.params) |*param| {
+                    std.log.info("- {s} {s}", .{ param.ident, param.typ });
+                }
+            }
+        }
+    }
 };
 
 fn toSnakeCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
@@ -242,20 +260,38 @@ fn toSnakeCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
 }
 
 fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
-    _ = writer;
+    try modules.print();
+    try writer.print("const ziglua = @import(\"ziglua\");\n", .{});
     for (modules.modules.items) |*module| {
-        var module_name = try toSnakeCase(alloc, std.fs.path.stem(module.path));
-        defer module_name.deinit(alloc);
-        std.log.info("{s}", .{module_name.items});
+        const module_name = std.fs.path.stem(module.path);
+        try writer.print("const {s} = struct {{", .{module_name});
         for (module.functions.items) |*function| {
             var func_name = try toSnakeCase(alloc, function.name);
             defer func_name.deinit(alloc);
-            std.log.info("{s}({s})", .{ func_name.items, function.ret });
-            for (function.params) |param| {
-                std.log.info("  {s}({s})", .{ param.ident, param.typ });
-            }
+            try writer.print("fn {s}(lua: *ziglua.Lua) i32 {{", .{function.name});
+            try writer.print(
+                \\lua.pushInteger(1);
+                \\return 1; 
+            , .{});
+            try writer.print("}}\n", .{});
         }
+        try writer.print("}};", .{});
     }
+
+    try writer.print("pub fn openModules(lua: *ziglua.Lua) void {{\n", .{});
+    for (modules.modules.items) |*module| {
+        const module_name = std.fs.path.stem(module.path);
+        try writer.print("lua.newTable();\n", .{});
+        try writer.print("lua.setFuncs(&.{{\n", .{});
+        for (module.functions.items) |*function| {
+            var func_name = try toSnakeCase(alloc, function.name);
+            defer func_name.deinit(alloc);
+            try writer.print(".{{ .name = \"{s}\", .func = ziglua.wrap({s}.{s}) }},\n", .{ func_name.items, module_name, function.name });
+        }
+        try writer.print("}}, 0);\n", .{});
+        try writer.print("lua.setGlobal(\"{s}\");\n", .{module_name});
+    }
+    try writer.print("}}\n", .{});
 }
 
 pub fn main() !void {

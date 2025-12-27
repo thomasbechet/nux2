@@ -23,8 +23,8 @@ pub fn build(b: *std.Build) void {
     run_bindings_exe.addFileArg(b.path("core/lua/modules.json"));
 
     // core
-    const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{ .{ .name = "zlua", .module = ziglua_dep.module("zlua") }, .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") }, .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") } } });
-    core.addAnonymousImport("bindings", .{ .root_source_file = bindings_output });
+    const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{ .{ .name = "ziglua", .module = ziglua_dep.module("zlua") }, .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") }, .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") } } });
+    core.addAnonymousImport("bindings", .{ .root_source_file = bindings_output, .imports = &.{.{ .name = "ziglua", .module = ziglua_dep.module("zlua") }} });
 
     // glfw
     const glfw_dep = b.dependency("glfw", .{ .target = target, .optimize = optimize });

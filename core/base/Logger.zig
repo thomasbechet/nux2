@@ -10,3 +10,12 @@ pub fn info(
     _ = self;
     std.log.info(format, args);
 }
+
+pub fn err(
+    self: *Self,
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    _ = self;
+    std.log.err(format, args);
+}

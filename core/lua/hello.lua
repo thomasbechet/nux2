@@ -1,3 +1,5 @@
 print("Hello World !")
-print(Transform.new())
-return 1
+print(type(vmath.vec2()))
+local v = vmath.vec2()
+print(v.x)
+print(v.y)

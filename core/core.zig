@@ -114,6 +114,7 @@ pub const Core = struct {
             @import("input/Input.zig"),
             @import("input/InputMap.zig"),
             @import("lua/Lua.zig"),
+            @import("wren/Wren.zig"),
         });
         // Register user modules
         try core.registerModules(mods);

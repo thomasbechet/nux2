@@ -1,30 +1,160 @@
 const std = @import("std");
 
 fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
-    // ziglua
-    const ziglua_dep = b.dependency("ziglua", .{ .target = target, .optimize = optimize, .lang = .lua52 });
+    const wren_lib = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+    });
+    const wren = b.addLibrary(.{
+        .name = "wren",
+        .linkage = .static,
+        .root_module = wren_lib,
+    });
+    wren.linkLibC();
+    wren.addIncludePath(b.path("externals/wren-0.4.0/src/vm/"));
+    wren.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
+    wren.addIncludePath(b.path("externals/wren-0.4.0/src/optional/"));
+    wren.addCSourceFiles(.{
+        .root = b.path("externals/wren-0.4.0/src/"),
+        .files = &.{
+            "vm/wren_compiler.c",
+            "vm/wren_core.c",
+            "vm/wren_debug.c",
+            "vm/wren_primitive.c",
+            "vm/wren_utils.c",
+            "vm/wren_value.c",
+            "vm/wren_vm.c",
+        },
+        .flags = &.{},
+    });
+
+    // lua
+    const lua_lib = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+    });
+    const lua = b.addLibrary(.{
+        .name = "lua",
+        .linkage = .static,
+        .root_module = lua_lib,
+    });
+    lua.addIncludePath(b.path("externals/lua-5.5.0/"));
+    var lua_sources = std.ArrayList([]const u8).initCapacity(b.allocator, 32) catch unreachable;
+    defer lua_sources.deinit(b.allocator);
+    lua_sources.appendSlice(b.allocator, &.{
+        "lapi.c",
+        "lauxlib.c",
+        "lbaselib.c",
+        "lcode.c",
+        "lcorolib.c",
+        "lctype.c",
+        "ldblib.c",
+        "ldebug.c",
+        "ldump.c",
+        "lfunc.c",
+        "lgc.c",
+        "patch_linit.c",
+        "liolib.c",
+        "llex.c",
+        "lmathlib.c",
+        "lmem.c",
+        "loadlib.c",
+        "lobject.c",
+        "lopcodes.c",
+        "lparser.c",
+        "lstate.c",
+        "lstring.c",
+        "lstrlib.c",
+        "ltable.c",
+        "ltablib.c",
+        "ltm.c",
+        "lua.h",
+        "lundump.c",
+        "lutf8lib.c",
+        "lvm.c",
+        "lzio.c",
+    }) catch unreachable;
+    if (target.result.os.tag == .wasi) {
+        lua_sources.append(b.allocator, "patch_wasi_ldo.c") catch unreachable;
+    } else {
+        lua_sources.append(b.allocator, "ldo.c") catch unreachable;
+    }
+    var lua_flags = std.ArrayList([]const u8).initCapacity(b.allocator, 32) catch unreachable;
+    defer lua_flags.deinit(b.allocator);
+    if (target.result.os.tag == .wasi) {
+        lua_flags.appendSlice(b.allocator, &.{
+            "-D_WASI_EMULATED_SIGNAL",
+            "-D_WASI_EMULATED_PROCESS_CLOCKS",
+            "-DLUAI_THROW(L,c)={return;}",
+            "-DLUAI_TRY(L,c,a,u)=a",
+            "-Dluai_jmpbuf=int",
+            "-Djmp_buf=int",
+            // "-mllvm",
+            // "-wasm-enable-sjlj",
+        }) catch unreachable;
+    }
+
+    lua.addCSourceFiles(.{ .root = b.path("externals/lua-5.5.0/"), .files = lua_sources.items, .flags = lua_flags.items, .language = .c });
+    lua.linkLibC();
+
     // zgltf
     const zgltf_dep = b.dependency("zgltf", .{ .target = target, .optimize = optimize });
     // zigimg
     const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
+
     // bindgen
-    const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
-        .target = target,
-        .root_source_file = b.path("core/lua/bindgen.zig"),
-    }) });
-    const run_bindings_exe = b.addRunArtifact(bindings_exe);
-    run_bindings_exe.step.dependOn(&bindings_exe.step);
-    const bindings_output = run_bindings_exe.addOutputFileArg("bindings.zig");
-    run_bindings_exe.addFileArg(b.path("core/lua/modules.json"));
+    // const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
+    //     .target = standard_target,
+    //     .optimize = .Debug,
+    //     .root_source_file = b.path("core/lua/bindgen.zig"),
+    // }) });
+    // const run_bindings_exe = b.addRunArtifact(bindings_exe);
+    // run_bindings_exe.step.dependOn(&bindings_exe.step);
+    // const bindings_output = run_bindings_exe.addOutputFileArg("bindings.zig");
+    // run_bindings_exe.addFileArg(b.path("core/lua/modules.json"));
 
     // core
-    const core = b.addModule("core", .{ .target = target, .optimize = optimize, .root_source_file = b.path("core/core.zig"), .imports = &.{ .{ .name = "ziglua", .module = ziglua_dep.module("zlua") }, .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") }, .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") } } });
-    core.addAnonymousImport("bindings", .{ .root_source_file = bindings_output, .imports = &.{.{ .name = "ziglua", .module = ziglua_dep.module("zlua") }} });
+    const core = b.addModule("core", .{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("core/core.zig"),
+        .imports = &.{
+            // .{ .name = "ziglua", .module = ziglua_dep.module("zlua") },
+            .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") }, .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") },
+            .{ .name = "wren", .module = wren_lib },                   .{ .name = "lua", .module = lua_lib },
+        },
+    });
+    core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
+    core.addIncludePath(b.path("externals/lua-5.5.0/"));
+    // core.addAnonymousImport("bindings", .{ .root_source_file = bindings_output, .imports = &.{.{ .name = "ziglua", .module = ziglua_dep.module("zlua") }} });
 
     return core;
 }
 
-pub fn build(b: *std.Build) void {
+fn buildWasi(b: *std.Build) void {
+    // web
+    const wasm_target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .os_tag = .wasi,
+    });
+    const wasm_optimize = .ReleaseSmall;
+    const wasm_lib = b.addExecutable(.{
+        .name = "nux",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("runtimes/web/main.zig"),
+            .target = wasm_target,
+            .optimize = wasm_optimize,
+            .imports = &.{
+                .{ .name = "core", .module = buildCore(b, wasm_target, wasm_optimize) },
+            },
+        }),
+    });
+    // wasm_runtime.entry = .disabled;
+    // wasm_runtime.rdynamic = true;
+    b.installArtifact(wasm_lib);
+}
+
+pub fn buildNative(b: *std.Build) void {
 
     // configuration
     const target = b.standardTargetOptions(.{});
@@ -57,30 +187,6 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(native_runtime);
     native_runtime.linkLibrary(glfw_lib);
     native_runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
-
-    // web
-    const wasm_target = b.resolveTargetQuery(.{
-        .cpu_arch = .wasm32,
-        .os_tag = .wasi,
-    });
-    const wasm_optimize = .ReleaseSmall;
-    const wasm_runtime = b.addExecutable(.{
-        .name = "nux",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("runtimes/web/main.zig"),
-            .target = wasm_target,
-            .optimize = wasm_optimize,
-            .imports = &.{
-                .{ .name = "core", .module = buildCore(b, wasm_target, wasm_optimize) },
-            },
-        }),
-    });
-    wasm_runtime.entry = .disabled;
-    wasm_runtime.rdynamic = true;
-    const wasm_cmd = b.addRunArtifact(wasm_runtime);
-    wasm_cmd.step.dependOn(b.getInstallStep());
-    const wasm_step = b.step("wasm", "build wasm");
-    wasm_step.dependOn(&wasm_cmd.step);
 
     // run
     const run_step = b.step("run", "run the app");
@@ -118,4 +224,9 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+}
+
+pub fn build(b: *std.Build) void {
+    buildNative(b);
+    // buildWasi(b);
 }

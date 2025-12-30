@@ -119,9 +119,10 @@ fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.buil
         .optimize = optimize,
         .root_source_file = b.path("core/core.zig"),
         .imports = &.{
-            // .{ .name = "ziglua", .module = ziglua_dep.module("zlua") },
-            .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") }, .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") },
-            .{ .name = "wren", .module = wren_lib },                   .{ .name = "lua", .module = lua_lib },
+            .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") },
+            .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") },
+            .{ .name = "lua", .module = lua_lib },
+            // .{ .name = "wren", .module = wren_lib },
         },
     });
     core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));

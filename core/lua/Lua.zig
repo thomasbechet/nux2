@@ -57,8 +57,7 @@ fn doString(lua: *c.lua_State, s: [:0]const u8) !void {
     try protectedCall(lua);
 }
 
-// pub fn set(objs: *@This(), id: ObjectID, comptime field_name: std.meta.FieldEnum(T), value: std.meta.FieldType(T, field_name)) void {
-fn pushUserData(lua: ?*c.lua_State, comptime field: std.meta.Tag(UserData), v: std.meta.TagPayload(UserData, field)) void {
+fn pushUserData(lua: ?*c.lua_State, comptime field: std.meta.Tag(UserData), v: @FieldType(UserData, @tagName(field))) void {
     const ptr: *anyopaque = c.lua_newuserdatauv(lua, @sizeOf(UserData), 0).?;
     const data: *UserData = @ptrCast(@alignCast(ptr));
     data.* = @unionInit(UserData, @tagName(field), v);
@@ -184,39 +183,83 @@ fn metaToString(lua: ?*c.lua_State) callconv(.c) c_int {
     }
     return 1;
 }
-fn metaAddVec(lua: ?*c.lua_State, comptime T: type, v: T) c_int {
-    if (c.lua_gettop(lua) == 1) {
+fn metaAddVec(lua: ?*c.lua_State, ud: *UserData, comptime tag: std.meta.Tag(UserData)) c_int {
+    const v = @field(ud, @tagName(tag));
+    if (c.lua_isnumber(lua, 2) != 0) {
         const s: f32 = @floatCast(c.luaL_checknumber(lua, 2));
-        pushUserData(lua, .vec2, v.add(.scalar(s)));
+        pushUserData(lua, tag, v.add(.scalar(s)));
     } else {
-        const b = checkUserData(lua, .vec2, 2);
-        pushUserData(lua, .vec2, v.add(b.vec2));
+        const b = checkUserData(lua, tag, 2);
+        pushUserData(lua, tag, v.add(@field(b, @tagName(tag))));
+    }
+    return 1;
+}
+fn metaSubVec(lua: ?*c.lua_State, ud: *UserData, comptime tag: std.meta.Tag(UserData)) c_int {
+    const v = @field(ud, @tagName(tag));
+    if (c.lua_isnumber(lua, 2) != 0) {
+        const s: f32 = @floatCast(c.luaL_checknumber(lua, 2));
+        pushUserData(lua, tag, v.sub(.scalar(s)));
+    } else {
+        const b = checkUserData(lua, tag, 2);
+        pushUserData(lua, tag, v.sub(@field(b, @tagName(tag))));
+    }
+    return 1;
+}
+fn metaMulVec(lua: ?*c.lua_State, ud: *UserData, comptime tag: std.meta.Tag(UserData)) c_int {
+    const v = @field(ud, @tagName(tag));
+    if (c.lua_isnumber(lua, 2) != 0) {
+        const s: f32 = @floatCast(c.luaL_checknumber(lua, 2));
+        pushUserData(lua, tag, v.mul(.scalar(s)));
+    } else {
+        const b = checkUserData(lua, tag, 2);
+        pushUserData(lua, tag, v.mul(@field(b, @tagName(tag))));
+    }
+    return 1;
+}
+fn metaDivVec(lua: ?*c.lua_State, ud: *UserData, comptime tag: std.meta.Tag(UserData)) c_int {
+    const v = @field(ud, @tagName(tag));
+    if (c.lua_isnumber(lua, 2) != 0) {
+        const s: f32 = @floatCast(c.luaL_checknumber(lua, 2));
+        pushUserData(lua, tag, v.div(.scalar(s)));
+    } else {
+        const b = checkUserData(lua, tag, 2);
+        pushUserData(lua, tag, v.div(@field(b, @tagName(tag))));
     }
     return 1;
 }
 fn metaAdd(lua: ?*c.lua_State) callconv(.c) c_int {
     const userdata = checkAnyUserData(lua, 1);
     switch (userdata.*) {
-        .vec2 => |*v| {
-            if (c.lua_gettop(lua) == 1) {
-                const s: f32 = @floatCast(c.luaL_checknumber(lua, 2));
-                pushUserData(lua, .vec2, v.add(.scalar(s)));
-            } else {
-                const b = checkUserData(lua, .vec2, 2);
-                pushUserData(lua, .vec2, v.add(b.vec2));
-            }
-            return 1;
-        },
-        .vec3 => |*v| {
-            const b = checkUserData(lua, .vec3, 2);
-            pushUserData(lua, .vec3, v.add(b.vec3));
-            return 1;
-        },
-        .vec4 => |*v| {
-            const b = checkUserData(lua, .vec4, 2);
-            pushUserData(lua, .vec4, v.add(b.vec4));
-            return 1;
-        },
+        .vec2 => return metaAddVec(lua, userdata, .vec2),
+        .vec3 => return metaAddVec(lua, userdata, .vec3),
+        .vec4 => return metaAddVec(lua, userdata, .vec4),
+    }
+    return 0;
+}
+fn metaSub(lua: ?*c.lua_State) callconv(.c) c_int {
+    const userdata = checkAnyUserData(lua, 1);
+    switch (userdata.*) {
+        .vec2 => return metaSubVec(lua, userdata, .vec2),
+        .vec3 => return metaSubVec(lua, userdata, .vec3),
+        .vec4 => return metaSubVec(lua, userdata, .vec4),
+    }
+    return 0;
+}
+fn metaMul(lua: ?*c.lua_State) callconv(.c) c_int {
+    const userdata = checkAnyUserData(lua, 1);
+    switch (userdata.*) {
+        .vec2 => return metaMulVec(lua, userdata, .vec2),
+        .vec3 => return metaMulVec(lua, userdata, .vec3),
+        .vec4 => return metaMulVec(lua, userdata, .vec4),
+    }
+    return 0;
+}
+fn metaDiv(lua: ?*c.lua_State) callconv(.c) c_int {
+    const userdata = checkAnyUserData(lua, 1);
+    switch (userdata.*) {
+        .vec2 => return metaDivVec(lua, userdata, .vec2),
+        .vec3 => return metaDivVec(lua, userdata, .vec3),
+        .vec4 => return metaDivVec(lua, userdata, .vec4),
     }
     return 0;
 }
@@ -270,6 +313,9 @@ fn openVMath(lua: *c.lua_State) !void {
         .{ .name = "__newindex", .func = metaNewIndex },
         .{ .name = "__tostring", .func = metaToString },
         .{ .name = "__add", .func = metaAdd },
+        .{ .name = "__sub", .func = metaSub },
+        .{ .name = "__mul", .func = metaMul },
+        .{ .name = "__div", .func = metaDiv },
         .{ .name = "__unm", .func = metaNeg },
         .{ .name = null, .func = null },
     };

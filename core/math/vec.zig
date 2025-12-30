@@ -57,6 +57,14 @@ pub fn Vec(n: comptime_int, comptime T: type) type {
             self.data = self.data * other.data;
         }
 
+        pub fn div(self: Self, other: Self) Self {
+            return .{ .data = self.data / other.data };
+        }
+
+        pub fn divAssign(self: *Self, other: Self) void {
+            self.data = self.data / other.data;
+        }
+
         pub fn dot(self: Self, other: Self) T {
             var sum: T = 0;
             inline for (0..n) |i| {

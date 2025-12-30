@@ -13,57 +13,48 @@ pub fn Vec(n: comptime_int, comptime T: type) type {
 
     return struct {
         const Self = @This();
+        pub const N = n;
 
         data: @Vector(n, T),
 
-        pub fn zero() Self {
-            return Self{ .data = @splat(0) };
+        pub fn init(v: [n]T) Self {
+            var vec = Self{ .data = undefined };
+            inline for (0..n) |i| {
+                vec.data[i] = v[i];
+            }
+            return vec;
         }
 
-        pub fn init(v: T) Self {
+        pub fn zero() Self {
+            return .scalar(0);
+        }
+
+        pub fn scalar(v: T) Self {
             return Self{ .data = @splat(v) };
         }
 
         pub fn add(self: Self, other: Self) Self {
-            var result: Self = .{ .data = undefined };
-            inline for (0..n) |i| {
-                result.data[i] = self.data[i] + other.data[i];
-            }
-            return result;
+            return .{ .data = self.data + other.data };
         }
 
         pub fn addAssign(self: *Self, other: Self) void {
-            inline for (0..n) |i| {
-                self.data[i] += other.data[i];
-            }
+            self.data = self.data + other.data;
         }
 
         pub fn sub(self: Self, other: Self) Self {
-            var result: Self = .{ .data = undefined };
-            inline for (0..n) |i| {
-                result.data[i] = self.data[i] - other.data[i];
-            }
-            return result;
+            return .{ .data = self.data - other.data };
         }
 
         pub fn subAssign(self: *Self, other: Self) void {
-            inline for (0..n) |i| {
-                self.data[i] -= other.data[i];
-            }
+            self.data = self.data - other.data;
         }
 
-        pub fn scale(self: Self, other: T) Self {
-            var result: Self = .{ .data = undefined };
-            inline for (0..n) |i| {
-                result.data[i] = self.data[i] * other;
-            }
-            return result;
+        pub fn mul(self: Self, other: Self) Self {
+            return .{ .data = self.data * other.data };
         }
 
-        pub fn scaleAssign(self: *Self, other: T) void {
-            inline for (0..n) |i| {
-                self.data[i] *= other;
-            }
+        pub fn mulAssign(self: *Self, other: Self) void {
+            self.data = self.data * other.data;
         }
 
         pub fn dot(self: Self, other: Self) T {
@@ -74,7 +65,11 @@ pub fn Vec(n: comptime_int, comptime T: type) type {
             return sum;
         }
 
-        pub fn lenSq(self: Self) T {
+        pub fn neg(self: Self) Self {
+            return self.mul(.scalar(-1));
+        }
+
+        pub fn lenSqrt(self: Self) T {
             return self.dot(self);
         }
 
@@ -151,6 +146,6 @@ pub fn Vec(n: comptime_int, comptime T: type) type {
 pub const Vec2f = Vec(2, f32);
 pub const Vec3f = Vec(3, f32);
 pub const Vec4f = Vec(4, f32);
-pub const Vec2 = Vec(2, f64);
-pub const Vec3 = Vec(3, f64);
-pub const Vec4 = Vec(4, f64);
+pub const Vec2d = Vec(2, f64);
+pub const Vec3d = Vec(3, f64);
+pub const Vec4d = Vec(4, f64);

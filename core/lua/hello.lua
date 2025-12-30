@@ -1,5 +1,5 @@
-print("Hello World !")
-print(type(vmath.vec2()))
-local v = vmath.vec2()
-print(v.x)
-print(v.y)
+local vec2 = vmath.vec2;
+print(vec2())
+print(vec2(1))
+print(vec2(2, 2) * 3)
+

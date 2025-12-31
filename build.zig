@@ -103,15 +103,15 @@ fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.buil
     const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
 
     // bindgen
-    // const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
-    //     .target = standard_target,
-    //     .optimize = .Debug,
-    //     .root_source_file = b.path("core/lua/bindgen.zig"),
-    // }) });
-    // const run_bindings_exe = b.addRunArtifact(bindings_exe);
-    // run_bindings_exe.step.dependOn(&bindings_exe.step);
-    // const bindings_output = run_bindings_exe.addOutputFileArg("bindings.zig");
-    // run_bindings_exe.addFileArg(b.path("core/lua/modules.json"));
+    const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
+        .target = target,
+        .optimize = .Debug,
+        .root_source_file = b.path("core/lua/bindgen.zig"),
+    }) });
+    const run_bindings_exe = b.addRunArtifact(bindings_exe);
+    run_bindings_exe.step.dependOn(&bindings_exe.step);
+    const bindings_output = run_bindings_exe.addOutputFileArg("lua_bindings.zig");
+    run_bindings_exe.addFileArg(b.path("core/lua/modules.json"));
 
     // core
     const core = b.addModule("core", .{
@@ -127,7 +127,7 @@ fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.buil
     });
     core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
     core.addIncludePath(b.path("externals/lua-5.5.0/"));
-    // core.addAnonymousImport("bindings", .{ .root_source_file = bindings_output, .imports = &.{.{ .name = "ziglua", .module = ziglua_dep.module("zlua") }} });
+    core.addAnonymousImport("lua_bindings", .{ .root_source_file = bindings_output });
 
     return core;
 }

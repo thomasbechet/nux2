@@ -1,8 +1,8 @@
 const nux = @import("../core.zig");
 const std = @import("std");
-// const bindings = @import("bindings");
+const lua_bindings = @import("lua_bindings");
 
-const c = @cImport({
+pub const c = @cImport({
     @cInclude("lua.h");
     @cInclude("lualib.h");
     @cInclude("lauxlib.h");
@@ -361,6 +361,7 @@ pub fn init(self: *Self, core: *nux.Core) !void {
     // open api
     c.luaL_openlibs(self.lua); // base api
     try openVMath(self.lua); // vmath
+    lua_bindings.Bindings(c).openModules(self.lua); // modules
 
     doString(self.lua, hello_file) catch {
         self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});

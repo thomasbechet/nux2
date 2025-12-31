@@ -261,16 +261,19 @@ fn toSnakeCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
 
 fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
     try modules.print();
-    try writer.print("const ziglua = @import(\"ziglua\");\n", .{});
+    try writer.print(
+        \\pub fn Bindings(c: anytype) type {{
+        \\  return struct {{
+    , .{});
     for (modules.modules.items) |*module| {
         const module_name = std.fs.path.stem(module.path);
         try writer.print("const {s} = struct {{", .{module_name});
         for (module.functions.items) |*function| {
             var func_name = try toSnakeCase(alloc, function.name);
             defer func_name.deinit(alloc);
-            try writer.print("fn {s}(lua: *ziglua.Lua) i32 {{", .{function.name});
+            try writer.print("fn {s}(lua: ?*c.lua_State) callconv(.c) c_int {{", .{function.name});
             try writer.print(
-                \\lua.pushInteger(1);
+                \\c.lua_pushinteger(lua, 1);
                 \\return 1; 
             , .{});
             try writer.print("}}\n", .{});
@@ -278,20 +281,22 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
         try writer.print("}};", .{});
     }
 
-    try writer.print("pub fn openModules(lua: *ziglua.Lua) void {{\n", .{});
+    try writer.print("pub fn openModules(lua: ?*c.lua_State) void {{\n", .{});
     for (modules.modules.items) |*module| {
         const module_name = std.fs.path.stem(module.path);
-        try writer.print("lua.newTable();\n", .{});
-        try writer.print("lua.setFuncs(&.{{\n", .{});
+        try writer.print("c.lua_newtable(lua);\n", .{});
+        try writer.print("const {s}_lib: [*]const c.luaL_Reg = &.{{", .{module_name});
         for (module.functions.items) |*function| {
             var func_name = try toSnakeCase(alloc, function.name);
             defer func_name.deinit(alloc);
-            try writer.print(".{{ .name = \"{s}\", .func = ziglua.wrap({s}.{s}) }},\n", .{ func_name.items, module_name, function.name });
+            try writer.print(".{{ .name = \"{s}\", .func = {s}.{s} }},\n", .{ func_name.items, module_name, function.name });
         }
-        try writer.print("}}, 0);\n", .{});
-        try writer.print("lua.setGlobal(\"{s}\");\n", .{module_name});
+        try writer.print(".{{ .name = null, .func = null }}, }};\n", .{});
+        try writer.print("c.luaL_setfuncs(lua, {s}_lib, 0);\n", .{module_name});
+        try writer.print("c.lua_setglobal(lua, \"{s}\");\n", .{module_name});
     }
     try writer.print("}}\n", .{});
+    try writer.print("}}; }}", .{});
 }
 
 pub fn main() !void {

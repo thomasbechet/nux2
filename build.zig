@@ -245,4 +245,3 @@ pub fn build(b: *std.Build) void {
         .web => buildWeb(b),
     }
 }
-

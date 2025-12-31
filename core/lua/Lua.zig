@@ -179,7 +179,7 @@ fn metaToString(lua: ?*c.lua_State) callconv(.c) c_int {
     switch (userdata.*) {
         .vec2 => |*v| _ = c.lua_pushfstring(lua, "vec2(%f, %f)", v.data[0], v.data[1]),
         .vec3 => |*v| _ = c.lua_pushfstring(lua, "vec3(%f, %f, %f)", v.data[0], v.data[1], v.data[2]),
-        .vec4 => |*v| _ = c.lua_pushfstring(lua, "vec3(%f, %f, %f, %f)", v.data[0], v.data[1], v.data[2], v.data[3]),
+        .vec4 => |*v| _ = c.lua_pushfstring(lua, "vec4(%f, %f, %f, %f)", v.data[0], v.data[1], v.data[2], v.data[3]),
     }
     return 1;
 }

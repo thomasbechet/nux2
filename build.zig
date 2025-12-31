@@ -1,32 +1,33 @@
 const std = @import("std");
 
-fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
-    const wren_lib = b.createModule(.{
-        .target = target,
-        .optimize = optimize,
-    });
-    const wren = b.addLibrary(.{
-        .name = "wren",
-        .linkage = .static,
-        .root_module = wren_lib,
-    });
-    wren.linkLibC();
-    wren.addIncludePath(b.path("externals/wren-0.4.0/src/vm/"));
-    wren.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
-    wren.addIncludePath(b.path("externals/wren-0.4.0/src/optional/"));
-    wren.addCSourceFiles(.{
-        .root = b.path("externals/wren-0.4.0/src/"),
-        .files = &.{
-            "vm/wren_compiler.c",
-            "vm/wren_core.c",
-            "vm/wren_debug.c",
-            "vm/wren_primitive.c",
-            "vm/wren_utils.c",
-            "vm/wren_value.c",
-            "vm/wren_vm.c",
-        },
-        .flags = &.{},
-    });
+fn buildCore(b: *std.Build, standard_target: std.Build.ResolvedTarget, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+    // // wren
+    // const wren_lib = b.createModule(.{
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // const wren = b.addLibrary(.{
+    //     .name = "wren",
+    //     .linkage = .static,
+    //     .root_module = wren_lib,
+    // });
+    // wren.linkLibC();
+    // wren.addIncludePath(b.path("externals/wren-0.4.0/src/vm/"));
+    // wren.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
+    // wren.addIncludePath(b.path("externals/wren-0.4.0/src/optional/"));
+    // wren.addCSourceFiles(.{
+    //     .root = b.path("externals/wren-0.4.0/src/"),
+    //     .files = &.{
+    //         "vm/wren_compiler.c",
+    //         "vm/wren_core.c",
+    //         "vm/wren_debug.c",
+    //         "vm/wren_primitive.c",
+    //         "vm/wren_utils.c",
+    //         "vm/wren_value.c",
+    //         "vm/wren_vm.c",
+    //     },
+    //     .flags = &.{},
+    // });
 
     // lua
     const lua_lib = b.createModule(.{
@@ -102,9 +103,9 @@ fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.buil
     // zigimg
     const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
 
-    // bindgen
+    // lua_bindings
     const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
-        .target = target,
+        .target = standard_target,
         .optimize = .Debug,
         .root_source_file = b.path("core/lua/bindgen.zig"),
     }) });
@@ -132,27 +133,36 @@ fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.buil
     return core;
 }
 
-fn buildWasi(b: *std.Build) void {
-    // web
+fn buildWeb(b: *std.Build) void {
+
+    // configuration
     const wasm_target = b.resolveTargetQuery(.{
         .cpu_arch = .wasm32,
         .os_tag = .wasi,
     });
     const wasm_optimize = .ReleaseSmall;
-    const wasm_lib = b.addExecutable(.{
+    const standard_target = b.standardTargetOptions(.{});
+
+    // core
+    const core = buildCore(b, standard_target, wasm_target, wasm_optimize);
+    // web
+    const wasm = b.addExecutable(.{
         .name = "nux",
         .root_module = b.createModule(.{
             .root_source_file = b.path("runtimes/web/main.zig"),
             .target = wasm_target,
             .optimize = wasm_optimize,
             .imports = &.{
-                .{ .name = "core", .module = buildCore(b, wasm_target, wasm_optimize) },
+                .{ .name = "core", .module = core },
             },
         }),
     });
-    // wasm_runtime.entry = .disabled;
-    // wasm_runtime.rdynamic = true;
-    b.installArtifact(wasm_lib);
+    wasm.entry = .disabled;
+    wasm.rdynamic = true;
+    wasm.wasi_exec_model = .reactor;
+    wasm.import_symbols = true;
+    const install = b.addInstallArtifact(wasm, .{ .dest_dir = .{ .override = .{ .custom = "../runtimes/web/" } } });
+    b.default_step.dependOn(&install.step);
 }
 
 pub fn buildNative(b: *std.Build) void {
@@ -161,6 +171,8 @@ pub fn buildNative(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // core
+    const core = buildCore(b, target, target, optimize);
     // glfw
     const glfw_dep = b.dependency("glfw", .{ .target = target, .optimize = optimize });
     const glfw_lib = glfw_dep.artifact("glfw");
@@ -180,7 +192,7 @@ pub fn buildNative(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "core", .module = buildCore(b, target, optimize) },
+                .{ .name = "core", .module = core },
                 .{ .name = "gl", .module = zigglgen },
             },
         }),
@@ -214,9 +226,7 @@ pub fn buildNative(b: *std.Build) void {
     valgrind_step.dependOn(&valgrind.step);
 
     // tests
-    const nux_tests = b.addTest(.{
-        .root_module = buildCore(b, target, optimize),
-    });
+    const nux_tests = b.addTest(.{ .root_module = core });
     const run_mod_tests = b.addRunArtifact(nux_tests);
     const exe_tests = b.addTest(.{
         .root_module = native_runtime.root_module,
@@ -228,6 +238,11 @@ pub fn buildNative(b: *std.Build) void {
 }
 
 pub fn build(b: *std.Build) void {
-    buildNative(b);
-    // buildWasi(b);
+    const Runtime = enum { native, web };
+    const runtime = b.option(Runtime, "runtime", "Runtime target") orelse .native;
+    switch (runtime) {
+        .native => buildNative(b),
+        .web => buildWeb(b),
+    }
 }
+

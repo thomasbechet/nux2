@@ -15,26 +15,6 @@ const Module = struct {
 
     pub fn init(self: *Self, c: *core.Core) !void {
         self.object = c.object;
-
-        // const id = try self.object.new(@typeName(MyObject), .null);
-        // std.log.info("{any}", .{id});
-        // try self.object.delete(id);
-        //
-        // const root, _ = try self.objects.add(.null);
-        // _, _ = try self.objects.add(root);
-        // self.object.dump(root);
-        // const s =
-        //     \\{ "value": 666 }
-        // ;
-        // // try self.objects.loadJson(id, s);
-        // std.log.info("{any}", .{id});
-        // try self.object.loadJson(id, s);
-        // std.log.info("{any}", .{try self.objects.get(id)});
-        //
-        // var buf: [2048]u8 = undefined;
-        // var fba = std.heap.FixedBufferAllocator.init(&buf);
-        // const json = try self.object.saveJson(id, fba.allocator());
-        // std.log.info("{s}", .{json.items});
         const id = try self.transform.new(.null);
         self.logger.info("{}", .{id});
     }
@@ -44,9 +24,9 @@ const Module = struct {
     pub fn delete(_: *Self, _: core.ObjectID) void {}
 };
 
-pub fn main() !void {
+export fn instance_init() void {
     const allocator = std.heap.page_allocator;
-    var c = try core.Core.init(allocator, .{Module});
+    var c = core.Core.init(allocator, .{Module}) catch unreachable;
     defer c.deinit();
-    try c.update();
+    c.update() catch unreachable;
 }

@@ -100,11 +100,11 @@ entries: std.ArrayList(ObjectEntry),
 free: std.ArrayList(ObjectEntry.Index),
 types: std.ArrayList(ObjectType),
 
-pub fn init(self: *Self, core: *nux.Core) !void {
-    self.allocator = core.allocator;
-    self.entries = try .initCapacity(core.allocator, 1024);
-    self.free = try .initCapacity(core.allocator, 1024);
-    self.types = try .initCapacity(core.allocator, 64);
+pub fn init(self: *Self, core: *const nux.Core) !void {
+    self.allocator = core.platform.allocator;
+    self.entries = try .initCapacity(self.allocator, 1024);
+    self.free = try .initCapacity(self.allocator, 1024);
+    self.types = try .initCapacity(self.allocator, 64);
     // reserve index 0 for null object id
     _ = try self.entries.addOne(self.allocator);
 }

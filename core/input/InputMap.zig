@@ -21,8 +21,8 @@ objects: nux.ObjectPool(struct {
     }
 }),
 
-pub fn init(self: *Self, core: *nux.Core) !void {
-    self.allocator = core.allocator;
+pub fn init(self: *Self, core: *const nux.Core) !void {
+    self.allocator = core.platform.allocator;
 }
 
 pub fn new(self: *Self, parent: nux.ObjectID) !nux.ObjectID {

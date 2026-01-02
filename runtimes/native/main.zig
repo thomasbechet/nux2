@@ -19,7 +19,7 @@ const Module = struct {
     transform: *core.Transform,
     logger: *core.Logger,
 
-    pub fn init(self: *Self, c: *core.Core) !void {
+    pub fn init(self: *Self, c: *const core.Core) !void {
         self.object = c.object;
 
         // const id = try self.object.new(@typeName(MyObject), .null);
@@ -50,9 +50,12 @@ const Module = struct {
     pub fn delete(_: *Self, _: core.ObjectID) void {}
 };
 
+fn log(_: *anyopaque, msg: []const u8) void {
+    std.log.info("{s}", .{msg});
+}
+
 pub fn main() !void {
-    const allocator = std.heap.page_allocator;
-    var c = try core.Core.init(allocator, .{Module});
+    var c: *core.Core = try .init(.{ .allocator = std.heap.page_allocator }, .{Module});
     defer c.deinit();
     try c.update();
     var context = window.Context{};

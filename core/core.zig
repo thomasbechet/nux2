@@ -1,6 +1,4 @@
 const std = @import("std");
-const zlua = @import("zlua");
-const zigimg = @import("zigimg");
 
 pub const Logger = @import("base/Logger.zig");
 pub const Object = @import("base/Object.zig");
@@ -12,6 +10,12 @@ pub const vec = @import("math/vec.zig");
 pub const Vec2 = vec.Vec2f;
 pub const Vec3 = vec.Vec3f;
 pub const Vec4 = vec.Vec4f;
+
+pub const Platform = struct {
+    pub const Logger = @import("platform/Logger.zig");
+    allocator: std.mem.Allocator,
+    logger: Platform.Logger = .default,
+};
 
 pub const Module = struct {
     allocator: std.mem.Allocator,
@@ -43,7 +47,8 @@ pub const Module = struct {
                 // objects initialization
                 try core.object.initModuleObjects(T, self);
                 if (@hasDecl(T, "init")) {
-                    return self.init(core);
+                    const ccore: *const Core = core;
+                    return self.init(ccore);
                 }
             }
             fn call_deinit(pointer: *anyopaque) void {
@@ -98,14 +103,14 @@ pub const Module = struct {
 };
 
 pub const Core = struct {
-    allocator: std.mem.Allocator,
     modules: std.ArrayList(Module),
+    platform: Platform,
     object: *Object,
 
-    pub fn init(allocator: std.mem.Allocator, comptime mods: anytype) !*Core {
-        var core = try allocator.create(@This());
-        core.allocator = allocator;
-        core.modules = try .initCapacity(allocator, 32);
+    pub fn init(platform: Platform, comptime mods: anytype) !*Core {
+        var core = try platform.allocator.create(@This());
+        core.platform = platform;
+        core.modules = try .initCapacity(platform.allocator, 32);
 
         // Register core modules
         core.object = try core.registerModule(Object);
@@ -115,21 +120,9 @@ pub const Core = struct {
             @import("input/Input.zig"),
             @import("input/InputMap.zig"),
             @import("lua/Lua.zig"),
-            // @import("wren/Wren.zig"),
         });
         // Register user modules
         try core.registerModules(mods);
-
-        // var read_buffer: [zigimg.io.DEFAULT_BUFFER_SIZE * 10]u8 = undefined;
-        // var image = try zigimg.Image.fromFilePath(allocator, "pannel22.jpg", read_buffer[0..]);
-        // defer image.deinit(allocator);
-        //
-        // // Add an integer to the Lua stack and retrieve it
-        // lua.pushInteger(42);
-        // std.debug.print("{}\n", .{try lua.toInteger(1)});
-        //
-        // const buffer = try std.fs.cwd().readFileAllocOptions(allocator, "test-samples/rigged_simple/RiggedSimple.gltf", 512_000, null, std.mem.Alignment.@"4", null);
-        // defer allocator.free(buffer);
 
         return core;
     }
@@ -145,8 +138,8 @@ pub const Core = struct {
         while (i > 0) : (i -= 1) {
             self.modules.items[i - 1].deinit();
         }
-        self.modules.deinit(self.allocator);
-        self.allocator.destroy(self);
+        self.modules.deinit(self.platform.allocator);
+        self.platform.allocator.destroy(self);
     }
 
     pub fn update(self: *Core) !void {
@@ -159,8 +152,8 @@ pub const Core = struct {
         const first = self.modules.items.len;
         inline for (mods) |mod| {
             std.log.info("register module {s}...", .{@typeName(mod)});
-            const module = try self.modules.addOne(self.allocator);
-            module.* = try .init(mod, self.allocator);
+            const module = try self.modules.addOne(self.platform.allocator);
+            module.* = try .init(mod, self.platform.allocator);
         }
         for (self.modules.items[first..]) |*module| {
             std.log.info("init module {s}...", .{module.name});

@@ -353,8 +353,8 @@ fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv
     }
 }
 
-pub fn init(self: *Self, core: *nux.Core) !void {
-    self.allocator = core.allocator;
+pub fn init(self: *Self, core: *const nux.Core) !void {
+    self.allocator = core.platform.allocator;
     self.lua = c.lua_newstate(alloc, self, 0) orelse return error.newstate;
     errdefer c.lua_close(self.lua);
 

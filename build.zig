@@ -57,7 +57,6 @@ fn buildCore(b: *std.Build, standard_target: std.Build.ResolvedTarget, target: s
         "llex.c",
         "lmathlib.c",
         "lmem.c",
-        "loadlib.c",
         "lobject.c",
         "lopcodes.c",
         "lparser.c",
@@ -90,6 +89,7 @@ fn buildCore(b: *std.Build, standard_target: std.Build.ResolvedTarget, target: s
             "-Djmp_buf=int",
             // "-mllvm",
             // "-wasm-enable-sjlj",
+            // "--trace-symbol=fd_write"
         }) catch unreachable;
     }
 
@@ -97,9 +97,9 @@ fn buildCore(b: *std.Build, standard_target: std.Build.ResolvedTarget, target: s
     lua.linkLibC();
 
     // zgltf
-    const zgltf_dep = b.dependency("zgltf", .{ .target = target, .optimize = optimize });
+    // const zgltf_dep = b.dependency("zgltf", .{ .target = target, .optimize = optimize });
     // zigimg
-    const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
+    // const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
 
     // lua_bindings
     const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
@@ -118,8 +118,8 @@ fn buildCore(b: *std.Build, standard_target: std.Build.ResolvedTarget, target: s
         .optimize = optimize,
         .root_source_file = b.path("core/core.zig"),
         .imports = &.{
-            .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") },
-            .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") },
+            // .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") },
+            // .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") },
             .{ .name = "lua", .module = lua_lib },
             // .{ .name = "wren", .module = wren_lib },
         },
@@ -155,10 +155,16 @@ fn buildWeb(b: *std.Build) void {
             },
         }),
     });
+    // wasm.verbose_cc
     wasm.entry = .disabled;
     wasm.rdynamic = true;
     wasm.wasi_exec_model = .reactor;
-    wasm.import_symbols = true;
+    // wasm.import_symbols = true;
+    // wasm.max_memory = (1 << 28);
+    // wasm.import_symbols
+    // wasm.export_memory = true;
+    // wasm.import_memory = true;
+    // wasm.initial_memory = (1 << 28);
     const install = b.addInstallArtifact(wasm, .{ .dest_dir = .{ .override = .{ .custom = "../runtimes/web/" } } });
     b.default_step.dependOn(&install.step);
 }

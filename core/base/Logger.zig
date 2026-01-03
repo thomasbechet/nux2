@@ -16,7 +16,7 @@ pub fn log(
     args: anytype,
 ) void {
     var buf: [256]u8 = undefined;
-    const out = std.fmt.bufPrint(&buf, format, args) catch {
+    const out = std.fmt.bufPrintZ(&buf, format, args) catch {
         return;
     };
     self.platform.vtable.log(self.platform.ptr, level, out);

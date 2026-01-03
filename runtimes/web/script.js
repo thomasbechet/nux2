@@ -17,6 +17,9 @@ const importObject = {
       console.log(decodeString(data, len));
       return 1;
     },
+    runtime_log: function (level, data, len) {
+      console.log(decodeString(data, len))
+    },
     nux_os_file_open: (userdata, slot, path, len, mode) => {
       path = decodeString(path, len);
       if (path === "cart.bin") {
@@ -61,23 +64,22 @@ const importObject = {
     nux_os_gpu_submit: (userdata, pcmds, count) => { return 1; },
     nux_os_input_update: (userdata, pbuttons, paxis) => { return 1; },
     // nux_os_stats_update: (userdata, pstats) => { return 1; },
-
   },
   wasi_snapshot_preview1: {
-    fd_close: fd => { return 0; },
-    fd_read: fd => { return 0; },
-    fd_seek: (fd, offset_low, offset_high, whence, newOffset) => { return 0; },
-    fd_write(fd, iovsPtr, iovsLength, bytesWrittenPtr) { return 0; },
-    fd_fdstat_get: (fd, stat) => { return 0; },
-    clock_time_get: () => { },
-    fd_fdstat_set_flags: () => { },
-    fd_filestat_get: () => { },
-    fd_prestat_get: () => { },
-    fd_prestat_dir_name: () => { },
-    fd_pwrite: () => { },
-    fd_renumber: () => { },
-    path_open: () => { },
-    proc_exit: () => { },
+    // fd_close: fd => { return 0; },
+    // fd_read: fd => { return 0; },
+    // fd_seek: (fd, offset_low, offset_high, whence, newOffset) => { return 0; },
+    // fd_write(fd, iovsPtr, iovsLength, bytesWrittenPtr) { return 0; },
+    // fd_fdstat_get: (fd, stat) => { return 0; },
+    // clock_time_get: () => { },
+    // fd_fdstat_set_flags: () => { },
+    // fd_filestat_get: () => { },
+    // fd_prestat_get: () => { },
+    // fd_prestat_dir_name: () => { },
+    // fd_pwrite: () => { },
+    // fd_renumber: () => { },
+    // path_open: () => { },
+    // proc_exit: () => { },
   },
 }
 const init = async () => {
@@ -96,7 +98,7 @@ const init = async () => {
   let obj = await WebAssembly.instantiateStreaming(runtime, importObject);
   instance = obj.instance
   console.log(instance.exports)
-  // instance.exports.instance_init();
+  instance.exports.runtime_init();
 
   const canvas = document.querySelector("#gl-canvas");
   const gl = canvas.getContext("webgl");

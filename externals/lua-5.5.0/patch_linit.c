@@ -28,7 +28,6 @@
 static const luaL_Reg stdlibs[] = {
   {LUA_GNAME, luaopen_base},
   {LUA_COLIBNAME, luaopen_coroutine},
-  {LUA_DBLIBNAME, luaopen_debug},
   {LUA_MATHLIBNAME, luaopen_math},
   {LUA_STRLIBNAME, luaopen_string},
   {LUA_TABLIBNAME, luaopen_table},

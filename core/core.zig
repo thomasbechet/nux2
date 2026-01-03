@@ -12,8 +12,9 @@ pub const Vec3 = vec.Vec3f;
 pub const Vec4 = vec.Vec4f;
 
 pub const Platform = struct {
+    pub const Allocator = std.mem.Allocator;
     pub const Logger = @import("platform/Logger.zig");
-    allocator: std.mem.Allocator,
+    allocator: Platform.Allocator = std.heap.page_allocator,
     logger: Platform.Logger = .default,
 };
 

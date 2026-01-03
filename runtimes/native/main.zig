@@ -50,10 +50,6 @@ const Module = struct {
     pub fn delete(_: *Self, _: core.ObjectID) void {}
 };
 
-fn log(_: *anyopaque, msg: []const u8) void {
-    std.log.info("{s}", .{msg});
-}
-
 pub fn main() !void {
     var c: *core.Core = try .init(.{ .allocator = std.heap.page_allocator }, .{Module});
     defer c.deinit();

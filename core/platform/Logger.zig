@@ -10,9 +10,10 @@ pub const VTable = struct {
 const Default = struct {
     fn log(_: *anyopaque, level: std.log.Level, msg: []const u8) void {
         switch (level) {
-            else => {
-                std.log.info("{s}", .{msg});
-            },
+            .err => std.log.err("{s}", .{msg}),
+            .warn => std.log.warn("{s}", .{msg}),
+            .info => std.log.info("{s}", .{msg}),
+            .debug => std.log.debug("{s}", .{msg}),
         }
     }
 };

@@ -37,7 +37,9 @@ pub const Module = struct {
                     switch (@typeInfo(field.type)) {
                         .pointer => |info| {
                             if (core.findModule(info.child)) |dependency| {
-                                std.log.info("inject {s} to {s}", .{ @typeName(info.child), @typeName(T) });
+                                if (core.log_enabled) {
+                                    core.logger.info("inject {s} to {s}", .{ @typeName(info.child), @typeName(T) });
+                                }
                                 @field(self, field.name) = dependency;
                             }
                         },
@@ -106,16 +108,20 @@ pub const Core = struct {
     modules: std.ArrayList(Module),
     platform: Platform,
     object: *Object,
+    logger: *Logger,
+    log_enabled: bool,
 
     pub fn init(platform: Platform, comptime mods: anytype) !*Core {
         var core = try platform.allocator.create(@This());
         core.platform = platform;
         core.modules = try .initCapacity(platform.allocator, 32);
+        core.log_enabled = false;
 
         // Register core modules
+        core.logger = try core.registerModule(Logger);
+        core.log_enabled = true;
         core.object = try core.registerModule(Object);
         try core.registerModules(.{
-            @import("base/Logger.zig"),
             @import("base/Transform.zig"),
             @import("input/Input.zig"),
             @import("input/InputMap.zig"),
@@ -131,7 +137,9 @@ pub const Core = struct {
         var i = self.modules.items.len;
         while (i > 0) : (i -= 1) {
             const module = &self.modules.items[i - 1];
-            std.log.info("deinit module {s}...", .{module.name});
+            if (self.log_enabled) {
+                self.logger.info("deinit module {s}...", .{module.name});
+            }
             module.call_deinit();
         }
         i = self.modules.items.len;
@@ -151,12 +159,16 @@ pub const Core = struct {
     pub fn registerModules(self: *Core, comptime mods: anytype) !void {
         const first = self.modules.items.len;
         inline for (mods) |mod| {
-            std.log.info("register module {s}...", .{@typeName(mod)});
+            if (self.log_enabled) {
+                self.logger.info("register module {s}...", .{@typeName(mod)});
+            }
             const module = try self.modules.addOne(self.platform.allocator);
             module.* = try .init(mod, self.platform.allocator);
         }
         for (self.modules.items[first..]) |*module| {
-            std.log.info("init module {s}...", .{module.name});
+            if (self.log_enabled) {
+                self.logger.info("init module {s}...", .{module.name});
+            }
             try module.call_init(self);
         }
     }
@@ -166,7 +178,7 @@ pub const Core = struct {
         return self.findModule(T) orelse return undefined;
     }
 
-    fn findModule(self: *@This(), comptime T: type) ?*T {
+    pub fn findModule(self: *@This(), comptime T: type) ?*T {
         for (self.modules.items) |*module| {
             if (std.mem.eql(u8, @typeName(T), module.name)) {
                 return @ptrCast(@alignCast(module.v_ptr));

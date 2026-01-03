@@ -31,6 +31,17 @@ transform: *nux.Transform,
 logger: *nux.Logger,
 lua: *c.lua_State,
 
+export fn lua_print(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
+    const self: *Self = @ptrCast(@alignCast(ud));
+    const str: [*:0]const u8 = std.mem.span(s);
+    self.logger.info("{s}", .{str});
+}
+export fn lua_printerror(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
+    const self: *Self = @ptrCast(@alignCast(ud));
+    const str: [*:0]const u8 = std.mem.span(s);
+    self.logger.err("{s}", .{str});
+}
+
 fn loadString(lua: *c.lua_State, s: [:0]const u8) !void {
     const ret = c.luaL_loadstring(lua, s.ptr);
     switch (ret) {

@@ -13,10 +13,6 @@ const importObject = {
     STACK_MAX: 65536,
     abortStackOverflow: function (val) { throw new Error("stackoverfow"); },
     memory: new WebAssembly.Memory({ initial: (1 << 16) }),
-    nux_os_log: function (userdata, level, data, len) {
-      console.log(decodeString(data, len));
-      return 1;
-    },
     runtime_log: function (level, data, len) {
       console.log(decodeString(data, len))
     },

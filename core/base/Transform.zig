@@ -9,6 +9,16 @@ objects: nux.ObjectPool(struct {
 object: *nux.Object,
 logger: *nux.Logger,
 
+const Key = enum(u32) {
+    my_enum_a = 0,
+    my_enum_b 
+};
+
+const Test = struct {
+    a: u32,
+    b: f32
+};
+
 pub fn new(self: *Self, parent: nux.ObjectID) !nux.ObjectID {
     return self.objects.add(parent, .{ .position = .zero() });
 }

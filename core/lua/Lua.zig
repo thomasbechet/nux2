@@ -366,10 +366,6 @@ fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    var out = try self.allocator.alloc(u8, (1 << 24));
-    self.logger.info("{any}", .{out.ptr});
-    out = try self.allocator.alloc(u8, (1 << 24));
-    self.logger.info("{any}", .{out.ptr});
     self.lua = c.lua_newstate(alloc, self, 0) orelse return error.newstate;
     errdefer c.lua_close(self.lua);
 

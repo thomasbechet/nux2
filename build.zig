@@ -84,7 +84,7 @@ fn buildCore(b: *std.Build, standard_target: std.Build.ResolvedTarget, target: s
             "-D_WASI_EMULATED_SIGNAL",
             "-D_WASI_EMULATED_PROCESS_CLOCKS",
             "-DLUAI_THROW(L,c)={return;}",
-            "-DLUAI_TRY(L,c,a,u)=a",
+            "-DLUAI_TRY(L,c,a,u)=a(L,u)",
             "-Dluai_jmpbuf=int",
             "-Djmp_buf=int",
             // "-mllvm",

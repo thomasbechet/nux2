@@ -1,6 +1,23 @@
 const std = @import("std");
 
-fn buildCore(b: *std.Build, standard_target: std.Build.ResolvedTarget, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+fn generateBindings(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Step {
+    // lua
+    const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
+        .target = target,
+        .optimize = .Debug,
+        .root_source_file = b.path("core/lua/bindgen.zig"),
+    }) });
+    const run_bindings_exe = b.addRunArtifact(bindings_exe);
+    run_bindings_exe.step.dependOn(&bindings_exe.step);
+    const bindings_output = run_bindings_exe.addOutputFileArg("lua_bindings.zig");
+    run_bindings_exe.addFileArg(b.path("core/lua/modules.json"));
+    const copy_bindings = b.addUpdateSourceFiles();
+    copy_bindings.step.dependOn(&run_bindings_exe.step);
+    copy_bindings.addCopyFileToSource(bindings_output, "core/lua/bindings.zig");
+    return &copy_bindings.step;
+}
+
+fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
     // // wren
     // const wren_lib = b.createModule(.{
     //     .target = target,
@@ -101,22 +118,11 @@ fn buildCore(b: *std.Build, standard_target: std.Build.ResolvedTarget, target: s
     // zigimg
     // const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
 
-    // lua_bindings
-    const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
-        .target = standard_target,
-        .optimize = .Debug,
-        .root_source_file = b.path("core/lua/bindgen.zig"),
-    }) });
-    const run_bindings_exe = b.addRunArtifact(bindings_exe);
-    run_bindings_exe.step.dependOn(&bindings_exe.step);
-    const bindings_output = run_bindings_exe.addOutputFileArg("lua_bindings.zig");
-    run_bindings_exe.addFileArg(b.path("core/lua/modules.json"));
-
     // core
     const core = b.addModule("core", .{
         .target = target,
         .optimize = optimize,
-        .root_source_file = b.path("core/core.zig"),
+        .root_source_file = b.path("core/nux.zig"),
         .imports = &.{
             // .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") },
             // .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") },
@@ -126,7 +132,7 @@ fn buildCore(b: *std.Build, standard_target: std.Build.ResolvedTarget, target: s
     });
     core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
     core.addIncludePath(b.path("externals/lua-5.5.0/"));
-    core.addAnonymousImport("lua_bindings", .{ .root_source_file = bindings_output });
+    // core.addAnonymousImport("lua_bindings", .{ .root_source_file = bindings_output });
 
     return core;
 }
@@ -142,7 +148,8 @@ fn buildWeb(b: *std.Build) void {
     const standard_target = b.standardTargetOptions(.{});
 
     // core
-    const core = buildCore(b, standard_target, wasm_target, wasm_optimize);
+    const core = buildCore(b, wasm_target, wasm_optimize);
+    const codegen = generateBindings(b, standard_target);
     // web
     const wasm = b.addExecutable(.{
         .name = "nux",
@@ -166,6 +173,7 @@ fn buildWeb(b: *std.Build) void {
     // wasm.import_memory = true;
     // wasm.initial_memory = (1 << 28);
     const install = b.addInstallArtifact(wasm, .{ .dest_dir = .{ .override = .{ .custom = "../runtimes/web/" } } });
+    install.step.dependOn(codegen);
     b.default_step.dependOn(&install.step);
 }
 
@@ -176,7 +184,8 @@ pub fn buildNative(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // core
-    const core = buildCore(b, target, target, optimize);
+    const core = buildCore(b, target, optimize);
+    const bindgen = generateBindings(b, target);
     // glfw
     const glfw_dep = b.dependency("glfw", .{ .target = target, .optimize = optimize });
     const glfw_lib = glfw_dep.artifact("glfw");
@@ -202,6 +211,7 @@ pub fn buildNative(b: *std.Build) void {
         }),
     });
     b.installArtifact(native_runtime);
+    b.getInstallStep().dependOn(bindgen);
     native_runtime.linkLibrary(glfw_lib);
     native_runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
 

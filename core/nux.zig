@@ -3,6 +3,9 @@ const std = @import("std");
 pub const Logger = @import("base/Logger.zig");
 pub const Object = @import("base/Object.zig");
 pub const Transform = @import("base/Transform.zig");
+pub const Input = @import("input/Input.zig");
+pub const InputMap = @import("input/InputMap.zig");
+pub const Lua = @import("lua/Lua.zig");
 
 pub const ObjectID = Object.ObjectID;
 pub const ObjectPool = Object.ObjectPool;
@@ -123,10 +126,10 @@ pub const Core = struct {
         core.log_enabled = true;
         core.object = try core.registerModule(Object);
         try core.registerModules(.{
-            @import("base/Transform.zig"),
-            @import("input/Input.zig"),
-            @import("input/InputMap.zig"),
-            @import("lua/Lua.zig"),
+            Transform,
+            Input,
+            InputMap,
+            Lua,
         });
         // Register user modules
         try core.registerModules(mods);

@@ -1,11 +1,11 @@
 const std = @import("std");
-const core = @import("../core.zig");
+const nux = @import("../nux.zig");
 
 const Self = @This();
 
-platform: core.Platform.Logger,
+platform: nux.Platform.Logger,
 
-pub fn init(self: *Self, ctx: *const core.Core) !void {
+pub fn init(self: *Self, ctx: *const nux.Core) !void {
     self.platform = ctx.platform.logger;
 }
 

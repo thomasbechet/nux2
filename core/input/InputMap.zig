@@ -1,6 +1,6 @@
 const std = @import("std");
-const nux = @import("../core.zig");
-const Input = @import("Input.zig");
+const nux = @import("../nux.zig");
+const Input = nux.Input;
 
 const Self = @This();
 

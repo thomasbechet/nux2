@@ -341,26 +341,31 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
     , .{});
     for (modules.modules.items) |*module| {
         const module_name = std.fs.path.stem(module.path);
-        try writer.print("const {s} = struct {{", .{module_name});
-        try writer.print("const Module = @import(\"{s}\");", .{module.path});
+        try writer.print("const {s} = struct {{\n", .{module_name});
+        var path = module.path;
+        if (std.mem.startsWith(u8, module.path, "core"))
+        {
+            path = path[5..]; 
+        }
+        try writer.print("const Module = @import(\"../{s}\");\n", .{path});
         for (module.functions.items) |*function| {
             var func_name = try toSnakeCase(alloc, function.name);
             defer func_name.deinit(alloc);
-            try writer.print("fn {s}(lua: ?*c.lua_State) callconv(.c) c_int {{", .{function.name});
+            try writer.print("fn {s}(lua: ?*c.lua_State) callconv(.c) c_int {{\n", .{function.name});
             try writer.print(
                 \\c.lua_pushinteger(lua, 1);
                 \\return 1; 
             , .{});
             try writer.print("}}\n", .{});
         }
-        try writer.print("}};", .{});
+        try writer.print("}};\n", .{});
     }
 
     try writer.print("pub fn openModules(lua: ?*c.lua_State) void {{\n", .{});
     for (modules.modules.items) |*module| {
         const module_name = std.fs.path.stem(module.path);
         try writer.print("c.lua_newtable(lua);\n", .{});
-        try writer.print("const {s}_lib: [*]const c.luaL_Reg = &.{{", .{module_name});
+        try writer.print("const {s}_lib: [*]const c.luaL_Reg = &.{{\n", .{module_name});
         for (module.functions.items) |*function| {
             var func_name = try toSnakeCase(alloc, function.name);
             defer func_name.deinit(alloc);
@@ -376,14 +381,15 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                 // module.ENUM_VALUE
                 const value_name = try alloc.dupe(u8, value);
                 defer alloc.free(value_name);
-                try writer.print("c.lua_pushinteger(lua, {s}.Module.{s}.{s});\n", .{ module_name, enu.name, value });
+                _ = std.ascii.upperString(value_name, value_name);
+                try writer.print("c.lua_pushinteger(lua, @intFromEnum({s}.Module.{s}.{s}));\n", .{ module_name, enu.name, value });
                 try writer.print("c.lua_setfield(lua, -2, \"{s}_{s}\");\n", .{ enum_name.items, value_name });
             }
         }
         try writer.print("c.lua_setglobal(lua, \"{s}\");\n", .{module_name});
     }
     try writer.print("}}\n", .{});
-    try writer.print("}}; }}", .{});
+    try writer.print("}}; }}\n", .{});
 }
 
 pub fn main() !void {

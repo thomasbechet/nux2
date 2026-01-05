@@ -1,6 +1,6 @@
-const core = @import("../core.zig");
 const std = @import("std");
-const lua_bindings = @import("lua_bindings");
+const nux = @import("../nux.zig");
+const bindings = @import("bindings.zig");
 
 pub const c = @cImport({
     @cInclude("lua.h");
@@ -13,9 +13,9 @@ const hello_file = @embedFile("hello.lua");
 
 const UserData = union(enum) {
     const Field = enum { x, y, z, w, normal, position };
-    vec2: core.Vec2,
-    vec3: core.Vec3,
-    vec4: core.Vec4,
+    vec2: nux.Vec2,
+    vec3: nux.Vec3,
+    vec4: nux.Vec4,
 };
 
 const Error = error{
@@ -27,8 +27,8 @@ const Error = error{
 };
 
 allocator: std.mem.Allocator,
-transform: *core.Transform,
-logger: *core.Logger,
+transform: *nux.Transform,
+logger: *nux.Logger,
 lua: *c.lua_State,
 
 export fn lua_print(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
@@ -306,15 +306,15 @@ fn vmathVec(lua: ?*c.lua_State, comptime T: type) T {
     return v;
 }
 fn vmathVec2(lua: ?*c.lua_State) callconv(.c) c_int {
-    pushUserData(lua, .vec2, vmathVec(lua, core.Vec2));
+    pushUserData(lua, .vec2, vmathVec(lua, nux.Vec2));
     return 1;
 }
 fn vmathVec3(lua: ?*c.lua_State) callconv(.c) c_int {
-    pushUserData(lua, .vec3, vmathVec(lua, core.Vec3));
+    pushUserData(lua, .vec3, vmathVec(lua, nux.Vec3));
     return 1;
 }
 fn vmathVec4(lua: ?*c.lua_State) callconv(.c) c_int {
-    pushUserData(lua, .vec4, vmathVec(lua, core.Vec4));
+    pushUserData(lua, .vec4, vmathVec(lua, nux.Vec4));
     return 1;
 }
 fn openVMath(lua: *c.lua_State) !void {
@@ -364,7 +364,7 @@ fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv
     }
 }
 
-pub fn init(self: *Self, core: *const core.Core) !void {
+pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.lua = c.lua_newstate(alloc, self, 0) orelse return error.newstate;
     errdefer c.lua_close(self.lua);
@@ -372,7 +372,7 @@ pub fn init(self: *Self, core: *const core.Core) !void {
     // open api
     c.luaL_openlibs(self.lua); // base api
     try openVMath(self.lua); // vmath
-    lua_bindings.Bindings(c).openModules(self.lua); // modules
+    bindings.Bindings(c).openModules(self.lua); // modules
 
     doString(self.lua, hello_file) catch {
         self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});

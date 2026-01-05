@@ -1,5 +1,5 @@
-const nux = @import("../core.zig");
 const std = @import("std");
+const nux = @import("../nux.zig");
 
 const Self = @This();
 

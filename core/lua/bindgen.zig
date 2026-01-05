@@ -342,6 +342,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
     for (modules.modules.items) |*module| {
         const module_name = std.fs.path.stem(module.path);
         try writer.print("const {s} = struct {{", .{module_name});
+        try writer.print("const Module = @import(\"{s}\");", .{module.path});
         for (module.functions.items) |*function| {
             var func_name = try toSnakeCase(alloc, function.name);
             defer func_name.deinit(alloc);
@@ -367,6 +368,18 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
         }
         try writer.print(".{{ .name = null, .func = null }}, }};\n", .{});
         try writer.print("c.luaL_setfuncs(lua, {s}_lib, 0);\n", .{module_name});
+        for (module.enums.items) |enu| {
+            var enum_name = try toSnakeCase(alloc, enu.name);
+            defer enum_name.deinit(alloc);
+            _ = std.ascii.upperString(enum_name.items, enum_name.items);
+            for (enu.values) |value| {
+                // module.ENUM_VALUE
+                const value_name = try alloc.dupe(u8, value);
+                defer alloc.free(value_name);
+                try writer.print("c.lua_pushinteger(lua, {s}.Module.{s}.{s});\n", .{ module_name, enu.name, value });
+                try writer.print("c.lua_setfield(lua, -2, \"{s}_{s}\");\n", .{ enum_name.items, value_name });
+            }
+        }
         try writer.print("c.lua_setglobal(lua, \"{s}\");\n", .{module_name});
     }
     try writer.print("}}\n", .{});

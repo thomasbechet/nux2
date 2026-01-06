@@ -6,4 +6,5 @@ print(vec2(2, 2) + vec2(1, 2))
 print("a", "b", "c")
 
 
-print(Input.KEY_A)
+print(input.KEY_A)
+print(input.KEY_B)

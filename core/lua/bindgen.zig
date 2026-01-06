@@ -203,20 +203,19 @@ const Modules = struct {
     source: []const u8,
 
     fn load(alloc: Allocator, modules_path: []const u8) !Modules {
-        // parse modules.json
         var buffer: [1024]u8 = undefined;
         const modules_file = try std.fs.cwd().openFile(modules_path, .{});
         defer modules_file.close();
         var modules_reader = modules_file.reader(&buffer);
         const modules_source = try modules_reader.interface.allocRemaining(alloc, .unlimited);
         errdefer alloc.free(modules_source);
-        const modules_json = try std.json.parseFromSlice([]ModuleJson, alloc, modules_source, .{});
-        defer modules_json.deinit();
-        var modules: ArrayList(Module) = try .initCapacity(alloc, modules_json.value.len);
+        const bindings_json = try std.json.parseFromSlice([]ModuleJson, alloc, modules_source, .{});
+        defer bindings_json.deinit();
+        var modules: ArrayList(Module) = try .initCapacity(alloc, bindings_json.value.len);
         errdefer modules.deinit(alloc);
 
         // iter files and generate bindings
-        for (modules_json.value) |module| {
+        for (bindings_json.value) |module| {
             // read file
             const file = try std.fs.cwd().openFile(module.path, .{});
             defer file.close();
@@ -343,9 +342,8 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
         const module_name = std.fs.path.stem(module.path);
         try writer.print("const {s} = struct {{\n", .{module_name});
         var path = module.path;
-        if (std.mem.startsWith(u8, module.path, "core"))
-        {
-            path = path[5..]; 
+        if (std.mem.startsWith(u8, module.path, "core")) {
+            path = path[5..];
         }
         try writer.print("const Module = @import(\"../{s}\");\n", .{path});
         for (module.functions.items) |*function| {

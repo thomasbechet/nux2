@@ -1,23 +1,22 @@
 const std = @import("std");
 
-fn generateBindings(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Step {
-    // lua
-    const bindings_exe = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
+fn generateCode(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Step {
+    const bindgen = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
         .target = target,
         .optimize = .Debug,
         .root_source_file = b.path("core/lua/bindgen.zig"),
     }) });
-    const run_bindings_exe = b.addRunArtifact(bindings_exe);
-    run_bindings_exe.step.dependOn(&bindings_exe.step);
-    const bindings_output = run_bindings_exe.addOutputFileArg("lua_bindings.zig");
-    run_bindings_exe.addFileArg(b.path("core/lua/modules.json"));
+    const bindgen_run = b.addRunArtifact(bindgen);
+    const bindings_output = bindgen_run.addOutputFileArg("lua_bindings.zig");
+    bindgen_run.addFileArg(b.path("core/lua/bindings.json")); // order is important
+    bindgen_run.step.dependOn(&bindgen.step);
     const copy_bindings = b.addUpdateSourceFiles();
-    copy_bindings.step.dependOn(&run_bindings_exe.step);
+    copy_bindings.step.dependOn(&bindgen_run.step);
     copy_bindings.addCopyFileToSource(bindings_output, "core/lua/bindings.zig");
     return &copy_bindings.step;
 }
 
-fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+fn addCoreModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {
     // // wren
     // const wren_lib = b.createModule(.{
     //     .target = target,
@@ -132,13 +131,11 @@ fn buildCore(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.buil
     });
     core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
     core.addIncludePath(b.path("externals/lua-5.5.0/"));
-    // core.addAnonymousImport("lua_bindings", .{ .root_source_file = bindings_output });
 
     return core;
 }
 
-fn buildWeb(b: *std.Build) void {
-
+fn configWeb(b: *std.Build) void {
     // configuration
     const wasm_target = b.resolveTargetQuery(.{
         .cpu_arch = .wasm32,
@@ -148,8 +145,8 @@ fn buildWeb(b: *std.Build) void {
     const standard_target = b.standardTargetOptions(.{});
 
     // core
-    const core = buildCore(b, wasm_target, wasm_optimize);
-    const codegen = generateBindings(b, standard_target);
+    const core = addCoreModule(b, wasm_target, wasm_optimize);
+    const codegen = generateCode(b, standard_target);
     // web
     const wasm = b.addExecutable(.{
         .name = "nux",
@@ -172,20 +169,23 @@ fn buildWeb(b: *std.Build) void {
     // wasm.export_memory = true;
     // wasm.import_memory = true;
     // wasm.initial_memory = (1 << 28);
-    const install = b.addInstallArtifact(wasm, .{ .dest_dir = .{ .override = .{ .custom = "../runtimes/web/" } } });
-    install.step.dependOn(codegen);
-    b.default_step.dependOn(&install.step);
-}
 
-pub fn buildNative(b: *std.Build) void {
+    // install to runtimes/web
+    const install = b.addInstallArtifact(wasm, .{ .dest_dir = .{ .override = .{ .custom = "../runtimes/web/" } } });
+
+    // dependencies
+    install.step.dependOn(codegen);
+    wasm.step.dependOn(codegen);
+}
+fn configNative(b: *std.Build) void {
 
     // configuration
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     // core
-    const core = buildCore(b, target, optimize);
-    const bindgen = generateBindings(b, target);
+    const core = addCoreModule(b, target, optimize);
+    const codegen = generateCode(b, target);
     // glfw
     const glfw_dep = b.dependency("glfw", .{ .target = target, .optimize = optimize });
     const glfw_lib = glfw_dep.artifact("glfw");
@@ -197,7 +197,7 @@ pub fn buildNative(b: *std.Build) void {
         .extensions = &.{},
     });
     // native
-    const native_runtime = b.addExecutable(.{
+    const artifact = b.addExecutable(.{
         .name = "nux",
         .use_llvm = true,
         .root_module = b.createModule(.{
@@ -210,52 +210,48 @@ pub fn buildNative(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(native_runtime);
-    b.getInstallStep().dependOn(bindgen);
-    native_runtime.linkLibrary(glfw_lib);
-    native_runtime.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
+    artifact.linkLibrary(glfw_lib);
+    artifact.addIncludePath(glfw_dep.path("glfw/include/GLFW"));
+    artifact.step.dependOn(codegen);
+
+    // install
+    const install = b.addInstallArtifact(artifact, .{});
+    b.default_step.dependOn(&install.step);
 
     // run
-    const run_step = b.step("run", "run the app");
-    const run_cmd = b.addRunArtifact(native_runtime);
-    run_step.dependOn(&run_cmd.step);
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    const run = b.addRunArtifact(artifact);
+    const run_step = b.step("run", "run the console");
+    run_step.dependOn(&install.step);
+    run_step.dependOn(&run.step);
 
     // debug
-    const lldb = b.addSystemCommand(&.{
+    const debug = b.addSystemCommand(&.{
         "lldb",
         "--",
     });
-    lldb.addArtifactArg(native_runtime);
-    const lldb_step = b.step("debug", "run the tests under lldb");
-    lldb_step.dependOn(&lldb.step);
+    debug.addArtifactArg(artifact);
+    const debug_step = b.step("debug", "run the console under lldb");
+    debug_step.dependOn(&debug.step);
 
     // valgrind
     const valgrind = b.addSystemCommand(&.{"valgrind"});
-    valgrind.addArtifactArg(native_runtime);
-    const valgrind_step = b.step("valgrind", "run the runtime with valgrind");
+    valgrind.addArtifactArg(artifact);
+    const valgrind_step = b.step("valgrind", "run the console with valgrind");
     valgrind_step.dependOn(&valgrind.step);
 
     // tests
-    const nux_tests = b.addTest(.{ .root_module = core });
-    const run_mod_tests = b.addRunArtifact(nux_tests);
-    const exe_tests = b.addTest(.{
-        .root_module = native_runtime.root_module,
-    });
-    const run_exe_tests = b.addRunArtifact(exe_tests);
-    const test_step = b.step("test", "run tests");
-    test_step.dependOn(&run_mod_tests.step);
-    test_step.dependOn(&run_exe_tests.step);
+    //
+    const tests = b.addTest(.{ .root_module = core });
+    const tests_run = b.addRunArtifact(tests);
+    const tests_step = b.step("test", "run tests");
+    tests_step.dependOn(&tests_run.step);
 }
 
 pub fn build(b: *std.Build) void {
     const Runtime = enum { native, web };
-    const runtime = b.option(Runtime, "runtime", "Runtime target") orelse .native;
-    switch (runtime) {
-        .native => buildNative(b),
-        .web => buildWeb(b),
+    const config = b.option(Runtime, "runtime", "Runtime target") orelse .native;
+    switch (config) {
+        .native => configNative(b),
+        .web => configWeb(b),
     }
 }

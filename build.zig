@@ -118,13 +118,13 @@ fn configCore(b: *std.Build, config: Config) void {
     }) });
     const bindgen_run = b.addRunArtifact(bindgen);
     const bindings_input = b.path("core/lua/bindings.json");
-    const bindings_output_tmp = bindgen_run.addOutputFileArg("bindings.zie");
+    const bindings_output_tmp = bindgen_run.addOutputFileArg("bindings.zig");
     bindgen_run.addFileArg(bindings_input);
-    const copy_bindings = b.addUpdateSourceFiles();
-    copy_bindings.step.dependOn(&bindgen_run.step);
-    copy_bindings.addCopyFileToSource(bindings_output_tmp, "core/lua/bindings.zig");
-    const codegen_run = b.step("codegen", "generate bindings");
-    codegen_run.dependOn(&copy_bindings.step);
+    const bindings_copy = b.addUpdateSourceFiles();
+    bindings_copy.step.dependOn(&bindgen_run.step);
+    bindings_copy.addCopyFileToSource(bindings_output_tmp, "core/lua/bindings.zig");
+    const bindgen_step = b.step("bindgen", "generate bindings");
+    bindgen_step.dependOn(&bindings_copy.step);
 
     // core
     const core = b.addModule("core", .{

@@ -19,7 +19,7 @@ const AstIter = struct {
         params: []const FunctionParam,
         ret: []const u8,
 
-        fn deinit(self: *const @This()) void {
+        fn deinit(self: *@This()) void {
             self.alloc.free(self.params);
         }
     };
@@ -28,10 +28,10 @@ const AstIter = struct {
         alloc: Allocator,
         name: []const u8,
         typ: []const u8,
-        values: []const []const u8,
+        values: std.ArrayList([]const u8),
 
-        fn deinit(self: *const @This()) void {
-            self.alloc.free(self.values);
+        fn deinit(self: *@This()) void {
+            self.values.deinit(self.alloc);
         }
     };
 
@@ -135,13 +135,14 @@ const AstIter = struct {
                         var buffer: [2]Ast.Node.Index = undefined;
                         const decl = self.ast.fullContainerDecl(&buffer, c.unwrap().?).?;
                         const name = self.ast.tokenSlice(node.main_token + 1);
-                        const values = try self.alloc.alloc([]const u8, decl.ast.members.len);
-
-                        for (decl.ast.members, 0..) |member, index| {
+                        // const values = try self.alloc.alloc([]const u8, decl.ast.members.len);
+                        var values = try std.ArrayList([]const u8).initCapacity(self.alloc, decl.ast.members.len);
+                        errdefer values.deinit(self.alloc);
+                        for (decl.ast.members) |member| {
                             const mem = self.ast.nodes.get(@intFromEnum(member));
                             if (mem.tag != .container_field_init) continue;
                             // std.log.info("ENUM {s}", .{self.ast.tokenSlice(mem.main_token)});
-                            values[index] = self.ast.tokenSlice(mem.main_token);
+                            try values.append(self.alloc, self.ast.tokenSlice(mem.main_token));
                         }
 
                         return .{ .@"enum" = Enum{ .alloc = self.alloc, .name = name, .typ = "test", .values = values } };
@@ -171,8 +172,7 @@ const AstIter = struct {
 
 const ModuleJson = struct {
     path: []const u8,
-    functions: [][]const u8,
-    enums: [][]const u8,
+    ignore: ?[][]const u8 = null,
 };
 const BindingsJson = struct {
     rootpath: []const u8,
@@ -187,10 +187,10 @@ const Module = struct {
     enums: ArrayList(AstIter.Enum),
 
     fn deinit(self: *Module, alloc: Allocator) void {
-        for (self.functions.items) |proto| {
+        for (self.functions.items) |*proto| {
             proto.deinit();
         }
-        for (self.enums.items) |enu| {
+        for (self.enums.items) |*enu| {
             enu.deinit();
         }
         self.functions.deinit(alloc);
@@ -243,36 +243,36 @@ const Modules = struct {
 
             // filter items
             var it = try AstIter.init(alloc, &ast);
-            while (try it.next()) |item| {
-                switch (item) {
-                    .function => |func| {
-                        var found = false;
-                        for (module.functions) |name| {
-                            if (std.mem.eql(u8, name, func.name)) {
-                                found = true;
-                                break;
-                            }
+            while (try it.next()) |next| {
+                var item = next;
+                const name = switch (item) {
+                    .function => |func| func.name,
+                    .@"enum" => |enu| enu.name,
+                };
+                var ignore = false;
+                for ([_][]const u8{ "init", "deinit" }) |keyword| {
+                    if (std.mem.eql(u8, name, keyword)) {
+                        ignore = true;
+                    }
+                }
+                if (module.ignore) |ignore_list| {
+                    for (ignore_list) |ignore_name| {
+                        if (std.mem.eql(u8, ignore_name, name)) {
+                            ignore = true;
+                            break;
                         }
-                        if (found) {
-                            try functions.append(alloc, func);
-                        } else {
-                            func.deinit();
-                        }
-                    },
-                    .@"enum" => |enu| {
-                        var found = false;
-                        for (module.enums) |name| {
-                            if (std.mem.eql(u8, name, enu.name)) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (found) {
-                            try enums.append(alloc, enu);
-                        } else {
-                            enu.deinit();
-                        }
-                    },
+                    }
+                }
+                if (!ignore) {
+                    switch (item) {
+                        .function => |*func| try functions.append(alloc, func.*),
+                        .@"enum" => |*enu| try enums.append(alloc, enu.*),
+                    }
+                } else {
+                    switch (item) {
+                        .function => |*func| func.deinit(),
+                        .@"enum" => |*enu| enu.deinit(),
+                    }
                 }
             }
 
@@ -342,7 +342,7 @@ fn toSnakeCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
 }
 
 fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
-    try modules.print();
+    // try modules.print();
     try writer.print("pub fn Bindings(c: anytype) type {{\n", .{});
     try writer.print("\treturn struct {{\n", .{});
     for (modules.modules.items) |*module| {
@@ -383,7 +383,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
             var enum_name = try toSnakeCase(alloc, enu.name);
             defer enum_name.deinit(alloc);
             _ = std.ascii.upperString(enum_name.items, enum_name.items);
-            for (enu.values) |value| {
+            for (enu.values.items) |value| {
                 // module.ENUM_VALUE
                 const value_name = try alloc.dupe(u8, value);
                 defer alloc.free(value_name);

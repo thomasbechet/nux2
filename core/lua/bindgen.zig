@@ -46,8 +46,15 @@ const AstIter = struct {
     }
 
     fn parse(self: *AstIter, idx: Ast.Node.Index) !?Item {
-        // check is function
         const node = self.ast.nodes.get(@intFromEnum(idx));
+        // check visibility
+        if (node.main_token > 0) {
+            const visib = self.ast.tokenSlice(node.main_token - 1);
+            if (!std.mem.eql(u8, visib, "pub")) {
+                return null;
+            }
+        }
+        // check function and enums
         switch (node.tag) {
             .fn_decl,
             .fn_proto_multi,
@@ -57,12 +64,6 @@ const AstIter = struct {
                 var buf: [1]Ast.Node.Index = undefined;
                 const proto = self.ast.fullFnProto(&buf, idx).?;
                 const name = self.ast.tokenSlice(proto.name_token.?);
-
-                // check pub function
-                const visib = proto.visib_token orelse return null;
-                if (!std.mem.eql(u8, self.ast.tokenSlice(visib), "pub")) {
-                    return null;
-                }
 
                 // parse params
                 var params = try self.alloc.alloc(FunctionParam, proto.ast.params.len);
@@ -135,7 +136,6 @@ const AstIter = struct {
                         var buffer: [2]Ast.Node.Index = undefined;
                         const decl = self.ast.fullContainerDecl(&buffer, c.unwrap().?).?;
                         const name = self.ast.tokenSlice(node.main_token + 1);
-                        // const values = try self.alloc.alloc([]const u8, decl.ast.members.len);
                         var values = try std.ArrayList([]const u8).initCapacity(self.alloc, decl.ast.members.len);
                         errdefer values.deinit(self.alloc);
                         for (decl.ast.members) |member| {
@@ -209,6 +209,7 @@ const Modules = struct {
 
     fn load(alloc: Allocator, modules_path: []const u8) !Modules {
         var buffer: [1024]u8 = undefined;
+
         const modules_file = try std.fs.cwd().openFile(modules_path, .{});
         defer modules_file.close();
         var modules_reader = modules_file.reader(&buffer);
@@ -223,8 +224,12 @@ const Modules = struct {
 
         // iter files and generate bindings
         for (bindings_json.value.modules) |module| {
+            // convert module path to core
+            const parts = [_][]const u8{ "core/", module.path };
+            const module_path = try std.mem.concat(alloc, u8, &parts);
+            defer alloc.free(module_path);
             // read file
-            const file = try std.fs.cwd().openFile(module.path, .{});
+            const file = try std.fs.cwd().openFile(module_path, .{});
             defer file.close();
             var reader = file.reader(&buffer);
             const source = try reader.interface.allocRemaining(alloc, .unlimited);
@@ -306,20 +311,21 @@ const Modules = struct {
     fn print(self: *const Modules) !void {
         for (self.modules.items) |*module| {
             const module_name = std.fs.path.stem(module.path);
+            std.log.info("{s}:", .{module_name});
             for (module.functions.items) |*function| {
                 var func_name = try toSnakeCase(self.allocator, function.name);
                 defer func_name.deinit(self.allocator);
-                std.log.info("{s}.{s} {s}", .{ module_name, function.name, function.ret });
+                std.log.info("\t{s}: {s}", .{ function.name, function.ret });
                 for (function.params) |*param| {
-                    std.log.info("- {s} {s}", .{ param.ident, param.typ });
+                    std.log.info("\t\t{s}: {s}", .{ param.ident, param.typ });
                 }
             }
             for (module.enums.items) |*enu| {
                 var enum_name = try toSnakeCase(self.allocator, enu.name);
                 defer enum_name.deinit(self.allocator);
-                std.log.info("{s}.{s}", .{ module_name, enu.name });
-                for (enu.values) |value| {
-                    std.log.info("- {s}", .{value});
+                std.log.info("\t{s}:", .{enu.name});
+                for (enu.values.items) |value| {
+                    std.log.info("\t\t{s}", .{value});
                 }
             }
         }
@@ -342,43 +348,59 @@ fn toSnakeCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
 }
 
 fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
-    // try modules.print();
-    try writer.print("pub fn Bindings(c: anytype) type {{\n", .{});
+    try modules.print();
+    try writer.print("pub fn Bindings(c: anytype, nux: anytype, Container: anytype) type {{\n", .{});
     try writer.print("\treturn struct {{\n", .{});
+    try writer.print(
+        \\      fn context(lua: ?*c.lua_State) *@This() {{
+        \\          var ud: ?*anyopaque = undefined;
+        \\          _ = c.lua_getallocf(lua, &ud);
+        \\          const self: *Container = @ptrCast(@alignCast(ud));
+        \\          return &@field(self, "bindings");
+        \\      }}
+        \\
+        , .{}
+    );
     for (modules.modules.items) |*module| {
-        const module_name = std.fs.path.stem(module.path);
-        try writer.print("\t\tconst {s} = struct {{\n", .{module_name});
-        var path = module.path;
-        if (std.mem.startsWith(u8, module.path, "core")) {
-            path = path[5..];
-        }
-        try writer.print("\t\t\tconst Module = @import(\"{s}/{s}\");\n", .{ modules.rootpath, path });
+        const module_name_camelcase = std.fs.path.stem(module.path);
+        try writer.print("\t\tconst {s} = struct {{\n", .{module_name_camelcase});
+        try writer.print("\t\t\tconst Module = @import(\"{s}/{s}\");\n", .{ modules.rootpath, module.path });
         for (module.functions.items) |*function| {
             var func_name = try toSnakeCase(alloc, function.name);
             defer func_name.deinit(alloc);
             try writer.print("\t\t\tfn {s}(lua: ?*c.lua_State) callconv(.c) c_int {{\n", .{function.name});
             try writer.print("\t\t\t\tc.lua_pushinteger(lua, 1);\n", .{});
+            try writer.print("\t\t\t\t_ = context(lua);\n", .{});
             try writer.print("\t\t\t\treturn 1;\n", .{});
             try writer.print("\t\t\t}}\n", .{});
         }
         try writer.print("\t\t}};\n", .{});
     }
 
-    try writer.print("\t\tpub fn openModules(lua: *c.lua_State) void {{\n", .{});
     for (modules.modules.items) |*module| {
         const module_name_camelcase = std.fs.path.stem(module.path);
         var module_name = try toSnakeCase(alloc, module_name_camelcase);
         defer module_name.deinit(alloc);
-        try writer.print("\t\t\tc.lua_newtable(lua);\n", .{});
-        try writer.print("\t\t\tconst {s}_lib: [*]const c.luaL_Reg = &.{{\n", .{module_name.items});
+        try writer.print("\t\t{s}: *{s}.Module,\n", .{ module_name.items, module_name_camelcase });
+    }
+
+    try writer.print("\t\tpub fn openModules(self: *@This(), lua: *c.lua_State, core: *const nux.Core) void {{\n", .{});
+    for (modules.modules.items) |*module| {
+        const module_name_camelcase = std.fs.path.stem(module.path);
+        var module_name = try toSnakeCase(alloc, module_name_camelcase);
+        defer module_name.deinit(alloc);
+        try writer.print("\t\t\tif (core.findModule({s}.Module)) |module| {{\n", .{module_name_camelcase});
+        try writer.print("\t\t\t\tself.{s} = module;\n", .{module_name.items});
+        try writer.print("\t\t\t\tc.lua_newtable(lua);\n", .{});
+        try writer.print("\t\t\t\tconst {s}_lib: [*]const c.luaL_Reg = &.{{\n", .{module_name.items});
         for (module.functions.items) |*function| {
             var func_name = try toSnakeCase(alloc, function.name);
             defer func_name.deinit(alloc);
-            try writer.print("\t\t\t\t.{{ .name = \"{s}\", .func = {s}.{s} }},\n", .{ func_name.items, module_name_camelcase, function.name });
+            try writer.print("\t\t\t\t\t.{{ .name = \"{s}\", .func = {s}.{s} }},\n", .{ func_name.items, module_name_camelcase, function.name });
         }
-        try writer.print("\t\t\t\t.{{ .name = null, .func = null }},\n", .{});
-        try writer.print("\t\t\t}};\n", .{});
-        try writer.print("\t\t\tc.luaL_setfuncs(lua, {s}_lib, 0);\n", .{module_name.items});
+        try writer.print("\t\t\t\t\t.{{ .name = null, .func = null }},\n", .{});
+        try writer.print("\t\t\t\t}};\n", .{});
+        try writer.print("\t\t\t\tc.luaL_setfuncs(lua, {s}_lib, 0);\n", .{module_name.items});
         for (module.enums.items) |enu| {
             var enum_name = try toSnakeCase(alloc, enu.name);
             defer enum_name.deinit(alloc);
@@ -388,11 +410,12 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                 const value_name = try alloc.dupe(u8, value);
                 defer alloc.free(value_name);
                 _ = std.ascii.upperString(value_name, value_name);
-                try writer.print("\t\t\tc.lua_pushinteger(lua, @intFromEnum({s}.Module.{s}.{s}));\n", .{ module_name_camelcase, enu.name, value });
-                try writer.print("\t\t\tc.lua_setfield(lua, -2, \"{s}_{s}\");\n", .{ enum_name.items, value_name });
+                try writer.print("\t\t\t\tc.lua_pushinteger(lua, @intFromEnum({s}.Module.{s}.{s}));\n", .{ module_name_camelcase, enu.name, value });
+                try writer.print("\t\t\t\tc.lua_setfield(lua, -2, \"{s}_{s}\");\n", .{ enum_name.items, value_name });
             }
         }
-        try writer.print("\t\t\tc.lua_setglobal(lua, \"{s}\");\n", .{module_name.items});
+        try writer.print("\t\t\t\tc.lua_setglobal(lua, \"{s}\");\n", .{module_name.items});
+        try writer.print("\t\t\t}}\n", .{});
     }
     try writer.print("\t\t}}\n", .{});
     try writer.print("\t}};\n", .{});

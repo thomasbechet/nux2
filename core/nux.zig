@@ -182,7 +182,7 @@ pub const Core = struct {
         return self.findModule(T) orelse return undefined;
     }
 
-    pub fn findModule(self: *@This(), comptime T: type) ?*T {
+    pub fn findModule(self: *const @This(), comptime T: type) ?*T {
         for (self.modules.items) |*module| {
             if (std.mem.eql(u8, @typeName(T), module.name)) {
                 return @ptrCast(@alignCast(module.v_ptr));

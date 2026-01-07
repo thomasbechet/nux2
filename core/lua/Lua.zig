@@ -1,6 +1,6 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
-const bindings = @import("bindings.zig");
+const Bindings = @import("bindings.zig").Bindings;
 
 pub const c = @cImport({
     @cInclude("lua.h");
@@ -26,10 +26,14 @@ const Error = error{
     LuaMsgHandler,
 };
 
+const Context = struct {
+    L: *c.lua_State,
+};
+
 allocator: std.mem.Allocator,
-transform: *nux.Transform,
 logger: *nux.Logger,
 lua: *c.lua_State,
+bindings: Bindings(c, nux, @This()),
 
 export fn lua_print(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
     const self: *Self = @ptrCast(@alignCast(ud));
@@ -372,7 +376,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     // open api
     c.luaL_openlibs(self.lua); // base api
     try openVMath(self.lua); // vmath
-    bindings.Bindings(c).openModules(self.lua); // modules
+    self.bindings.openModules(self.lua, core); // modules
 
     doString(self.lua, hello_file) catch {
         self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});

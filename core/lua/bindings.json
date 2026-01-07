@@ -2,10 +2,10 @@
     "rootpath": "..",
     "modules": [
         {
-            "path": "core/base/Transform.zig"
+            "path": "base/Transform.zig"
         },
         {
-            "path": "core/input/Input.zig"
+            "path": "input/Input.zig"
         }
     ]
 }

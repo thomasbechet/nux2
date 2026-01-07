@@ -8,3 +8,5 @@ print("a", "b", "c")
 
 print(input.KEY_A)
 print(input.KEY_B)
+
+print(input.is_pressed)

@@ -1,22 +1,25 @@
-[
-    {
-        "path": "core/base/Transform.zig",
-        "functions": [
-            "new",
-            "getPosition"
-        ],
-        "enums": []
-    },
-    {
-        "path": "core/input/Input.zig",
-        "functions": [
-            "isPressed",
-            "isReleased",
-            "isJustPressed",
-            "isJustReleased"
-        ],
-        "enums": [
-            "Key"
-        ]
-    }
-]
+{
+    "rootpath": "..",
+    "modules": [
+        {
+            "path": "core/base/Transform.zig",
+            "functions": [
+                "new",
+                "getPosition"
+            ],
+            "enums": []
+        },
+        {
+            "path": "core/input/Input.zig",
+            "functions": [
+                "isPressed",
+                "isReleased",
+                "isJustPressed",
+                "isJustReleased"
+            ],
+            "enums": [
+                "Key"
+            ]
+        }
+    ]
+}

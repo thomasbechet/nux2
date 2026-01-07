@@ -138,15 +138,27 @@ controllers: [Controller.max]Controller,
 
 // pub fn init(self: *Module, core: *nux.Core) !void {}
 
-// pub fn isPressed(self: *Self, controller: u32, name: []const u8) bool {
-//     return false;
-// }
-// pub fn isReleased(self: *Self, controller: u32, name: []const u8) bool {
-//     return false;
-// }
-// pub fn isJustPressed(self: *Self, controller: u32, name: []const u8) bool {
-//     return false;
-// }
-// pub fn isJustReleased(self: *Self, controller: u32, name: []const u8) bool {
-//     return false;
-// }
+pub fn isPressed(self: *Self, controller: u32, name: []const u8) bool {
+    _ = self;
+    _ = controller;
+    _ = name;
+    return false;
+}
+pub fn isReleased(self: *Self, controller: u32, name: []const u8) bool {
+    _ = self;
+    _ = controller;
+    _ = name;
+    return false;
+}
+pub fn isJustPressed(self: *Self, controller: u32, name: []const u8) bool {
+    _ = self;
+    _ = controller;
+    _ = name;
+    return false;
+}
+pub fn isJustReleased(self: *Self, controller: u32, name: []const u8) bool {
+    _ = self;
+    _ = controller;
+    _ = name;
+    return false;
+}

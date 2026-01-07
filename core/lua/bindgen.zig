@@ -174,6 +174,10 @@ const ModuleJson = struct {
     functions: [][]const u8,
     enums: [][]const u8,
 };
+const BindingsJson = struct {
+    rootpath: []const u8,
+    modules: []const ModuleJson,
+};
 
 const Module = struct {
     source: [:0]const u8,
@@ -199,6 +203,7 @@ const Module = struct {
 
 const Modules = struct {
     allocator: Allocator,
+    rootpath: []const u8,
     modules: ArrayList(Module),
     source: []const u8,
 
@@ -209,13 +214,15 @@ const Modules = struct {
         var modules_reader = modules_file.reader(&buffer);
         const modules_source = try modules_reader.interface.allocRemaining(alloc, .unlimited);
         errdefer alloc.free(modules_source);
-        const bindings_json = try std.json.parseFromSlice([]ModuleJson, alloc, modules_source, .{});
+        const bindings_json = try std.json.parseFromSlice(BindingsJson, alloc, modules_source, .{});
         defer bindings_json.deinit();
-        var modules: ArrayList(Module) = try .initCapacity(alloc, bindings_json.value.len);
+        var modules: ArrayList(Module) = try .initCapacity(alloc, bindings_json.value.modules.len);
         errdefer modules.deinit(alloc);
+        const rootpath = try alloc.dupe(u8, bindings_json.value.rootpath);
+        errdefer alloc.free(rootpath);
 
         // iter files and generate bindings
-        for (bindings_json.value) |module| {
+        for (bindings_json.value.modules) |module| {
             // read file
             const file = try std.fs.cwd().openFile(module.path, .{});
             defer file.close();
@@ -280,6 +287,7 @@ const Modules = struct {
         }
 
         return .{
+            .rootpath = rootpath,
             .allocator = alloc,
             .source = modules_source,
             .modules = modules,
@@ -292,6 +300,7 @@ const Modules = struct {
         }
         self.modules.deinit(self.allocator);
         self.allocator.free(self.source);
+        self.allocator.free(self.rootpath);
     }
 
     fn print(self: *const Modules) !void {
@@ -343,7 +352,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
         if (std.mem.startsWith(u8, module.path, "core")) {
             path = path[5..];
         }
-        try writer.print("\t\t\tconst Module = @import(\"../{s}\");\n", .{path});
+        try writer.print("\t\t\tconst Module = @import(\"{s}/{s}\");\n", .{ modules.rootpath, path });
         for (module.functions.items) |*function| {
             var func_name = try toSnakeCase(alloc, function.name);
             defer func_name.deinit(alloc);

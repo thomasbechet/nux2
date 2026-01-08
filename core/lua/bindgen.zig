@@ -18,6 +18,7 @@ const AstIter = struct {
         name: []const u8,
         params: []const FunctionParam,
         ret: []const u8,
+        throw_error: bool,
 
         fn deinit(self: *@This()) void {
             self.alloc.free(self.params);
@@ -120,11 +121,25 @@ const AstIter = struct {
                     return_type = self.ast.tokenSlice(ret_token + 1);
                 }
 
+                // find if function throw error
+                var throw_error = false;
+                var it = ret_token;
+                while (true) {
+                    const tok = self.ast.tokenSlice(it);
+                    if (std.mem.eql(u8, tok, ")")) break;
+                    if (std.mem.eql(u8, tok, "!")) {
+                        throw_error = true;
+                        break;
+                    }
+                    it -= 1;
+                }
+
                 return .{ .function = Function{
                     .alloc = self.alloc,
                     .name = name,
                     .params = params,
                     .ret = return_type,
+                    .throw_error = throw_error,
                 } };
             },
             .simple_var_decl => {
@@ -358,6 +373,7 @@ const PrimitiveType = enum {
 
 fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
     try modules.print();
+    try writer.print("const std = @import(\"std\");\n", .{});
     try writer.print("pub fn Bindings(c: anytype, nux: anytype, Lua: anytype) type {{\n", .{});
     try writer.print("\treturn struct {{\n", .{});
     try writer.print(
@@ -391,9 +407,9 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                 try writer.print("\t\t\t\tconst p{d} = ", .{i});
                 switch (typ) {
                     .bool => try writer.print("c.lua_toboolean(lua, {d});\n", .{i}),
-                    .u32 => try writer.print("c.luaL_checknumber(lua, {d});\n", .{i}),
-                    .string => try writer.print("c.luaL_checkstring(lua, {d});\n", .{i}),
-                    .ObjectID => try writer.print("c.luaL_checknumber(lua, {d});\n", .{i}),
+                    .u32 => try writer.print("@as(u32, @intCast(c.luaL_checkinteger(lua, {d})));\n", .{i}),
+                    .string => try writer.print("std.mem.span(c.luaL_checklstring(lua, {d}, null));\n", .{i}),
+                    .ObjectID => try writer.print("@as(nux.ObjectID, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, {d})))));\n", .{i}),
                     else => {},
                 }
             }
@@ -415,16 +431,26 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                     try writer.print(", ", .{});
                 }
             }
-            try writer.print(");\n", .{});
-            // return value
-            switch (ret) {
-                .void => {},
-                .bool => try writer.print("\t\t\t\tc.lua_pushboolean(lua, ret);\n", .{}),
-                else => {
-                    try writer.print("\t\t\t\tc.lua_pushinteger(lua, 1);\n", .{});
-                },
+            // exception
+            if (function.throw_error) {
+                try writer.print(") catch |err| {{\n", .{});
+                try writer.print("\t\t\t\t\treturn c.luaL_error(lua, @errorName(err));\n", .{});
+                try writer.print("\t\t\t\t}};\n", .{});
+            } else {
+                try writer.print(");\n", .{});
             }
+            // return value
             if (ret != .void) {
+                try writer.print("\t\t\t\t", .{});
+                switch (ret) {
+                    .void => {},
+                    .bool => try writer.print("c.lua_pushboolean(lua, @intFromBool(ret));\n", .{}),
+                    .ObjectID => try writer.print("c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));\n", .{}),
+                    .Vec3 => try writer.print("Lua.pushUserData(lua, .vec3, ret);\n", .{}),
+                    else => {
+                        try writer.print("c.lua_pushinteger(lua, 1);\n", .{});
+                    },
+                }
                 try writer.print("\t\t\t\treturn 1;\n", .{});
             } else {
                 try writer.print("\t\t\t\treturn 0;\n", .{});

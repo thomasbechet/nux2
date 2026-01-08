@@ -204,18 +204,9 @@ fn configNative(b: *std.Build, config: Config) void {
     valgrind_step.dependOn(&valgrind.step);
 }
 fn configWeb(b: *std.Build, config: Config) void {
-    // configuration
-    const wasm_target = b.resolveTargetQuery(.{
-        .cpu_arch = .wasm32,
-        .os_tag = .wasi,
-    });
-    const wasm_optimize = .ReleaseSmall;
+    _ = config;
 
-    // core
-    var core_config = config;
-    core_config.target = wasm_target;
-    core_config.optimize = wasm_optimize;
-    configCore(b, core_config);
+    // configuration
 
     // web
     const wasm = b.addExecutable(.{
@@ -246,11 +237,24 @@ fn configWeb(b: *std.Build, config: Config) void {
 }
 
 pub fn build(b: *std.Build) void {
+    const platform = b.option(Config.Platform, "platform", "Platform target") orelse .native;
+
     const config: Config = .{
-        .target = b.standardTargetOptions(.{}),
-        .optimize = b.standardOptimizeOption(.{}),
-        .platform = b.option(Config.Platform, "platform", "Platform target") orelse .native,
+        .target = switch (platform) {
+            .native => return b.standardTargetOptions(.{}),
+            .web => return b.resolveTargetQuery(.{
+                .cpu_arch = .wasm32,
+                .os_tag = .wasi,
+            }),
+        },
+        .optimize = switch (platform) {
+            .native => return b.standardOptimizeOption(.{}),
+            .wasi => return .ReleaseSmall,
+        },
+        .platform = platform,
     };
+    // const wasm_target = ;
+    // const wasm_optimize = .ReleaseSmall;
 
     configCore(b, config);
     switch (config.platform) {

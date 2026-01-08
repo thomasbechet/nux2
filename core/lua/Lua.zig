@@ -72,7 +72,7 @@ fn doString(lua: *c.lua_State, s: [:0]const u8) !void {
     try protectedCall(lua);
 }
 
-fn pushUserData(lua: ?*c.lua_State, comptime field: std.meta.Tag(UserData), v: @FieldType(UserData, @tagName(field))) void {
+pub fn pushUserData(lua: ?*c.lua_State, comptime field: std.meta.Tag(UserData), v: @FieldType(UserData, @tagName(field))) void {
     const ptr: *anyopaque = c.lua_newuserdatauv(lua, @sizeOf(UserData), 0).?;
     const data: *UserData = @ptrCast(@alignCast(ptr));
     data.* = @unionInit(UserData, @tagName(field), v);

@@ -15,6 +15,6 @@ pub fn new(self: *Self, parent: nux.ObjectID) !nux.ObjectID {
 pub fn delete(self: *Self, id: nux.ObjectID) !void {
     try self.objects.remove(id);
 }
-pub fn getPosition(self: *Self, id: nux.ObjectID) nux.Vec3 {
-    return self.objects.get(id).position;
+pub fn getPosition(self: *Self, id: nux.ObjectID) !nux.Vec3 {
+    return (try self.objects.get(id)).position;
 }

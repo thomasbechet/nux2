@@ -347,31 +347,88 @@ fn toSnakeCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
     return out;
 }
 
+const PrimitiveType = enum {
+    void,
+    bool,
+    u32,
+    string,
+    ObjectID,
+    Vec3,
+};
+
 fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
     try modules.print();
-    try writer.print("pub fn Bindings(c: anytype, nux: anytype, Container: anytype) type {{\n", .{});
+    try writer.print("pub fn Bindings(c: anytype, nux: anytype, Lua: anytype) type {{\n", .{});
     try writer.print("\treturn struct {{\n", .{});
     try writer.print(
         \\      fn context(lua: ?*c.lua_State) *@This() {{
         \\          var ud: ?*anyopaque = undefined;
         \\          _ = c.lua_getallocf(lua, &ud);
-        \\          const self: *Container = @ptrCast(@alignCast(ud));
+        \\          const self: *Lua = @ptrCast(@alignCast(ud));
         \\          return &@field(self, "bindings");
         \\      }}
         \\
-        , .{}
-    );
+    , .{});
     for (modules.modules.items) |*module| {
         const module_name_camelcase = std.fs.path.stem(module.path);
+        var module_name = try toSnakeCase(alloc, module_name_camelcase);
+        defer module_name.deinit(alloc);
         try writer.print("\t\tconst {s} = struct {{\n", .{module_name_camelcase});
         try writer.print("\t\t\tconst Module = @import(\"{s}/{s}\");\n", .{ modules.rootpath, module.path });
         for (module.functions.items) |*function| {
             var func_name = try toSnakeCase(alloc, function.name);
             defer func_name.deinit(alloc);
             try writer.print("\t\t\tfn {s}(lua: ?*c.lua_State) callconv(.c) c_int {{\n", .{function.name});
-            try writer.print("\t\t\t\tc.lua_pushinteger(lua, 1);\n", .{});
-            try writer.print("\t\t\t\t_ = context(lua);\n", .{});
-            try writer.print("\t\t\t\treturn 1;\n", .{});
+            // retrieve context
+            try writer.print("\t\t\t\tconst self = context(lua);\n", .{});
+            for (function.params[1..], 1..) |param, i| {
+                const typ = std.meta.stringToEnum(PrimitiveType, param.typ) orelse {
+                    std.log.err("name = {s}", .{param.ident});
+                    std.log.err("type = {s}", .{param.typ});
+                    return error.unknownParameterType;
+                };
+                // parameter variable
+                try writer.print("\t\t\t\tconst p{d} = ", .{i});
+                switch (typ) {
+                    .bool => try writer.print("c.lua_toboolean(lua, {d});\n", .{i}),
+                    .u32 => try writer.print("c.luaL_checknumber(lua, {d});\n", .{i}),
+                    .string => try writer.print("c.luaL_checkstring(lua, {d});\n", .{i}),
+                    .ObjectID => try writer.print("c.luaL_checknumber(lua, {d});\n", .{i}),
+                    else => {},
+                }
+            }
+            // return variable
+            const ret = std.meta.stringToEnum(PrimitiveType, function.ret) orelse {
+                std.log.err("name = {s}", .{function.name});
+                std.log.err("type = {s}", .{function.ret});
+                return error.unknownFunctionType;
+            };
+            try writer.print("\t\t\t\t", .{});
+            if (ret != .void) {
+                try writer.print("const ret = ", .{});
+            }
+            // function call
+            try writer.print("self.{s}.{s}(", .{ module_name.items, function.name });
+            for (1..function.params.len) |i| {
+                try writer.print("p{d}", .{i});
+                if (i != function.params.len - 1) {
+                    try writer.print(", ", .{});
+                }
+            }
+            try writer.print(");\n", .{});
+            // return value
+            switch (ret) {
+                .void => {},
+                .bool => try writer.print("\t\t\t\tc.lua_pushboolean(lua, ret);\n", .{}),
+                else => {
+                    try writer.print("\t\t\t\tc.lua_pushinteger(lua, 1);\n", .{});
+                },
+            }
+            if (ret != .void) {
+                try writer.print("\t\t\t\treturn 1;\n", .{});
+            } else {
+                try writer.print("\t\t\t\treturn 0;\n", .{});
+            }
             try writer.print("\t\t\t}}\n", .{});
         }
         try writer.print("\t\t}};\n", .{});

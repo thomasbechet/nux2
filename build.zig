@@ -11,43 +11,43 @@ const Config = struct {
 };
 
 fn configCore(b: *std.Build, config: Config) void {
-    // // wren
-    // const wren_lib = b.createModule(.{
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
-    // const wren = b.addLibrary(.{
-    //     .name = "wren",
-    //     .linkage = .static,
-    //     .root_module = wren_lib,
-    // });
-    // wren.linkLibC();
-    // wren.addIncludePath(b.path("externals/wren-0.4.0/src/vm/"));
-    // wren.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
-    // wren.addIncludePath(b.path("externals/wren-0.4.0/src/optional/"));
-    // wren.addCSourceFiles(.{
-    //     .root = b.path("externals/wren-0.4.0/src/"),
-    //     .files = &.{
-    //         "vm/wren_compiler.c",
-    //         "vm/wren_core.c",
-    //         "vm/wren_debug.c",
-    //         "vm/wren_primitive.c",
-    //         "vm/wren_utils.c",
-    //         "vm/wren_value.c",
-    //         "vm/wren_vm.c",
-    //     },
-    //     .flags = &.{},
-    // });
+    // wren
+    const wren_mod = b.createModule(.{
+        .target = config.target,
+        .optimize = config.optimize,
+    });
+    const wren = b.addLibrary(.{
+        .name = "wren",
+        .linkage = .static,
+        .root_module = wren_mod,
+    });
+    wren.linkLibC();
+    wren.addIncludePath(b.path("externals/wren-0.4.0/src/vm/"));
+    wren.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
+    wren.addIncludePath(b.path("externals/wren-0.4.0/src/optional/"));
+    wren.addCSourceFiles(.{
+        .root = b.path("externals/wren-0.4.0/src/"),
+        .files = &.{
+            "vm/wren_compiler.c",
+            "vm/wren_core.c",
+            "vm/wren_debug.c",
+            "vm/wren_primitive.c",
+            "vm/wren_utils.c",
+            "vm/wren_value.c",
+            "vm/wren_vm.c",
+        },
+        .flags = &.{},
+    });
 
     // lua
-    const lua_lib = b.createModule(.{
+    const lua_mod = b.createModule(.{
         .target = config.target,
         .optimize = config.optimize,
     });
     const lua = b.addLibrary(.{
         .name = "lua",
         .linkage = .static,
-        .root_module = lua_lib,
+        .root_module = lua_mod,
     });
     lua.addIncludePath(b.path("externals/lua-5.5.0/"));
     var lua_sources = std.ArrayList([]const u8).initCapacity(b.allocator, 32) catch unreachable;
@@ -106,9 +106,9 @@ fn configCore(b: *std.Build, config: Config) void {
     lua.linkLibC();
 
     // zgltf
-    // const zgltf_dep = b.dependency("zgltf", .{ .target = target, .optimize = optimize });
+    const zgltf_pkg = b.dependency("zgltf", .{ .target = config.target, .optimize = config.optimize });
     // zigimg
-    // const zigimg_dep = b.dependency("zigimg", .{ .target = target, .optimize = optimize });
+    const zigimg_pkg = b.dependency("zigimg", .{ .target = config.target, .optimize = config.optimize });
 
     // bindings
     const bindgen = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
@@ -132,15 +132,14 @@ fn configCore(b: *std.Build, config: Config) void {
         .optimize = config.optimize,
         .root_source_file = b.path("core/nux.zig"),
         .imports = &.{
-            // .{ .name = "zgltf", .module = zgltf_dep.module("zgltf") },
-            // .{ .name = "zigimg", .module = zigimg_dep.module("zigimg") },
-            .{ .name = "lua", .module = lua_lib },
-            // .{ .name = "wren", .module = wren_lib },
+            .{ .name = "zgltf", .module = zgltf_pkg.module("zgltf") },
+            .{ .name = "zigimg", .module = zigimg_pkg.module("zigimg") },
+            .{ .name = "lua", .module = lua_mod },
+            .{ .name = "wren", .module = wren_mod },
         },
     });
     core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
     core.addIncludePath(b.path("externals/lua-5.5.0/"));
-    // core.addAnonymousImport("lua_bindings", .{ .root_source_file = bindings_output });
 
     // tests
     const tests = b.addTest(.{ .root_module = core });
@@ -173,6 +172,7 @@ fn configNative(b: *std.Build, config: Config) void {
                 .{ .name = "core", .module = b.modules.get("core").? },
                 .{ .name = "gl", .module = zigglgen },
             },
+            .strip = true,
         }),
     });
     artifact.linkLibrary(glfw_lib);
@@ -204,17 +204,14 @@ fn configNative(b: *std.Build, config: Config) void {
     valgrind_step.dependOn(&valgrind.step);
 }
 fn configWeb(b: *std.Build, config: Config) void {
-    _ = config;
-
-    // configuration
 
     // web
     const wasm = b.addExecutable(.{
         .name = "nux",
         .root_module = b.createModule(.{
             .root_source_file = b.path("runtimes/web/main.zig"),
-            .target = wasm_target,
-            .optimize = wasm_optimize,
+            .target = config.target,
+            .optimize = config.optimize,
             .imports = &.{
                 .{ .name = "core", .module = b.modules.get("core").? },
             },
@@ -237,24 +234,22 @@ fn configWeb(b: *std.Build, config: Config) void {
 }
 
 pub fn build(b: *std.Build) void {
-    const platform = b.option(Config.Platform, "platform", "Platform target") orelse .native;
+    const platform = b.option(Config.Platform, "platform", "target platform") orelse .native;
 
     const config: Config = .{
         .target = switch (platform) {
-            .native => return b.standardTargetOptions(.{}),
-            .web => return b.resolveTargetQuery(.{
+            .native => b.standardTargetOptions(.{}),
+            .web => b.resolveTargetQuery(.{
                 .cpu_arch = .wasm32,
                 .os_tag = .wasi,
             }),
         },
         .optimize = switch (platform) {
-            .native => return b.standardOptimizeOption(.{}),
-            .wasi => return .ReleaseSmall,
+            .native => b.standardOptimizeOption(.{}),
+            .web => .ReleaseSmall,
         },
         .platform = platform,
     };
-    // const wasm_target = ;
-    // const wasm_optimize = .ReleaseSmall;
 
     configCore(b, config);
     switch (config.platform) {

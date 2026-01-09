@@ -85,7 +85,7 @@ fn checkAnyUserData(lua: ?*c.lua_State, index: c_int) *UserData {
     const data = c.lua_touserdata(lua, index);
     return @ptrCast(@alignCast(data));
 }
-fn checkUserData(lua: ?*c.lua_State, comptime Tag: anytype, index: c_int) *UserData {
+pub fn checkUserData(lua: ?*c.lua_State, comptime Tag: anytype, index: c_int) *UserData {
     const userdata = checkAnyUserData(lua, index);
     if (std.meta.activeTag(userdata.*) != Tag) {
         _ = c.luaL_argerror(lua, index, "invalid userdata type");

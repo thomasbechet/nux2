@@ -368,7 +368,9 @@ const PrimitiveType = enum {
     u32,
     string,
     ObjectID,
+    Vec2,
     Vec3,
+    Vec4,
 };
 
 fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
@@ -410,6 +412,9 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                     .u32 => try writer.print("@as(u32, @intCast(c.luaL_checkinteger(lua, {d})));\n", .{i}),
                     .string => try writer.print("std.mem.span(c.luaL_checklstring(lua, {d}, null));\n", .{i}),
                     .ObjectID => try writer.print("@as(nux.ObjectID, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, {d})))));\n", .{i}),
+                    .Vec2 => try writer.print("Lua.checkUserData(lua, .vec2, {d});\n", .{i}),
+                    .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d});\n", .{i}),
+                    .Vec4 => try writer.print("Lua.checkUserData(lua, .vec4, {d});\n", .{i}),
                     else => {},
                 }
             }
@@ -446,7 +451,9 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                     .void => {},
                     .bool => try writer.print("c.lua_pushboolean(lua, @intFromBool(ret));\n", .{}),
                     .ObjectID => try writer.print("c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));\n", .{}),
+                    .Vec2 => try writer.print("Lua.pushUserData(lua, .vec2, ret);\n", .{}),
                     .Vec3 => try writer.print("Lua.pushUserData(lua, .vec3, ret);\n", .{}),
+                    .Vec4 => try writer.print("Lua.pushUserData(lua, .vec4, ret);\n", .{}),
                     else => {
                         try writer.print("c.lua_pushinteger(lua, 1);\n", .{});
                     },

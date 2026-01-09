@@ -6,19 +6,11 @@ const Self = @This();
 
 allocator: std.mem.Allocator,
 objects: nux.ObjectPool(struct {
-    const DTO = struct {};
     const Entry = struct {
-        name: []const u8,
         key: Input.Key,
     };
-    entries: std.ArrayList(Entry),
+    entries: std.StringHashMap(Entry),
     sensivity: f32,
-
-    fn findEntry(self: *@This(), name: []const u8) *Entry {
-        return for (self.entries) |*entry| {
-            if (std.mem.eql(u8, name, entry.name)) break entry;
-        };
-    }
 }),
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -27,9 +19,16 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 
 pub fn new(self: *Self, parent: nux.ObjectID) !nux.ObjectID {
     return try self.objects.add(parent, .{
-        .entries = try .initCapacity(self.allocator, 10),
+        .entries = .init(self.allocator),
         .sensivity = 1,
     });
 }
-pub fn delete(_: *Self, _: nux.ObjectID) void {}
-// pub fn bindKey(self: *Self, map: nux.ObjectID, name: []const u8, key: input.Key) void {}
+pub fn delete(self: *Self, id: nux.ObjectID) !void {
+    const map = try self.objects.get(id);
+    map.entries.deinit();
+}
+pub fn bindKey(self: *Self, id: nux.ObjectID, name: []const u8, key: Input.Key) !void {
+    const map = try self.objects.get(id);
+    const entry = try map.entries.getOrPut(name);
+    entry.value_ptr.key = key;
+}

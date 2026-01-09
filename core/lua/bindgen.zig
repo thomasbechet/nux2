@@ -330,7 +330,11 @@ const Modules = struct {
             for (module.functions.items) |*function| {
                 var func_name = try toSnakeCase(self.allocator, function.name);
                 defer func_name.deinit(self.allocator);
-                std.log.info("\t{s}: {s}", .{ function.name, function.ret });
+                const exception = if (function.throw_error)
+                    "!"
+                else
+                    "";
+                std.log.info("\t{s}: {s} {s}", .{ function.name, function.ret, exception });
                 for (function.params) |*param| {
                     std.log.info("\t\t{s}: {s}", .{ param.ident, param.typ });
                 }
@@ -399,33 +403,35 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
             try writer.print("\t\t\tfn {s}(lua: ?*c.lua_State) callconv(.c) c_int {{\n", .{function.name});
             // retrieve context
             try writer.print("\t\t\t\tconst self = context(lua);\n", .{});
-            for (function.params[1..], 1..) |param, i| {
-                const typ = std.meta.stringToEnum(PrimitiveType, param.typ) orelse {
-                    std.log.err("name = {s}", .{param.ident});
-                    std.log.err("type = {s}", .{param.typ});
-                    return error.unknownParameterType;
-                };
+            for (function.params[1..], 1..) |param, i| { // skip self parameter
                 // parameter variable
+                const primitive_type = std.meta.stringToEnum(PrimitiveType, param.typ);
                 try writer.print("\t\t\t\tconst p{d} = ", .{i});
-                switch (typ) {
-                    .bool => try writer.print("c.lua_toboolean(lua, {d});\n", .{i}),
-                    .u32 => try writer.print("@as(u32, @intCast(c.luaL_checkinteger(lua, {d})));\n", .{i}),
-                    .string => try writer.print("std.mem.span(c.luaL_checklstring(lua, {d}, null));\n", .{i}),
-                    .ObjectID => try writer.print("@as(nux.ObjectID, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, {d})))));\n", .{i}),
-                    .Vec2 => try writer.print("Lua.checkUserData(lua, .vec2, {d});\n", .{i}),
-                    .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d});\n", .{i}),
-                    .Vec4 => try writer.print("Lua.checkUserData(lua, .vec4, {d});\n", .{i}),
-                    else => {},
+                if (primitive_type) |typ| {
+                    switch (typ) {
+                        .bool => try writer.print("c.lua_toboolean(lua, {d});\n", .{i}),
+                        .u32 => try writer.print("@as(u32, @intCast(c.luaL_checkinteger(lua, {d})));\n", .{i}),
+                        .string => try writer.print("std.mem.span(c.luaL_checklstring(lua, {d}, null));\n", .{i}),
+                        .ObjectID => try writer.print("@as(nux.ObjectID, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, {d})))));\n", .{i}),
+                        .Vec2 => try writer.print("Lua.checkUserData(lua, .vec2, {d});\n", .{i}),
+                        .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d});\n", .{i}),
+                        .Vec4 => try writer.print("Lua.checkUserData(lua, .vec4, {d});\n", .{i}),
+                        else => {},
+                    }
+                } else { // enum constant
+                    try writer.print("std.enums.fromInt(@typeInfo(@TypeOf(Module.{s})).@\"fn\".params[{d}].type.?, c.luaL_checkinteger(lua, {d})) orelse return c.luaL_error(lua, \"invalid enum value\");\n", .{ function.name, i, i });
                 }
             }
             // return variable
-            const ret = std.meta.stringToEnum(PrimitiveType, function.ret) orelse {
-                std.log.err("name = {s}", .{function.name});
-                std.log.err("type = {s}", .{function.ret});
-                return error.unknownFunctionType;
-            };
+            var has_return_value = false;
+            const ret_primitive_type = std.meta.stringToEnum(PrimitiveType, function.ret);
+            if (ret_primitive_type) |typ| {
+                if (typ != .void) {
+                    has_return_value = true;
+                }
+            }
             try writer.print("\t\t\t\t", .{});
-            if (ret != .void) {
+            if (has_return_value) {
                 try writer.print("const ret = ", .{});
             }
             // function call
@@ -445,18 +451,22 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                 try writer.print(");\n", .{});
             }
             // return value
-            if (ret != .void) {
+            if (has_return_value) {
                 try writer.print("\t\t\t\t", .{});
-                switch (ret) {
-                    .void => {},
-                    .bool => try writer.print("c.lua_pushboolean(lua, @intFromBool(ret));\n", .{}),
-                    .ObjectID => try writer.print("c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));\n", .{}),
-                    .Vec2 => try writer.print("Lua.pushUserData(lua, .vec2, ret);\n", .{}),
-                    .Vec3 => try writer.print("Lua.pushUserData(lua, .vec3, ret);\n", .{}),
-                    .Vec4 => try writer.print("Lua.pushUserData(lua, .vec4, ret);\n", .{}),
-                    else => {
-                        try writer.print("c.lua_pushinteger(lua, 1);\n", .{});
-                    },
+                if (ret_primitive_type) |typ| {
+                    switch (typ) {
+                        .void => {},
+                        .bool => try writer.print("c.lua_pushboolean(lua, @intFromBool(ret));\n", .{}),
+                        .ObjectID => try writer.print("c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));\n", .{}),
+                        .Vec2 => try writer.print("Lua.pushUserData(lua, .vec2, ret);\n", .{}),
+                        .Vec3 => try writer.print("Lua.pushUserData(lua, .vec3, ret);\n", .{}),
+                        .Vec4 => try writer.print("Lua.pushUserData(lua, .vec4, ret);\n", .{}),
+                        else => {
+                            try writer.print("c.lua_pushinteger(lua, 1);\n", .{});
+                        },
+                    }
+                } else { // cast enum type to int
+                    try writer.print("c.lua_pushinteger(lua, @intFromEnum(ret));\n", .{});
                 }
                 try writer.print("\t\t\t\treturn 1;\n", .{});
             } else {

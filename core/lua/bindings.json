@@ -6,6 +6,9 @@
         },
         {
             "path": "input/Input.zig"
+        },
+        {
+            "path": "input/InputMap.zig"
         }
     ]
 }

@@ -9,4 +9,7 @@ print("a", "b", "c")
 print(input.KEY_A)
 print(input.KEY_B)
 
-print(input.is_pressed(0, "hello"))
+local map = InputMap.new(0);
+InputMap.bindKey(map, "up", 12312891724)
+InputMap.bindKey(map, "up", Input.KEY_A)
+print(map);

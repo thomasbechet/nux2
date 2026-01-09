@@ -296,7 +296,7 @@ fn metaNeg(lua: ?*c.lua_State) callconv(.c) c_int {
     }
     return 0;
 }
-fn vmathVec(lua: ?*c.lua_State, comptime T: type) T {
+fn mathVec(lua: ?*c.lua_State, comptime T: type) T {
     var v: T = undefined;
     if (c.lua_gettop(lua) == 0) {
         v = .zero();
@@ -309,19 +309,19 @@ fn vmathVec(lua: ?*c.lua_State, comptime T: type) T {
     }
     return v;
 }
-fn vmathVec2(lua: ?*c.lua_State) callconv(.c) c_int {
-    pushUserData(lua, .vec2, vmathVec(lua, nux.Vec2));
+fn mathVec2(lua: ?*c.lua_State) callconv(.c) c_int {
+    pushUserData(lua, .vec2, mathVec(lua, nux.Vec2));
     return 1;
 }
-fn vmathVec3(lua: ?*c.lua_State) callconv(.c) c_int {
-    pushUserData(lua, .vec3, vmathVec(lua, nux.Vec3));
+fn mathVec3(lua: ?*c.lua_State) callconv(.c) c_int {
+    pushUserData(lua, .vec3, mathVec(lua, nux.Vec3));
     return 1;
 }
-fn vmathVec4(lua: ?*c.lua_State) callconv(.c) c_int {
-    pushUserData(lua, .vec4, vmathVec(lua, nux.Vec4));
+fn mathVec4(lua: ?*c.lua_State) callconv(.c) c_int {
+    pushUserData(lua, .vec4, mathVec(lua, nux.Vec4));
     return 1;
 }
-fn openVMath(lua: *c.lua_State) !void {
+fn openMath(lua: *c.lua_State) !void {
     _ = c.luaL_newmetatable(lua, "userdata");
     const regs: [*]const c.luaL_Reg = &.{
         .{ .name = "__index", .func = metaIndex },
@@ -338,14 +338,14 @@ fn openVMath(lua: *c.lua_State) !void {
     c.lua_pop(lua, 1);
 
     c.lua_newtable(lua);
-    const vmath_lib: [*]const c.luaL_Reg = &.{
-        .{ .name = "vec2", .func = vmathVec2 },
-        .{ .name = "vec3", .func = vmathVec3 },
-        .{ .name = "vec4", .func = vmathVec4 },
+    const math_lib: [*]const c.luaL_Reg = &.{
+        .{ .name = "vec2", .func = mathVec2 },
+        .{ .name = "vec3", .func = mathVec3 },
+        .{ .name = "vec4", .func = mathVec4 },
         .{ .name = null, .func = null },
     };
-    c.luaL_setfuncs(lua, vmath_lib, 0);
-    c.lua_setglobal(lua, "vmath");
+    c.luaL_setfuncs(lua, math_lib, 0);
+    c.lua_setglobal(lua, "Math");
 }
 
 fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv(.c) ?*anyopaque {
@@ -374,9 +374,9 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     errdefer c.lua_close(self.lua);
 
     // open api
-    c.luaL_openlibs(self.lua); // base api
-    try openVMath(self.lua); // vmath
-    self.bindings.openModules(self.lua, core); // modules
+    c.luaL_openlibs(self.lua);
+    try openMath(self.lua);
+    self.bindings.openModules(self.lua, core);
 
     doString(self.lua, hello_file) catch {
         self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});

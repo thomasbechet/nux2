@@ -328,8 +328,6 @@ const Modules = struct {
             const module_name = std.fs.path.stem(module.path);
             std.log.info("{s}:", .{module_name});
             for (module.functions.items) |*function| {
-                var func_name = try toSnakeCase(self.allocator, function.name);
-                defer func_name.deinit(self.allocator);
                 const exception = if (function.throw_error)
                     "!"
                 else
@@ -340,8 +338,6 @@ const Modules = struct {
                 }
             }
             for (module.enums.items) |*enu| {
-                var enum_name = try toSnakeCase(self.allocator, enu.name);
-                defer enum_name.deinit(self.allocator);
                 std.log.info("\t{s}:", .{enu.name});
                 for (enu.values.items) |value| {
                     std.log.info("\t\t{s}", .{value});
@@ -391,15 +387,11 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
         \\      }}
         \\
     , .{});
-    for (modules.modules.items) |*module| {
-        const module_name_camelcase = std.fs.path.stem(module.path);
-        var module_name = try toSnakeCase(alloc, module_name_camelcase);
-        defer module_name.deinit(alloc);
-        try writer.print("\t\tconst {s} = struct {{\n", .{module_name_camelcase});
+    for (modules.modules.items, 0..) |*module, module_index| {
+        const module_name = std.fs.path.stem(module.path);
+        try writer.print("\t\tconst {s} = struct {{\n", .{module_name});
         try writer.print("\t\t\tconst Module = @import(\"{s}/{s}\");\n", .{ modules.rootpath, module.path });
         for (module.functions.items) |*function| {
-            var func_name = try toSnakeCase(alloc, function.name);
-            defer func_name.deinit(alloc);
             try writer.print("\t\t\tfn {s}(lua: ?*c.lua_State) callconv(.c) c_int {{\n", .{function.name});
             // retrieve context
             try writer.print("\t\t\t\tconst self = context(lua);\n", .{});
@@ -435,7 +427,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                 try writer.print("const ret = ", .{});
             }
             // function call
-            try writer.print("self.{s}.{s}(", .{ module_name.items, function.name });
+            try writer.print("self.mod{d}.{s}(", .{ module_index, function.name });
             for (1..function.params.len) |i| {
                 try writer.print("p{d}", .{i});
                 if (i != function.params.len - 1) {
@@ -477,30 +469,24 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
         try writer.print("\t\t}};\n", .{});
     }
 
-    for (modules.modules.items) |*module| {
-        const module_name_camelcase = std.fs.path.stem(module.path);
-        var module_name = try toSnakeCase(alloc, module_name_camelcase);
-        defer module_name.deinit(alloc);
-        try writer.print("\t\t{s}: *{s}.Module,\n", .{ module_name.items, module_name_camelcase });
+    for (modules.modules.items, 0..) |*module, module_index| {
+        const module_name = std.fs.path.stem(module.path);
+        try writer.print("\t\tmod{d}: *{s}.Module,\n", .{ module_index, module_name });
     }
 
     try writer.print("\t\tpub fn openModules(self: *@This(), lua: *c.lua_State, core: *const nux.Core) void {{\n", .{});
-    for (modules.modules.items) |*module| {
-        const module_name_camelcase = std.fs.path.stem(module.path);
-        var module_name = try toSnakeCase(alloc, module_name_camelcase);
-        defer module_name.deinit(alloc);
-        try writer.print("\t\t\tif (core.findModule({s}.Module)) |module| {{\n", .{module_name_camelcase});
-        try writer.print("\t\t\t\tself.{s} = module;\n", .{module_name.items});
+    for (modules.modules.items, 0..) |*module, module_index| {
+        const module_name = std.fs.path.stem(module.path);
+        try writer.print("\t\t\tif (core.findModule({s}.Module)) |module| {{\n", .{module_name});
+        try writer.print("\t\t\t\tself.mod{d} = module;\n", .{module_index});
         try writer.print("\t\t\t\tc.lua_newtable(lua);\n", .{});
-        try writer.print("\t\t\t\tconst {s}_lib: [*]const c.luaL_Reg = &.{{\n", .{module_name.items});
+        try writer.print("\t\t\t\tconst {s}_lib: [*]const c.luaL_Reg = &.{{\n", .{module_name});
         for (module.functions.items) |*function| {
-            var func_name = try toSnakeCase(alloc, function.name);
-            defer func_name.deinit(alloc);
-            try writer.print("\t\t\t\t\t.{{ .name = \"{s}\", .func = {s}.{s} }},\n", .{ func_name.items, module_name_camelcase, function.name });
+            try writer.print("\t\t\t\t\t.{{ .name = \"{s}\", .func = {s}.{s} }},\n", .{ function.name, module_name, function.name });
         }
         try writer.print("\t\t\t\t\t.{{ .name = null, .func = null }},\n", .{});
         try writer.print("\t\t\t\t}};\n", .{});
-        try writer.print("\t\t\t\tc.luaL_setfuncs(lua, {s}_lib, 0);\n", .{module_name.items});
+        try writer.print("\t\t\t\tc.luaL_setfuncs(lua, {s}_lib, 0);\n", .{module_name});
         for (module.enums.items) |enu| {
             var enum_name = try toSnakeCase(alloc, enu.name);
             defer enum_name.deinit(alloc);
@@ -510,11 +496,11 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                 const value_name = try alloc.dupe(u8, value);
                 defer alloc.free(value_name);
                 _ = std.ascii.upperString(value_name, value_name);
-                try writer.print("\t\t\t\tc.lua_pushinteger(lua, @intFromEnum({s}.Module.{s}.{s}));\n", .{ module_name_camelcase, enu.name, value });
+                try writer.print("\t\t\t\tc.lua_pushinteger(lua, @intFromEnum({s}.Module.{s}.{s}));\n", .{ module_name, enu.name, value });
                 try writer.print("\t\t\t\tc.lua_setfield(lua, -2, \"{s}_{s}\");\n", .{ enum_name.items, value_name });
             }
         }
-        try writer.print("\t\t\t\tc.lua_setglobal(lua, \"{s}\");\n", .{module_name.items});
+        try writer.print("\t\t\t\tc.lua_setglobal(lua, \"{s}\");\n", .{module_name});
         try writer.print("\t\t\t}}\n", .{});
     }
     try writer.print("\t\t}}\n", .{});

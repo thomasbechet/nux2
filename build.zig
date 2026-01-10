@@ -117,17 +117,16 @@ fn configCore(b: *std.Build, config: Config) void {
         .root_source_file = b.path("core/lua/bindgen.zig"),
     }) });
     const bindgen_run = b.addRunArtifact(bindgen);
-    const bindings_input = b.path("core/lua/bindings.json");
     const bindings_output_tmp = bindgen_run.addOutputFileArg("bindings.zig");
-    bindgen_run.addFileArg(bindings_input);
+    bindgen_run.addFileArg(b.path("core/lua/bindings.json"));
     const bindings_copy = b.addUpdateSourceFiles();
     bindings_copy.step.dependOn(&bindgen_run.step);
     bindings_copy.addCopyFileToSource(bindings_output_tmp, "core/lua/bindings.zig");
-    const bindgen_step = b.step("bindgen", "generate bindings");
+    const bindgen_step = b.step("bindgen", "Generate bindings");
     bindgen_step.dependOn(&bindings_copy.step);
 
     // core
-    const core = b.addModule("core", .{
+    const core = b.addModule("nux", .{
         .target = config.target,
         .optimize = config.optimize,
         .root_source_file = b.path("core/nux.zig"),
@@ -144,7 +143,7 @@ fn configCore(b: *std.Build, config: Config) void {
     // tests
     const tests = b.addTest(.{ .root_module = core });
     const tests_run = b.addRunArtifact(tests);
-    const tests_step = b.step("test", "run tests");
+    const tests_step = b.step("test", "Run tests");
     tests_step.dependOn(&tests_run.step);
 }
 
@@ -169,10 +168,9 @@ fn configNative(b: *std.Build, config: Config) void {
             .target = config.target,
             .optimize = config.optimize,
             .imports = &.{
-                .{ .name = "core", .module = b.modules.get("core").? },
+                .{ .name = "nux", .module = b.modules.get("nux").? },
                 .{ .name = "gl", .module = zigglgen },
             },
-            .strip = true,
         }),
     });
     artifact.linkLibrary(glfw_lib);
@@ -184,7 +182,7 @@ fn configNative(b: *std.Build, config: Config) void {
 
     // run
     const run = b.addRunArtifact(artifact);
-    const run_step = b.step("run", "run the console");
+    const run_step = b.step("run", "Run the console");
     run_step.dependOn(&install.step);
     run_step.dependOn(&run.step);
 
@@ -194,13 +192,13 @@ fn configNative(b: *std.Build, config: Config) void {
         "--",
     });
     debug.addArtifactArg(artifact);
-    const debug_step = b.step("debug", "run the console under lldb");
+    const debug_step = b.step("debug", "Run the console under lldb");
     debug_step.dependOn(&debug.step);
 
     // valgrind
     const valgrind = b.addSystemCommand(&.{"valgrind"});
     valgrind.addArtifactArg(artifact);
-    const valgrind_step = b.step("valgrind", "run the console with valgrind");
+    const valgrind_step = b.step("valgrind", "Run the console with valgrind");
     valgrind_step.dependOn(&valgrind.step);
 }
 fn configWeb(b: *std.Build, config: Config) void {

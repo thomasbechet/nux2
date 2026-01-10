@@ -17,6 +17,10 @@ pub const Vec4 = vec.Vec4f;
 pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;
     pub const Logger = @import("platform/Logger.zig");
+    pub const Input = @import("platform/Input.zig");
+    pub const Event = union(enum) {
+        input: Platform.Input.Event,
+    };
     allocator: Platform.Allocator = std.heap.page_allocator,
     logger: Platform.Logger = .default,
 };
@@ -111,8 +115,9 @@ pub const Module = struct {
 pub const Core = struct {
     modules: std.ArrayList(Module),
     platform: Platform,
-    object: *Object,
     logger: *Logger,
+    object: *Object,
+    input: *Input,
     log_enabled: bool,
 
     pub fn init(platform: Platform, comptime mods: anytype) !*Core {
@@ -125,9 +130,9 @@ pub const Core = struct {
         core.logger = try core.registerModule(Logger);
         core.log_enabled = true;
         core.object = try core.registerModule(Object);
+        core.input = try core.registerModule(Input);
         try core.registerModules(.{
             Transform,
-            Input,
             InputMap,
             Lua,
         });
@@ -157,6 +162,12 @@ pub const Core = struct {
     pub fn update(self: *Core) !void {
         for (self.modules.items) |*module| {
             try module.call_update();
+        }
+    }
+
+    pub fn pushEvent(self: *Core, event: Platform.Event) void {
+        switch (event) {
+            .input => |input| self.input.onEvent(input),
         }
     }
 

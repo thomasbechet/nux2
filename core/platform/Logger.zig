@@ -1,4 +1,5 @@
 const std = @import("std");
+const nux = @import("../nux.zig");
 
 ptr: *anyopaque,
 vtable: *const VTable,

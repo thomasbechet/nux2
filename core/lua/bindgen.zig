@@ -156,7 +156,6 @@ const AstIter = struct {
                         for (decl.ast.members) |member| {
                             const mem = self.ast.nodes.get(@intFromEnum(member));
                             if (mem.tag != .container_field_init) continue;
-                            // std.log.info("ENUM {s}", .{self.ast.tokenSlice(mem.main_token)});
                             try values.append(self.alloc, self.ast.tokenSlice(mem.main_token));
                         }
 
@@ -270,7 +269,7 @@ const Modules = struct {
                     .@"enum" => |enu| enu.name,
                 };
                 var ignore = false;
-                for ([_][]const u8{ "init", "deinit" }) |keyword| {
+                for ([_][]const u8{ "init", "deinit", "onEvent" }) |keyword| {
                     if (std.mem.eql(u8, name, keyword)) {
                         ignore = true;
                     }
@@ -405,9 +404,9 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                         .u32 => try writer.print("@as(u32, @intCast(c.luaL_checkinteger(lua, {d})));\n", .{i}),
                         .string => try writer.print("std.mem.span(c.luaL_checklstring(lua, {d}, null));\n", .{i}),
                         .ObjectID => try writer.print("@as(nux.ObjectID, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, {d})))));\n", .{i}),
-                        .Vec2 => try writer.print("Lua.checkUserData(lua, .vec2, {d});\n", .{i}),
-                        .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d});\n", .{i}),
-                        .Vec4 => try writer.print("Lua.checkUserData(lua, .vec4, {d});\n", .{i}),
+                        .Vec2 => try writer.print("Lua.checkUserData(lua, .vec2, {d}).vec2;\n", .{i}),
+                        .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d}).vec3;\n", .{i}),
+                        .Vec4 => try writer.print("Lua.checkUserData(lua, .vec4, {d}).vec4;\n", .{i}),
                         else => {},
                     }
                 } else { // enum constant

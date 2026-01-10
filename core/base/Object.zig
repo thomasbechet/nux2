@@ -111,6 +111,9 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn deinit(self: *Self) void {
     self.entries.deinit(self.allocator);
     self.free.deinit(self.allocator);
+    for (self.types.items) |typ| {
+        typ.v_deinit(typ.v_ptr);
+    }
     self.types.deinit(self.allocator);
 }
 

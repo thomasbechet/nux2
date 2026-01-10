@@ -11,7 +11,10 @@ const Controller = struct {
     inputmap: nux.ObjectID,
     inputs: std.ArrayList(f32),
     prev_inputs: std.ArrayList(f32),
+    // values: std.StringHashMap,
 };
+
+pub const ButtonState = enum(u32) { pressed = 1, released = 0 };
 
 pub const Key = enum(u32) {
     space = 0,
@@ -135,12 +138,56 @@ pub const Key = enum(u32) {
 };
 
 controllers: [Controller.max]Controller,
+allocator: std.mem.Allocator,
+logger: *nux.Logger,
+input_map: *nux.InputMap,
+events: std.ArrayList(nux.Platform.Input.Event),
 
-// pub fn init(self: *Module, core: *nux.Core) !void {}
+pub fn init(self: *Self, core: *const nux.Core) !void {
+    self.allocator = core.platform.allocator;
+    self.events = try .initCapacity(self.allocator, 32);
+}
+pub fn deinit(self: *Self) void {
+    self.events.deinit(self.allocator);
+}
+pub fn onEvent(self: *Self, event: nux.Platform.Input.Event) void {
+    self.logger.info("{any} {any}", .{ event.key, event.state });
+    self.events.append(self.allocator, event) catch return;
+}
+
+// static void
+// controller_get_input_value (nux_u32_t       controller,
+//                             const nux_c8_t *name,
+//                             nux_f32_t      *value,
+//                             nux_f32_t      *prev_value,
+//                             nux_f32_t       default_value)
+// {
+//     nux_check(controller < nux_array_size(_module.controllers), goto error);
+//     nux_controller_t *ctrl = _module.controllers + controller;
+//     nux_inputmap_t   *map
+//         = nux_resource_get(NUX_RESOURCE_INPUTMAP, ctrl->inputmap);
+//     nux_check(map, goto error);
+//     nux_u32_t index;
+//     nux_check(nux_inputmap_find_index(map, name, &index), goto error);
+//     nux_assert(index < ctrl->inputs.size);
+//     *value      = ctrl->inputs.data[index];
+//     *prev_value = ctrl->prev_inputs.data[index];
+//     return;
+// error:
+//     *value      = default_value;
+//     *prev_value = default_value;
+// }
+
+// fn controllerInputValue(self: *Self, controller: u32, name: []const u8, default: f32) struct { f32, f32 } {
+//     const missing_default = .{ false, false };
+//     if (controller >= Controller.max) return missing_default;
+//     const map = self.input_map.objects.get(self.controllers[controller].inputmap) catch return missing_default;
+//     // map.entries
+// }
 
 pub fn isPressed(self: *Self, controller: u32, name: []const u8) bool {
-    _ = self;
     _ = controller;
+    _ = self;
     _ = name;
     return false;
 }

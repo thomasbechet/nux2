@@ -7,7 +7,9 @@ const Self = @This();
 allocator: std.mem.Allocator,
 objects: nux.ObjectPool(struct {
     const Entry = struct {
-        key: Input.Key,
+        mapping: union(enum) {
+            key: Input.Key,
+        },
     };
     entries: std.StringHashMap(Entry),
     sensivity: f32,
@@ -26,9 +28,14 @@ pub fn new(self: *Self, parent: nux.ObjectID) !nux.ObjectID {
 pub fn delete(self: *Self, id: nux.ObjectID) !void {
     const map = try self.objects.get(id);
     map.entries.deinit();
+    std.log.info("called", .{});
 }
 pub fn bindKey(self: *Self, id: nux.ObjectID, name: []const u8, key: Input.Key) !void {
-    const map = try self.objects.get(id);
-    const entry = try map.entries.getOrPut(name);
-    entry.value_ptr.key = key;
+    // const map = try self.objects.get(id);
+    // const entry = try map.entries.getOrPut(name);
+    // entry.value_ptr.mapping.key = key;
+    _ = self;
+    _ = id;
+    _ = name;
+    _ = key;
 }

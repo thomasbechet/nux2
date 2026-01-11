@@ -8,7 +8,7 @@ const Controller = struct {
 
     cursor: nux.Vec2,
     cursor_prev: nux.Vec2,
-    inputmap: nux.ObjectID,
+    inputmap: nux.NodeID,
     inputs: std.ArrayList(f32),
     prev_inputs: std.ArrayList(f32),
     // values: std.StringHashMap,

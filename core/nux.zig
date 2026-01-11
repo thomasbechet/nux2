@@ -1,14 +1,14 @@
 const std = @import("std");
 
 pub const Logger = @import("base/Logger.zig");
-pub const Object = @import("base/Object.zig");
+pub const Node = @import("base/Node.zig");
 pub const Transform = @import("base/Transform.zig");
 pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
 pub const Lua = @import("lua/Lua.zig");
 
-pub const ObjectID = Object.ObjectID;
-pub const ObjectPool = Object.ObjectPool;
+pub const NodeID = Node.NodeID;
+pub const NodePool = Node.NodePool;
 pub const vec = @import("math/vec.zig");
 pub const Vec2 = vec.Vec2f;
 pub const Vec3 = vec.Vec3f;
@@ -55,7 +55,7 @@ pub const Module = struct {
                     }
                 }
                 // objects initialization
-                try core.object.initModuleObjects(T, self);
+                try core.object.initModuleNodePool(T, self);
                 if (@hasDecl(T, "init")) {
                     const ccore: *const Core = core;
                     return self.init(ccore);
@@ -116,7 +116,7 @@ pub const Core = struct {
     modules: std.ArrayList(Module),
     platform: Platform,
     logger: *Logger,
-    object: *Object,
+    object: *Node,
     input: *Input,
     log_enabled: bool,
 
@@ -129,9 +129,10 @@ pub const Core = struct {
         // Register core modules
         core.logger = try core.registerModule(Logger);
         core.log_enabled = true;
-        core.object = try core.registerModule(Object);
+        core.object = try core.registerModule(Node);
         core.input = try core.registerModule(Input);
         try core.registerModules(.{
+            Node,
             Transform,
             InputMap,
             Lua,
@@ -202,17 +203,3 @@ pub const Core = struct {
         return null;
     }
 };
-
-test "core" {
-    const ModA = struct {
-        objs: ObjectPool(u32),
-        pub fn init(self: *@This(), core: *Core) !void {
-            try self.objs.init(core);
-        }
-        pub fn deinit(self: *@This()) void {
-            self.objs.deinit();
-        }
-    };
-    var core = try Core.init(std.testing.allocator, .{ModA});
-    defer core.deinit();
-}

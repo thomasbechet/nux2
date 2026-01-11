@@ -2,6 +2,18 @@
     "rootpath": "..",
     "modules": [
         {
+            "path": "base/Node.zig",
+            "ignore": [
+                "NodePool",
+                "NodeID",
+                "NodeEntry",
+                "NodeType",
+                "initModuleNodePool",
+                "getType",
+                "findType"
+            ]
+        },
+        {
             "path": "base/Transform.zig"
         },
         {

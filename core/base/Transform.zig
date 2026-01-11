@@ -3,18 +3,18 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
-objects: nux.ObjectPool(struct {
+nodes: nux.NodePool(struct {
     position: nux.Vec3,
 }),
-object: *nux.Object,
+node: *nux.Node,
 logger: *nux.Logger,
 
-pub fn new(self: *Self, parent: nux.ObjectID) !nux.ObjectID {
-    return self.objects.add(parent, .{ .position = .zero() });
+pub fn new(self: *Self, parent: nux.NodeID) !nux.NodeID {
+    return self.nodes.add(parent, .{ .position = .zero() });
 }
-pub fn delete(self: *Self, id: nux.ObjectID) !void {
-    try self.objects.remove(id);
+pub fn delete(self: *Self, id: nux.NodeID) !void {
+    try self.nodes.remove(id);
 }
-pub fn getPosition(self: *Self, id: nux.ObjectID) !nux.Vec3 {
-    return (try self.objects.get(id)).position;
+pub fn getPosition(self: *Self, id: nux.NodeID) !nux.Vec3 {
+    return (try self.nodes.get(id)).position;
 }

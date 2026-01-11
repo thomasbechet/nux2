@@ -55,7 +55,7 @@ pub const Module = struct {
                     }
                 }
                 // objects initialization
-                try core.object.initModuleNodePool(T, self);
+                try core.object.registerNodePool(T, self);
                 if (@hasDecl(T, "init")) {
                     const ccore: *const Core = core;
                     return self.init(ccore);

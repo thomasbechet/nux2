@@ -169,17 +169,21 @@ pub fn deinit(self: *Self) void {
     self.types.deinit(self.allocator);
 }
 
-pub fn initModuleNodePool(self: *Self, comptime T: type, module: *T) !void {
+pub fn registerNodePool(self: *Self, comptime T: type, module: *T) !void {
     if (@hasField(T, "nodes")) {
-        const type_index: NodeEntry.TypeIndex = @intCast(self.types.items.len);
-        module.nodes = try .init(&self.tree, type_index);
 
+        // check missing functions
         inline for (.{ "new", "delete" }) |func| {
             if (!@hasDecl(T, func)) {
                 @compileError("module " ++ @typeName(T) ++ " has nodes but is missing function " ++ func);
             }
         }
 
+        // init pool
+        const type_index: NodeEntry.TypeIndex = @intCast(self.types.items.len);
+        module.nodes = try .init(&self.tree, type_index);
+
+        // create vtable
         const gen = struct {
             fn new(pointer: *anyopaque, parent: NodeID) !NodeID {
                 const mod: *T = @ptrCast(@alignCast(pointer));
@@ -194,6 +198,8 @@ pub fn initModuleNodePool(self: *Self, comptime T: type, module: *T) !void {
                 mod.nodes.deinit();
             }
         };
+
+        // register type
         (try self.types.addOne(self.allocator)).* = .{
             .name = @typeName(T),
             .v_ptr = module,
@@ -204,8 +210,8 @@ pub fn initModuleNodePool(self: *Self, comptime T: type, module: *T) !void {
     }
 }
 
-pub fn new(self: *Self, name: []const u8, parent: NodeID) !NodeID {
-    const typ = try self.findType(name);
+pub fn new(self: *Self, typename: []const u8, parent: NodeID) !NodeID {
+    const typ = try self.findType(typename);
     return typ.v_new(typ.v_ptr, parent);
 }
 pub fn delete(self: *Self, id: NodeID) !void {

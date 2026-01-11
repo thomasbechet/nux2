@@ -5,15 +5,16 @@ const Self = @This();
 
 nodes: nux.NodePool(struct {
     position: nux.Vec3,
+    pub fn init(_: *Self) !@This() {
+        return .{ .position = .zero() };
+    }
+    pub fn deinit(_: *Self, _: @This()) void {}
 }),
 node: *nux.Node,
 logger: *nux.Logger,
 
 pub fn new(self: *Self, parent: nux.NodeID) !nux.NodeID {
-    return self.nodes.add(parent, .{ .position = .zero() });
-}
-pub fn delete(self: *Self, id: nux.NodeID) !void {
-    try self.nodes.remove(id);
+    return try self.nodes.new(parent);
 }
 pub fn getPosition(self: *Self, id: nux.NodeID) !nux.Vec3 {
     return (try self.nodes.get(id)).position;

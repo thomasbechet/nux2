@@ -5,6 +5,7 @@ const Input = nux.Input;
 const Self = @This();
 
 allocator: std.mem.Allocator,
+logger: *nux.Logger,
 nodes: nux.NodePool(struct {
     const Entry = struct {
         mapping: union(enum) {
@@ -13,6 +14,18 @@ nodes: nux.NodePool(struct {
     };
     entries: std.StringHashMap(Entry),
     sensivity: f32,
+
+    pub fn init(self: *Self) !@This() {
+        self.logger.info("new InputMap !", .{});
+        return .{
+            .entries = .init(self.allocator),
+            .sensivity = 1,
+        };
+    }
+    pub fn deinit(_: *Self, data: @This()) void {
+        data.entries.deinit();
+        std.log.info("called", .{});
+    }
 }),
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -20,15 +33,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 }
 
 pub fn new(self: *Self, parent: nux.NodeID) !nux.NodeID {
-    return try self.nodes.add(parent, .{
-        .entries = .init(self.allocator),
-        .sensivity = 1,
-    });
-}
-pub fn delete(self: *Self, id: nux.NodeID) !void {
-    const map = try self.nodes.get(id);
-    map.entries.deinit();
-    std.log.info("called", .{});
+    return try self.nodes.new(parent);
 }
 pub fn bindKey(self: *Self, id: nux.NodeID, name: []const u8, key: Input.Key) !void {
     // const map = try self.objects.get(id);

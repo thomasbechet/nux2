@@ -63,22 +63,33 @@ pub fn NodePool(comptime T: type) type {
             self.ids.deinit(self.allocator);
         }
 
-        pub fn add(self: *@This(), parent: NodeID, data: T) !NodeID {
+        pub fn new(self: *@This(), parent: NodeID) !NodeID {
             const pool_index = self.data.items.len;
             const id = try self.tree.add(parent, @intCast(pool_index), self.type_index);
-            (try self.data.addOne(self.allocator)).* = data;
-            (try self.ids.addOne(self.allocator)).* = id;
+            const data_ptr = try self.data.addOne(self.allocator);
+            const id_ptr = try self.ids.addOne(self.allocator);
+            id_ptr.* = id;
+            // init node
+            std.log.info("new called", .{});
+            if (@hasField(T, "init")) {
+                std.log.info("init called", .{});
+                data_ptr.* = try T.init(@fieldParentPtr("nodes", self));
+            }
             return id;
         }
-        pub fn remove(self: *@This(), id: NodeID) !void {
-            const obj = try self.tree.get(id);
+        fn delete(self: *@This(), id: NodeID) !void {
+            const node = try self.tree.get(id);
+            // deinit node
+            if (@hasField(T, "deinit")) {
+                T.deinit(@fieldParentPtr("nodes", self), &self.data[node.pool_index]);
+            }
             // remove node from graph
             try self.tree.remove(id);
             // update last item before swap remove
-            self.tree.updatePoolIndex(self.ids.items[obj.pool_index], obj.pool_index);
+            self.tree.updatePoolIndex(self.ids.items[node.pool_index], node.pool_index);
             // remove from array
-            _ = self.data.swapRemove(obj.pool_index);
-            _ = self.ids.swapRemove(obj.pool_index);
+            _ = self.data.swapRemove(node.pool_index);
+            _ = self.ids.swapRemove(node.pool_index);
         }
         pub fn get(self: *@This(), id: NodeID) !*T {
             const node = try self.tree.get(id);
@@ -172,13 +183,6 @@ pub fn deinit(self: *Self) void {
 pub fn registerNodePool(self: *Self, comptime T: type, module: *T) !void {
     if (@hasField(T, "nodes")) {
 
-        // check missing functions
-        inline for (.{ "new", "delete" }) |func| {
-            if (!@hasDecl(T, func)) {
-                @compileError("module " ++ @typeName(T) ++ " has nodes but is missing function " ++ func);
-            }
-        }
-
         // init pool
         const type_index: NodeEntry.TypeIndex = @intCast(self.types.items.len);
         module.nodes = try .init(&self.tree, type_index);
@@ -187,11 +191,11 @@ pub fn registerNodePool(self: *Self, comptime T: type, module: *T) !void {
         const gen = struct {
             fn new(pointer: *anyopaque, parent: NodeID) !NodeID {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return mod.new(parent);
+                return mod.nodes.new(parent);
             }
             fn delete(pointer: *anyopaque, id: NodeID) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return mod.delete(id);
+                return mod.nodes.delete(id);
             }
             fn deinit(pointer: *anyopaque) void {
                 const mod: *T = @ptrCast(@alignCast(pointer));

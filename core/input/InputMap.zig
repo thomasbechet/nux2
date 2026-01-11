@@ -16,15 +16,14 @@ nodes: nux.NodePool(struct {
     sensivity: f32,
 
     pub fn init(self: *Self) !@This() {
-        self.logger.info("new InputMap !", .{});
         return .{
             .entries = .init(self.allocator),
             .sensivity = 1,
         };
     }
-    pub fn deinit(_: *Self, data: @This()) void {
+    pub fn deinit(_: *Self, data: *@This()) void {
         data.entries.deinit();
-        std.log.info("called", .{});
+        std.log.info("deinit called", .{});
     }
 }),
 

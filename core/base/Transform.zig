@@ -8,7 +8,7 @@ nodes: nux.NodePool(struct {
     pub fn init(_: *Self) !@This() {
         return .{ .position = .zero() };
     }
-    pub fn deinit(_: *Self, _: @This()) void {}
+    pub fn deinit(_: *Self, _: *@This()) void {}
 }),
 node: *nux.Node,
 logger: *nux.Logger,

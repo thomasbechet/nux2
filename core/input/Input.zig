@@ -14,7 +14,7 @@ const Controller = struct {
     // values: std.StringHashMap,
 };
 
-pub const ButtonState = enum(u32) { pressed = 1, released = 0 };
+pub const State = enum(u32) { pressed = 1, released = 0 };
 
 pub const Key = enum(u32) {
     space = 0,

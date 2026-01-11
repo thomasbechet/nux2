@@ -70,9 +70,7 @@ pub fn NodePool(comptime T: type) type {
             const id_ptr = try self.ids.addOne(self.allocator);
             id_ptr.* = id;
             // init node
-            std.log.info("new called", .{});
-            if (@hasField(T, "init")) {
-                std.log.info("init called", .{});
+            if (@hasDecl(T, "init")) {
                 data_ptr.* = try T.init(@fieldParentPtr("nodes", self));
             }
             return id;
@@ -80,8 +78,8 @@ pub fn NodePool(comptime T: type) type {
         fn delete(self: *@This(), id: NodeID) !void {
             const node = try self.tree.get(id);
             // deinit node
-            if (@hasField(T, "deinit")) {
-                T.deinit(@fieldParentPtr("nodes", self), &self.data[node.pool_index]);
+            if (@hasDecl(T, "deinit")) {
+                T.deinit(@fieldParentPtr("nodes", self), &self.data.items[node.pool_index]);
             }
             // remove node from graph
             try self.tree.remove(id);

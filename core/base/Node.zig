@@ -44,18 +44,18 @@ pub const NodeType = struct {
 pub fn NodePool(comptime T: type) type {
     return struct {
         allocator: std.mem.Allocator,
-        tree: *Tree,
+        node_module: *Self,
         type_index: NodeEntry.TypeIndex,
         data: std.ArrayList(T),
         ids: std.ArrayList(NodeID),
 
-        fn init(tree: *Tree, type_index: NodeEntry.TypeIndex) !@This() {
+        fn init(self: *Self, type_index: NodeEntry.TypeIndex) !@This() {
             return .{
-                .allocator = tree.allocator,
+                .allocator = self.tree.allocator,
                 .type_index = type_index,
-                .tree = tree,
-                .data = try .initCapacity(tree.allocator, 1000),
-                .ids = try .initCapacity(tree.allocator, 1000),
+                .node_module = self,
+                .data = try .initCapacity(self.tree.allocator, 1000),
+                .ids = try .initCapacity(self.tree.allocator, 1000),
             };
         }
         fn deinit(self: *@This()) void {
@@ -65,7 +65,7 @@ pub fn NodePool(comptime T: type) type {
 
         pub fn new(self: *@This(), parent: NodeID) !NodeID {
             const pool_index = self.data.items.len;
-            const id = try self.tree.add(parent, @intCast(pool_index), self.type_index);
+            const id = try self.node_module.tree.add(parent, @intCast(pool_index), self.type_index);
             const data_ptr = try self.data.addOne(self.allocator);
             const id_ptr = try self.ids.addOne(self.allocator);
             id_ptr.* = id;
@@ -76,21 +76,29 @@ pub fn NodePool(comptime T: type) type {
             return id;
         }
         fn delete(self: *@This(), id: NodeID) !void {
-            const node = try self.tree.get(id);
+            const node = try self.node_module.tree.get(id);
             // deinit node
             if (@hasDecl(T, "deinit")) {
                 T.deinit(@fieldParentPtr("nodes", self), &self.data.items[node.pool_index]);
             }
             // remove node from graph
-            try self.tree.remove(id);
+            try self.node_module.tree.remove(id);
             // update last item before swap remove
-            self.tree.updatePoolIndex(self.ids.items[node.pool_index], node.pool_index);
+            self.node_module.tree.updatePoolIndex(self.ids.items[node.pool_index], node.pool_index);
             // remove from array
             _ = self.data.swapRemove(node.pool_index);
             _ = self.ids.swapRemove(node.pool_index);
+
+            // delete childs
+            var it = node.child;
+            while (!it.isNull()) {
+                const cinfo = self.node_module.tree.get(it) catch break;
+                try self.node_module.delete(it);
+                it = cinfo.next;
+            }
         }
         pub fn get(self: *@This(), id: NodeID) !*T {
-            const node = try self.tree.get(id);
+            const node = try self.node_module.tree.get(id);
             return &self.data.items[node.pool_index];
         }
     };
@@ -117,6 +125,8 @@ const Tree = struct {
     }
 
     fn add(self: *Tree, parent: NodeID, pool_index: NodeEntry.Index, type_index: NodeEntry.TypeIndex) !NodeID {
+
+        // find free node
         var index: NodeEntry.Index = undefined;
         if (self.free.pop()) |idx| {
             index = idx;
@@ -125,6 +135,8 @@ const Tree = struct {
             const object = try self.entries.addOne(self.allocator);
             object.version = 0;
         }
+
+        // initialize node
         var node = &self.entries.items[index];
         node.pool_index = pool_index;
         node.type_index = type_index;
@@ -132,10 +144,18 @@ const Tree = struct {
         node.child = .null;
         node.next = .null;
         node.prev = .null;
-        return .{
+        const id: NodeID = .{
             .index = index,
             .version = node.version,
         };
+
+        // update parent
+        if (!parent.isNull()) {
+            const p = try self.get(parent);
+            p.child = id;
+        }
+
+        return id;
     }
     fn remove(self: *Tree, id: NodeID) !void {
         var node = &self.entries.items[id.index];
@@ -183,7 +203,7 @@ pub fn registerNodePool(self: *Self, comptime T: type, module: *T) !void {
 
         // init pool
         const type_index: NodeEntry.TypeIndex = @intCast(self.types.items.len);
-        module.nodes = try .init(&self.tree, type_index);
+        module.nodes = try .init(self, type_index);
 
         // create vtable
         const gen = struct {
@@ -225,9 +245,8 @@ pub fn getParent(self: *Self, id: NodeID) !NodeID {
     return node.parent;
 }
 pub fn setParent(self: *Self, id: NodeID, parent: NodeID) !void {
-    _ = parent;
     const node = try self.tree.get(id);
-    _ = node;
+    node.parent = parent;
 }
 pub fn getType(self: *Self, id: NodeID) !*NodeType {
     const node = try self.tree.get(id);

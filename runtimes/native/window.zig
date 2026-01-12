@@ -176,7 +176,7 @@ fn keyCallback(win: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, 
         },
         else => {},
     }
-    const state: nux.Input.ButtonState = if (action == c.GLFW_RELEASE) .released else .pressed;
+    const state: nux.Input.State = if (action == c.GLFW_RELEASE) .released else .pressed;
     if (key_map[@intCast(key)]) |k| {
         ctx.core.pushEvent(.{ .input = .{
             .key = k,

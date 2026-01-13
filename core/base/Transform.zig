@@ -21,3 +21,6 @@ pub fn new(self: *Self, parent: nux.NodeID) !nux.NodeID {
 pub fn getPosition(self: *Self, id: nux.NodeID) !nux.Vec3 {
     return (try self.nodes.get(id)).position;
 }
+pub fn setPosition(self: *Self, id: nux.NodeID, position: nux.Vec3) !void {
+    (try self.nodes.get(id)).position = position;
+}

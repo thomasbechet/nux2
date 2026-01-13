@@ -54,8 +54,9 @@ pub const Module = struct {
                         else => {},
                     }
                 }
-                // objects initialization
-                try core.object.registerNodePool(T, self);
+                // nodes initialization
+                try core.node.registerNodeModule(T, self);
+                // initialize
                 if (@hasDecl(T, "init")) {
                     const ccore: *const Core = core;
                     return self.init(ccore);
@@ -116,7 +117,7 @@ pub const Core = struct {
     modules: std.ArrayList(Module),
     platform: Platform,
     logger: *Logger,
-    object: *Node,
+    node: *Node,
     input: *Input,
     log_enabled: bool,
 
@@ -129,7 +130,7 @@ pub const Core = struct {
         // Register core modules
         core.logger = try core.registerModule(Logger);
         core.log_enabled = true;
-        core.object = try core.registerModule(Node);
+        core.node = try core.registerModule(Node);
         core.input = try core.registerModule(Input);
         try core.registerModules(.{
             Node,

@@ -1,0 +1,21 @@
+{
+    "type": "empty",
+    "children": [
+        {
+            "type": "transform",
+            "name": "transform",
+            "position": []
+        },
+        {
+            "type": "staticmesh",
+            "mesh": "meshes/mymesh",
+            "texture": "textures/mytexture",
+            "transform": "transform"
+        },
+        {
+            "type": "texture",
+            "name": "mytexture",
+            "path": "mytexture.png"
+        }
+    ]
+}

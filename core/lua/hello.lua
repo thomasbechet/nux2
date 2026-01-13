@@ -4,3 +4,5 @@ InputMap.bindKey(map, "down", Input.KEY_D)
 print(Node.dump(map))
 Transform.new(map)
 Node.delete(map)
+
+Node.export()

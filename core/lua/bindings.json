@@ -2,9 +2,6 @@
     "rootpath": "..",
     "modules": [
         {
-            "path": "base/Container.zig"
-        },
-        {
             "path": "base/Node.zig",
             "ignore": [
                 "NodePool",

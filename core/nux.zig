@@ -1,7 +1,6 @@
 const std = @import("std");
 
 pub const Logger = @import("base/Logger.zig");
-pub const Container = @import("base/Container.zig");
 pub const Node = @import("base/Node.zig");
 pub const Transform = @import("base/Transform.zig");
 pub const Input = @import("input/Input.zig");
@@ -56,7 +55,7 @@ pub const Module = struct {
                     }
                 }
                 // nodes initialization
-                try core.node.registerNodeModule(T, self);
+                try core.node.registerNodeModule(T, "nodes", self);
                 // initialize
                 if (@hasDecl(T, "init")) {
                     const ccore: *const Core = core;
@@ -132,9 +131,6 @@ pub const Core = struct {
         core.logger = try core.registerModule(Logger);
         core.log_enabled = true;
         core.node = try core.registerModule(Node);
-        try core.registerModules(.{
-            Container,
-        });
         core.input = try core.registerModule(Input);
         try core.registerModules(.{
             Transform,

@@ -10,7 +10,6 @@ pub const TypeIndex = u32;
 
 pub const NodeID = packed struct(u32) {
     pub const @"null" = @This(){ .version = 0, .index = 0 };
-    pub const root = @This(){ .version = 1, .index = 1 };
 
     pub fn isNull(self: *const @This()) bool {
         return self.index == 0;
@@ -28,10 +27,10 @@ const NodeEntry = struct {
     pool_index: PoolIndex = 0,
     type_index: TypeIndex = 0,
 
-    parent: NodeID = .null,
-    prev: NodeID = .null,
-    next: NodeID = .null,
-    child: NodeID = .null,
+    parent: EntryIndex = 0,
+    prev: EntryIndex = 0,
+    next: EntryIndex = 0,
+    child: EntryIndex = 0,
 };
 
 pub const NodeType = struct {
@@ -46,19 +45,30 @@ pub fn NodePool(comptime T: type) type {
     return struct {
         allocator: std.mem.Allocator,
         node: *Self,
+        mod: *anyopaque,
         type_index: TypeIndex,
         data: std.ArrayList(T),
         ids: std.ArrayList(NodeID),
 
+        fn init(node: *Self, mod: *anyopaque, type_index: TypeIndex) !@This() {
+            return .{ .allocator = node.allocator, .type_index = type_index, .node = node, .data = try .initCapacity(node.allocator, 32), .ids = try .initCapacity(node.allocator, 32), .mod = mod };
+        }
+        fn deinit(self: *@This()) void {
+            self.data.deinit(self.allocator);
+            self.ids.deinit(self.allocator);
+        }
+
         pub fn new(self: *@This(), parent: NodeID) !NodeID {
+            // add entry
             const pool_index = self.data.items.len;
             const id = try self.node.addEntry(parent, @intCast(pool_index), self.type_index);
+            // add data entry
             const data_ptr = try self.data.addOne(self.allocator);
             const id_ptr = try self.ids.addOne(self.allocator);
             id_ptr.* = id;
             // init node
             if (@hasDecl(T, "init")) {
-                data_ptr.* = try T.init(@fieldParentPtr("nodes", self));
+                data_ptr.* = try T.init(@ptrCast(@alignCast(self.mod)));
             }
             return id;
         }
@@ -66,7 +76,7 @@ pub fn NodePool(comptime T: type) type {
             const node = try self.node.getEntry(id);
             // deinit node
             if (@hasDecl(T, "deinit")) {
-                T.deinit(@fieldParentPtr("nodes", self), &self.data.items[node.pool_index]);
+                T.deinit(@ptrCast(@alignCast(self.mod)), &self.data.items[node.pool_index]);
             }
             // remove node from graph
             try self.node.removeEntry(id);
@@ -77,10 +87,13 @@ pub fn NodePool(comptime T: type) type {
             _ = self.ids.swapRemove(node.pool_index);
             // delete children
             var it = node.child;
-            while (!it.isNull()) {
-                const cinfo = self.node.getEntry(it) catch break;
-                try self.node.delete(it);
-                it = cinfo.next;
+            while (it != 0) {
+                const child = &self.node.entries.items[it];
+                try self.node.delete(.{
+                    .version = child.version,
+                    .index = it,
+                });
+                it = child.next;
             }
         }
         pub fn get(self: *@This(), id: NodeID) !*T {
@@ -129,7 +142,7 @@ allocator: std.mem.Allocator,
 types: std.ArrayList(NodeType),
 entries: std.ArrayList(NodeEntry),
 free: std.ArrayList(EntryIndex),
-empty_nodes: NodePool(struct { dummy: u32 }), // empty nodes
+empty_nodes: NodePool(struct { dummy: u32 }),
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -138,19 +151,8 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.free = try .initCapacity(self.allocator, 1024);
     // reserve index 0 for null id
     try self.entries.append(self.allocator, .{});
-    // create empty node type
-    // try self.registerNodePool(@This(), self);
-    // self.types.append(self.allocator, .{
-    //     .name
-    // })
-    // self.empty_nodes = try .init(self, 0);
-    // create root node as empty node
-    // _ = try self.empty_nodes.data.addOne(self.allocator);
-    try self.entries.append(self.allocator, .{
-        .version = NodeID.root.version,
-        .pool_index = NodeID.root.index,
-        .type_index = 0,
-    });
+    // register empty node type
+    try self.registerNodeModule(Self, "empty_nodes", self);
 }
 pub fn deinit(self: *Self) void {
     self.entries.deinit(self.allocator);
@@ -162,9 +164,8 @@ pub fn deinit(self: *Self) void {
 }
 
 fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: TypeIndex) !NodeID {
-
     // check parent
-    if (!self.valid(parent)) {
+    if (!parent.isNull() and !self.valid(parent)) {
         return error.invalidParent;
     }
 
@@ -183,7 +184,7 @@ fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: Type
     node.* = .{
         .pool_index = pool_index,
         .type_index = type_index,
-        .parent = parent,
+        .parent = parent.index,
     };
     const id = NodeID{
         .index = index,
@@ -191,9 +192,13 @@ fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: Type
     };
 
     // update parent
-    if (!parent.isNull()) {
-        const p = try self.getEntry(parent);
-        p.child = id;
+    if (parent.index != 0) {
+        const p = &self.entries.items[parent.index];
+        if (p.child != 0) {
+            self.entries.items[p.child].prev = index;
+            node.next = p.child;
+        }
+        p.child = index;
     }
 
     return id;
@@ -220,33 +225,26 @@ fn getEntry(self: *Self, id: NodeID) !*NodeEntry {
     return node;
 }
 
-pub fn registerNodeModule(self: *Self, comptime T: type, module: *T) !void {
-    if (@hasField(T, "nodes")) {
+pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []const u8, module: *T) !void {
+    if (@hasField(T, field_name)) {
 
         // init pool
         const type_index: TypeIndex = @intCast(self.types.items.len);
-        module.nodes = .{
-            .allocator = self.allocator,
-            .type_index = type_index,
-            .node = self,
-            .data = try .initCapacity(self.allocator, 1000),
-            .ids = try .initCapacity(self.allocator, 1000),
-        };
+        @field(module, field_name) = try .init(self, module, type_index);
 
         // create vtable
         const gen = struct {
             fn new(pointer: *anyopaque, parent: NodeID) !NodeID {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return mod.nodes.new(parent);
+                return @field(mod, field_name).new(parent);
             }
             fn delete(pointer: *anyopaque, id: NodeID) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return mod.nodes.delete(id);
+                return @field(mod, field_name).delete(id);
             }
             fn deinit(pointer: *anyopaque) void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                mod.nodes.data.deinit(mod.nodes.allocator);
-                mod.nodes.ids.deinit(mod.nodes.allocator);
+                @field(mod, field_name).deinit();
             }
         };
 
@@ -265,10 +263,10 @@ pub fn new(self: *Self, typename: []const u8, parent: NodeID) !NodeID {
     const typ = try self.findType(typename);
     return typ.v_new(typ.v_ptr, parent);
 }
+pub fn newEmpty(self: *Self, parent: NodeID) !NodeID {
+    return try self.empty_nodes.new(parent);
+}
 pub fn delete(self: *Self, id: NodeID) !void {
-    if (id == NodeID.root) {
-        return error.deleteRootNode;
-    }
     const typ = try self.getType(id);
     return typ.v_delete(typ.v_ptr, id);
 }
@@ -277,11 +275,14 @@ pub fn valid(self: *Self, id: NodeID) bool {
     return true;
 }
 pub fn getParent(self: *Self, id: NodeID) !NodeID {
-    return (try self.getEntry(id)).parent;
-}
-pub fn setParent(self: *Self, id: NodeID, parent: NodeID) !void {
     const node = try self.getEntry(id);
-    node.parent = parent;
+    if (node.parent != 0) {
+        return .{
+            .index = node.parent,
+            .version = self.entries.items[node.parent].version,
+        };
+    }
+    return .null;
 }
 pub fn getType(self: *Self, id: NodeID) !*NodeType {
     const node = try self.getEntry(id);
@@ -295,24 +296,30 @@ pub fn findType(self: *Self, name: []const u8) !*NodeType {
     }
     return error.unknownType;
 }
-fn dumpRecursive(self: *Self, id: NodeID, depth: u32) void {
-    const node = self.getEntry(id) catch return;
-    const typ = self.getType(id) catch unreachable;
+fn dumpRecursive(self: *Self, index: EntryIndex, depth: u32) void {
+    const node = self.entries.items[index];
+    const typ = self.types.items[node.type_index];
     for (0..depth) |_| {
         std.debug.print(" ", .{});
     }
     if (depth > 0) {
         std.debug.print("\\_ ", .{});
     }
+    const id = NodeID{
+        .index = index,
+        .version = node.version,
+    };
     std.debug.print("0x{x:0>8} ({s})\n", .{ @as(u32, @bitCast(id)), typ.name });
 
     var next = node.child;
-    while (!next.isNull()) {
-        const cinfo = self.getEntry(id) catch break;
+    while (next != 0) {
+        const child = self.entries.items[next];
         dumpRecursive(self, next, depth + 1);
-        next = cinfo.next;
+        next = child.next;
     }
 }
 pub fn dump(self: *Self, id: NodeID) void {
-    dumpRecursive(self, id, 0);
+    if (self.valid(id)) {
+        dumpRecursive(self, id.index, 0);
+    }
 }

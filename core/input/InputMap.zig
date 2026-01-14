@@ -23,7 +23,6 @@ nodes: nux.NodePool(struct {
     }
     pub fn deinit(_: *Self, data: *@This()) void {
         data.entries.deinit();
-        std.log.info("deinit called", .{});
     }
 }),
 

@@ -8,8 +8,8 @@
         },
         {
             "type": "staticmesh",
-            "mesh": "meshes/mymesh",
-            "texture": "textures/mytexture",
+            "mesh": "$meshes/mymesh",
+            "texture": "$textures/mytexture",
             "transform": "transform"
         },
         {

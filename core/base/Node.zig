@@ -145,7 +145,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     // })
     // self.empty_nodes = try .init(self, 0);
     // create root node as empty node
-    _ = try self.empty_nodes.data.addOne(self.allocator);
+    // _ = try self.empty_nodes.data.addOne(self.allocator);
     try self.entries.append(self.allocator, .{
         .version = NodeID.root.version,
         .pool_index = NodeID.root.index,
@@ -261,9 +261,6 @@ pub fn registerNodeModule(self: *Self, comptime T: type, module: *T) !void {
     }
 }
 
-pub fn root() NodeID {
-    return .root;
-}
 pub fn new(self: *Self, typename: []const u8, parent: NodeID) !NodeID {
     const typ = try self.findType(typename);
     return typ.v_new(typ.v_ptr, parent);

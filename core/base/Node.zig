@@ -74,6 +74,16 @@ pub fn NodePool(comptime T: type) type {
         }
         fn delete(self: *@This(), id: NodeID) !void {
             const node = try self.node.getEntry(id);
+            // delete children
+            var it = node.child;
+            while (it != 0) {
+                const child = &self.node.entries.items[it];
+                try self.node.delete(.{
+                    .version = child.version,
+                    .index = it,
+                });
+                it = child.next;
+            }
             // deinit node
             if (@hasDecl(T, "deinit")) {
                 T.deinit(@ptrCast(@alignCast(self.mod)), &self.data.items[node.pool_index]);
@@ -85,16 +95,6 @@ pub fn NodePool(comptime T: type) type {
             // remove from pool
             _ = self.data.swapRemove(node.pool_index);
             _ = self.ids.swapRemove(node.pool_index);
-            // delete children
-            var it = node.child;
-            while (it != 0) {
-                const child = &self.node.entries.items[it];
-                try self.node.delete(.{
-                    .version = child.version,
-                    .index = it,
-                });
-                it = child.next;
-            }
         }
         pub fn get(self: *@This(), id: NodeID) !*T {
             const node = try self.node.getEntry(id);
@@ -299,11 +299,15 @@ pub fn findType(self: *Self, name: []const u8) !*NodeType {
 fn dumpRecursive(self: *Self, index: EntryIndex, depth: u32) void {
     const node = self.entries.items[index];
     const typ = self.types.items[node.type_index];
-    for (0..depth) |_| {
-        std.debug.print(" ", .{});
-    }
     if (depth > 0) {
-        std.debug.print("\\_ ", .{});
+        for (0..depth - 1) |_| {
+            std.debug.print(" ", .{});
+        }
+        if (node.next != 0) {
+            std.debug.print("├─ ", .{});
+        } else {
+            std.debug.print("└─ ", .{});
+        }
     }
     const id = NodeID{
         .index = index,

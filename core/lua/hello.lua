@@ -17,6 +17,6 @@ for i, v in ipairs(transforms) do
     print(v)
 end
 
-Node.delete(0)
+-- Node.delete(0)
 Node.dump(transforms[0])
 Node.delete(transforms[0])

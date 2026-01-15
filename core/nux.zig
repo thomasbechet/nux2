@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub const Logger = @import("base/Logger.zig");
 pub const Node = @import("base/Node.zig");
+pub const Cart = @import("base/Cart.zig");
 pub const Transform = @import("base/Transform.zig");
 pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
@@ -18,11 +19,13 @@ pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;
     pub const Logger = @import("platform/Logger.zig");
     pub const Input = @import("platform/Input.zig");
+    pub const File = @import("platform/File.zig");
     pub const Event = union(enum) {
         input: Platform.Input.Event,
     };
     allocator: Platform.Allocator = std.heap.page_allocator,
     logger: Platform.Logger = .default,
+    file: Platform.File = .default,
 };
 
 pub const Module = struct {
@@ -133,6 +136,7 @@ pub const Core = struct {
         core.node = try core.registerModule(Node);
         core.input = try core.registerModule(Input);
         try core.registerModules(.{
+            Cart,
             Transform,
             InputMap,
             Lua,

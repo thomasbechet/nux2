@@ -117,6 +117,7 @@ fn configCore(b: *std.Build, config: Config) void {
         .root_source_file = b.path("core/lua/bindgen.zig"),
     }) });
     const bindgen_run = b.addRunArtifact(bindgen);
+    bindgen_run.has_side_effects = true;
     const bindings_output_tmp = bindgen_run.addOutputFileArg("bindings.zig");
     bindgen_run.addFileArg(b.path("core/lua/bindings.json"));
     const bindings_copy = b.addUpdateSourceFiles();

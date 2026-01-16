@@ -5,9 +5,9 @@ ptr: *anyopaque,
 vtable: *const VTable,
 
 pub const OpenMode = enum {
-    read_only,
-    write_only,
-    read_write,
+    read,
+    write_truncate,
+    write_append,
 };
 
 pub const FileStat = struct {
@@ -28,11 +28,15 @@ pub const VTable = struct {
 const Default = struct {
     fn open(_: *anyopaque, path: []const u8, mode: OpenMode) anyerror!Handle {
         const alloc = std.heap.page_allocator;
-        const file = try std.fs.cwd().openFile(path, .{ .mode = switch (mode) {
-            .read_only => .read_only,
-            .write_only => .write_only,
-            .read_write => .read_write,
-        } });
+        const file = out: switch (mode) {
+            .read => try std.fs.cwd().openFile(path, .{ .mode = .read_only }),
+            .write_truncate => try std.fs.cwd().createFile(path, .{ .truncate = true }),
+            .write_append => {
+                const f = try std.fs.cwd().createFile(path, .{});
+                try f.seekFromEnd(0);
+                break :out f;
+            },
+        };
         const handle = try alloc.create(std.fs.File);
         handle.* = file;
         return @ptrCast(handle);

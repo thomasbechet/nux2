@@ -46,8 +46,8 @@ export fn lua_printerror(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
     self.logger.err("{s}", .{str});
 }
 
-fn loadString(lua: *c.lua_State, s: [:0]const u8) !void {
-    const ret = c.luaL_loadstring(lua, s.ptr);
+fn loadString(lua: *c.lua_State, s: []const u8) !void {
+    const ret = c.luaL_loadbufferx(lua, s.ptr, s.len, s.ptr, null);
     switch (ret) {
         c.LUA_OK => {},
         c.LUA_ERRSYNTAX => return error.LuaSyntax,
@@ -66,10 +66,6 @@ fn protectedCall(lua: *c.lua_State) !void {
         c.LUA_ERRERR => return error.LuaMsgHandler,
         else => unreachable,
     }
-}
-fn doString(lua: *c.lua_State, s: [:0]const u8) !void {
-    try loadString(lua, s);
-    try protectedCall(lua);
 }
 
 pub fn pushUserData(lua: ?*c.lua_State, comptime field: std.meta.Tag(UserData), v: @FieldType(UserData, @tagName(field))) void {
@@ -378,10 +374,14 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     try openMath(self.lua);
     self.bindings.openModules(self.lua, core);
 
-    doString(self.lua, hello_file) catch {
+    self.doString(hello_file) catch {
         self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
     };
 }
 pub fn deinit(self: *Self) void {
     c.lua_close(self.lua);
+}
+pub fn doString(self: *Self, source: []const u8) !void {
+    try loadString(self.lua, source);
+    try protectedCall(self.lua);
 }

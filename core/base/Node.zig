@@ -142,6 +142,7 @@ allocator: std.mem.Allocator,
 types: std.ArrayList(NodeType),
 entries: std.ArrayList(NodeEntry),
 free: std.ArrayList(EntryIndex),
+root: NodeEntry,
 empty_nodes: NodePool(struct { dummy: u32 }),
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -149,6 +150,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.types = try .initCapacity(self.allocator, 64);
     self.entries = try .initCapacity(self.allocator, 1024);
     self.free = try .initCapacity(self.allocator, 1024);
+    self.root = .{};
     // reserve index 0 for null id
     try self.entries.append(self.allocator, .{});
     // register empty node type
@@ -192,19 +194,33 @@ fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: Type
     };
 
     // update parent
+    var p: *NodeEntry = undefined;
     if (parent.index != 0) {
-        const p = &self.entries.items[parent.index];
-        if (p.child != 0) {
-            self.entries.items[p.child].prev = index;
-            node.next = p.child;
-        }
-        p.child = index;
+        p = &self.entries.items[parent.index];
+    } else {
+        p = &self.root;
     }
+    if (p.child != 0) {
+        self.entries.items[p.child].prev = index;
+        node.next = p.child;
+    }
+    p.child = index;
 
     return id;
 }
 fn removeEntry(self: *Self, id: NodeID) !void {
     var node = &self.entries.items[id.index];
+    // remove from parent
+    var p: *NodeEntry = undefined;
+    if (node.parent != 0) {
+        p = &self.entries.items[node.parent];
+    } else {
+        p = &self.root;
+    }
+    if (p.child == id.index) {
+        p.child = node.next;
+    }
+    // update version and add to freelist
     node.version += 1;
     (try self.free.addOne(self.allocator)).* = id.index;
 }
@@ -225,6 +241,17 @@ fn getEntry(self: *Self, id: NodeID) !*NodeEntry {
     return node;
 }
 
+pub fn deleteAll(self: *Self) void {
+    var it = self.root.child;
+    while (it != 0) {
+        const child = &self.entries.items[it];
+        self.delete(.{
+            .version = child.version,
+            .index = it,
+        }) catch {};
+        it = child.next;
+    }
+}
 pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []const u8, module: *T) !void {
     if (@hasField(T, field_name)) {
 

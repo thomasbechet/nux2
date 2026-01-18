@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub const Logger = @import("base/Logger.zig");
 pub const Node = @import("base/Node.zig");
-pub const Cart = @import("base/Cart.zig");
+pub const Disk = @import("base/Disk.zig");
 pub const Transform = @import("base/Transform.zig");
 pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
@@ -137,7 +137,7 @@ pub const Core = struct {
         core.node = try core.registerModule(Node);
         core.input = try core.registerModule(Input);
         try core.registerModules(.{
-            Cart,
+            Disk,
             Transform,
             InputMap,
             Script,
@@ -150,6 +150,9 @@ pub const Core = struct {
     }
 
     pub fn deinit(self: *Core) void {
+
+        self.node.deleteAll();
+
         var i = self.modules.items.len;
         while (i > 0) : (i -= 1) {
             const module = &self.modules.items[i - 1];

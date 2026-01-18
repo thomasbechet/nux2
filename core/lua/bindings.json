@@ -14,7 +14,7 @@
             ]
         },
         {
-            "path": "base/Cart.zig",
+            "path": "base/Disk.zig",
             "ignore": [
                 "read",
                 "readAlloc"

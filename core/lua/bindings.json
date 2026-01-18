@@ -14,7 +14,11 @@
             ]
         },
         {
-            "path": "base/Cart.zig"
+            "path": "base/Cart.zig",
+            "ignore": [
+                "read",
+                "readAlloc"
+            ]
         },
         {
             "path": "base/Transform.zig"
@@ -24,6 +28,9 @@
         },
         {
             "path": "input/InputMap.zig"
+        },
+        {
+            "path": "base/Script.zig"
         }
     ]
 }

@@ -53,7 +53,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.log();
     var buf: [3]u8 = undefined;
     try self.read("myentry3", &buf);
-    std.debug.assert(std.mem.eql(u8, &buf, &.{0xAA, 0xBB, 0xCC}));
+    std.debug.assert(std.mem.eql(u8, &buf, &.{ 0xAA, 0xBB, 0xCC }));
 }
 pub fn deinit(self: *Self) void {
     self.closeWriteFile();
@@ -139,6 +139,17 @@ pub fn read(self: *Self, path: []const u8, buffer: []u8) !void {
         try self.file.vtable.seek(self.file.ptr, cart.handle, entry.offset);
         try self.file.vtable.read(self.file.ptr, cart.handle, buffer);
     }
+}
+pub fn readAlloc(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+    if (self.entries.get(path)) |entry| {
+        std.debug.assert(entry.length > 0);
+        const buffer = try allocator.alloc(u8, entry.length);
+        const cart = &self.carts.items[entry.cart];
+        try self.file.vtable.seek(self.file.ptr, cart.handle, entry.offset);
+        try self.file.vtable.read(self.file.ptr, cart.handle, buffer);
+        return buffer;
+    }
+    return error.entryNotFound;
 }
 pub fn writeCart(self: *Self, path: []const u8) !void {
     // create file

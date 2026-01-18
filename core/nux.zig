@@ -7,6 +7,7 @@ pub const Transform = @import("base/Transform.zig");
 pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
 pub const Lua = @import("lua/Lua.zig");
+pub const Script = @import("base/Script.zig");
 
 pub const NodeID = Node.NodeID;
 pub const NodePool = Node.NodePool;
@@ -139,6 +140,7 @@ pub const Core = struct {
             Cart,
             Transform,
             InputMap,
+            Script,
             Lua,
         });
         // Register user modules

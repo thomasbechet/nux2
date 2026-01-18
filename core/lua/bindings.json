@@ -16,8 +16,7 @@
         {
             "path": "base/Disk.zig",
             "ignore": [
-                "read",
-                "readAlloc"
+                "read"
             ]
         },
         {
@@ -31,6 +30,9 @@
         },
         {
             "path": "base/Script.zig"
+        },
+        {
+            "path": "graphics/Texture.zig"
         }
     ]
 }

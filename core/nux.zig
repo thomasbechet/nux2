@@ -8,6 +8,7 @@ pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
 pub const Lua = @import("lua/Lua.zig");
 pub const Script = @import("base/Script.zig");
+pub const Texture = @import("graphics/Texture.zig");
 
 pub const NodeID = Node.NodeID;
 pub const NodePool = Node.NodePool;
@@ -141,10 +142,15 @@ pub const Core = struct {
             Transform,
             InputMap,
             Script,
+            Texture,
             Lua,
         });
+        var lua = core.findModule(Lua) orelse unreachable;
         // Register user modules
         try core.registerModules(mods);
+
+        // Call entry point
+        try lua.callEntryPoint();
 
         return core;
     }

@@ -373,10 +373,6 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     c.luaL_openlibs(self.lua);
     try openMath(self.lua);
     self.bindings.openModules(self.lua, core);
-
-    self.doString(hello_file) catch {
-        self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
-    };
 }
 pub fn deinit(self: *Self) void {
     c.lua_close(self.lua);
@@ -384,4 +380,9 @@ pub fn deinit(self: *Self) void {
 pub fn doString(self: *Self, source: []const u8) !void {
     try loadString(self.lua, source);
     try protectedCall(self.lua);
+}
+pub fn callEntryPoint(self: *Self) !void {
+    self.doString(hello_file) catch {
+        self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
+    };
 }

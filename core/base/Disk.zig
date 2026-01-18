@@ -150,7 +150,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.file = core.platform.file;
     self.disks = try .initCapacity(core.platform.allocator, 8);
 
-    // add platform disk by default
+    // add platform filesystem by default
     const fs: FileSystem = try .init(self, ".");
     try self.disks.append(self.allocator, .{ .fs = fs });
 }

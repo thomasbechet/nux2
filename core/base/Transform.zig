@@ -14,7 +14,7 @@ node: *nux.Node,
 logger: *nux.Logger,
 
 pub fn new(self: *Self, parent: nux.NodeID) !nux.NodeID {
-    return try self.nodes.new(parent);
+    return (try self.nodes.new(parent)).id;
 }
 pub fn getPosition(self: *Self, id: nux.NodeID) !nux.Vec3 {
     return (try self.nodes.get(id)).position;

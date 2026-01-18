@@ -58,7 +58,7 @@ pub fn NodePool(comptime T: type) type {
             self.ids.deinit(self.allocator);
         }
 
-        pub fn new(self: *@This(), parent: NodeID) !NodeID {
+        pub fn new(self: *@This(), parent: NodeID) !struct { id: NodeID, data: *T } {
             // add entry
             const pool_index = self.data.items.len;
             const id = try self.node.addEntry(parent, @intCast(pool_index), self.type_index);
@@ -70,7 +70,7 @@ pub fn NodePool(comptime T: type) type {
             if (@hasDecl(T, "init")) {
                 data_ptr.* = try T.init(@ptrCast(@alignCast(self.mod)));
             }
-            return id;
+            return .{ .id = id, .data = data_ptr };
         }
         fn delete(self: *@This(), id: NodeID) !void {
             const node = try self.node.getEntry(id);
@@ -263,7 +263,7 @@ pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []
         const gen = struct {
             fn new(pointer: *anyopaque, parent: NodeID) !NodeID {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, field_name).new(parent);
+                return (try @field(mod, field_name).new(parent)).id;
             }
             fn delete(pointer: *anyopaque, id: NodeID) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
@@ -291,7 +291,7 @@ pub fn new(self: *Self, typename: []const u8, parent: NodeID) !NodeID {
     return typ.v_new(typ.v_ptr, parent);
 }
 pub fn newEmpty(self: *Self, parent: NodeID) !NodeID {
-    return try self.empty_nodes.new(parent);
+    return (try self.empty_nodes.new(parent)).id;
 }
 pub fn delete(self: *Self, id: NodeID) !void {
     const typ = try self.getType(id);

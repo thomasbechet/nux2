@@ -25,8 +25,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
 pub fn load(self: *Self, parent: nux.NodeID, path: []const u8) !nux.NodeID {
-    const id = try self.nodes.new(parent);
-    const texture = self.nodes.get(id) catch unreachable;
+    const node = try self.nodes.new(parent);
 
     const data = try self.disk.read(path, self.allocator);
     errdefer self.allocator.free(data);
@@ -35,6 +34,6 @@ pub fn load(self: *Self, parent: nux.NodeID, path: []const u8) !nux.NodeID {
 
     self.logger.info("{d}x{d}", .{ image.width, image.height });
 
-    texture.data = data;
-    return id;
+    node.data.data = data;
+    return node.id;
 }

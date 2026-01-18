@@ -31,7 +31,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 }
 
 pub fn new(self: *Self, parent: nux.NodeID) !nux.NodeID {
-    return try self.nodes.new(parent);
+    return (try self.nodes.new(parent)).id;
 }
 pub fn bindKey(self: *Self, id: nux.NodeID, name: []const u8, key: Input.Key) !void {
     // const map = try self.objects.get(id);

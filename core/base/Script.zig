@@ -37,16 +37,15 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
 pub fn load(self: *Self, parent: nux.NodeID, path: []const u8) !nux.NodeID {
-    const id = try self.nodes.new(parent);
+    const node = try self.nodes.new(parent);
     const source = try self.disk.read(path, self.allocator);
     errdefer self.allocator.free(source);
     try self.lua.doString(source);
     const path_copy = try self.allocator.dupe(u8, path);
     errdefer self.allocator.free(path_copy);
-    const script = self.nodes.get(id) catch unreachable;
-    script.* = .{ .lua = .{
+    node.data.* = .{ .lua = .{
         .path = path_copy,
         .source = source,
     } };
-    return id;
+    return node.id;
 }

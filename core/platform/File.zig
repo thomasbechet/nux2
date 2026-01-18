@@ -26,6 +26,11 @@ pub const VTable = struct {
 };
 
 const Default = struct {
+    const FileHandle = struct {
+        file: std.fs.File,
+        reader: std.fs.File.Reader,
+        buffer: [256]u8,
+    };
     fn open(_: *anyopaque, path: []const u8, mode: OpenMode) anyerror!Handle {
         const alloc = std.heap.page_allocator;
         const file = out: switch (mode) {
@@ -37,34 +42,33 @@ const Default = struct {
                 break :out f;
             },
         };
-        const handle = try alloc.create(std.fs.File);
-        handle.* = file;
+        const handle = try alloc.create(FileHandle);
+        handle.file = file;
+        handle.reader = file.reader(&handle.buffer);
         return @ptrCast(handle);
     }
     fn close(_: *anyopaque, handle: Handle) void {
         const alloc = std.heap.page_allocator;
-        const file: *std.fs.File = @ptrCast(@alignCast(handle));
-        file.close();
+        const file: *FileHandle = @ptrCast(@alignCast(handle));
+        file.file.close();
         alloc.destroy(file);
     }
     fn stat(_: *anyopaque, handle: Handle) anyerror!FileStat {
-        const file: *std.fs.File = @ptrCast(@alignCast(handle));
-        const fstat = try file.stat();
+        const file: *FileHandle = @ptrCast(@alignCast(handle));
+        const fstat = try file.file.stat();
         return .{ .size = @intCast(fstat.size) };
     }
     fn seek(_: *anyopaque, handle: Handle, offset: u32) anyerror!void {
-        const file: *std.fs.File = @ptrCast(@alignCast(handle));
-        try file.seekTo(@intCast(offset));
+        const file: *FileHandle = @ptrCast(@alignCast(handle));
+        try file.reader.seekTo(@intCast(offset));
     }
     fn read(_: *anyopaque, handle: Handle, data: []u8) anyerror!void {
-        const file: *std.fs.File = @ptrCast(@alignCast(handle));
-        var buf: [256]u8 = undefined;
-        var reader = file.reader(&buf);
-        try reader.interface.readSliceAll(data);
+        const file: *FileHandle = @ptrCast(@alignCast(handle));
+        try file.reader.interface.readSliceAll(data);
     }
     fn write(_: *anyopaque, handle: Handle, data: []const u8) anyerror!void {
-        const file: *std.fs.File = @ptrCast(@alignCast(handle));
-        _ = try file.write(data);
+        const file: *FileHandle = @ptrCast(@alignCast(handle));
+        _ = try file.file.write(data);
     }
 };
 

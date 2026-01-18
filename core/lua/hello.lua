@@ -3,7 +3,6 @@ InputMap.bindKey(map, "up", Input.KEY_W)
 InputMap.bindKey(map, "down", Input.KEY_D)
 -- print(Node.dump(map))
 Transform.new(map)
-print(map)
 
 local transforms = {}
 local prev = 0
@@ -13,9 +12,9 @@ for i = 0, 10 do
 end
 Transform.new(transforms[3])
 
-for i, v in ipairs(transforms) do
-    print(v)
-end
+-- for i, v in ipairs(transforms) do
+--     print(v)
+-- end
 
 -- Node.delete(0)
 Node.dump(transforms[0])

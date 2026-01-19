@@ -142,19 +142,30 @@ allocator: std.mem.Allocator,
 types: std.ArrayList(NodeType),
 entries: std.ArrayList(NodeEntry),
 free: std.ArrayList(EntryIndex),
-root: NodeEntry,
 empty_nodes: NodePool(struct { dummy: u32 }),
+root: NodeID,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.types = try .initCapacity(self.allocator, 64);
     self.entries = try .initCapacity(self.allocator, 1024);
     self.free = try .initCapacity(self.allocator, 1024);
-    self.root = .{};
     // reserve index 0 for null id
     try self.entries.append(self.allocator, .{});
     // register empty node type
     try self.registerNodeModule(Self, "empty_nodes", self);
+    // create root node
+    self.root = NodeID{
+        .index = 1,
+        .version = 1,
+    };
+    try self.entries.append(self.allocator, .{
+        .type_index = self.empty_nodes.type_index,
+        .pool_index = 0,
+        .version = self.root.version,
+    });
+    _ = try self.empty_nodes.data.addOne(self.allocator);
+    _ = try self.empty_nodes.ids.append(self.allocator, self.root);
 }
 pub fn deinit(self: *Self) void {
     self.entries.deinit(self.allocator);
@@ -167,7 +178,7 @@ pub fn deinit(self: *Self) void {
 
 fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: TypeIndex) !NodeID {
     // check parent
-    if (!parent.isNull() and !self.valid(parent)) {
+    if (!self.valid(parent)) {
         return error.invalidParent;
     }
 
@@ -194,31 +205,24 @@ fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: Type
     };
 
     // update parent
-    var p: *NodeEntry = undefined;
     if (parent.index != 0) {
-        p = &self.entries.items[parent.index];
-    } else {
-        p = &self.root;
+        const p = &self.entries.items[parent.index];
+        if (p.child != 0) {
+            self.entries.items[p.child].prev = index;
+            node.next = p.child;
+        }
+        p.child = index;
     }
-    if (p.child != 0) {
-        self.entries.items[p.child].prev = index;
-        node.next = p.child;
-    }
-    p.child = index;
-
     return id;
 }
 fn removeEntry(self: *Self, id: NodeID) !void {
     var node = &self.entries.items[id.index];
     // remove from parent
-    var p: *NodeEntry = undefined;
     if (node.parent != 0) {
-        p = &self.entries.items[node.parent];
-    } else {
-        p = &self.root;
-    }
-    if (p.child == id.index) {
-        p.child = node.next;
+        const p = &self.entries.items[node.parent];
+        if (p.child == id.index) {
+            p.child = node.next;
+        }
     }
     // update version and add to freelist
     node.version += 1;
@@ -241,8 +245,11 @@ fn getEntry(self: *Self, id: NodeID) !*NodeEntry {
     return node;
 }
 
+pub fn getRoot(self: *Self) NodeID {
+    return self.root;
+}
 pub fn deleteAll(self: *Self) void {
-    var it = self.root.child;
+    var it = self.root.index;
     while (it != 0) {
         const child = &self.entries.items[it];
         self.delete(.{

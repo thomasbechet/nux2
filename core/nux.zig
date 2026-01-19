@@ -150,13 +150,13 @@ pub const Core = struct {
         try core.registerModules(mods);
 
         // Call entry point
+        errdefer core.deinit();
         try lua.callEntryPoint();
 
         return core;
     }
 
     pub fn deinit(self: *Core) void {
-
         self.node.deleteAll();
 
         var i = self.modules.items.len;

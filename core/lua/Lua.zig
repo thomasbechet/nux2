@@ -379,10 +379,11 @@ pub fn deinit(self: *Self) void {
 }
 pub fn doString(self: *Self, source: []const u8) !void {
     try loadString(self.lua, source);
-    try protectedCall(self.lua);
+    protectedCall(self.lua) catch |e| {
+        self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
+        return e;
+    };
 }
 pub fn callEntryPoint(self: *Self) !void {
-    self.doString(hello_file) catch {
-        self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
-    };
+    try self.doString(hello_file);
 }

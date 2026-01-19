@@ -1,2 +1,1 @@
-
-Script.load(0, "hello2.lua")
+Script.load(Node.getRoot(), "hello2.lua")

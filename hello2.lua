@@ -1,4 +1,4 @@
-local map = InputMap.new(0);
+local map = InputMap.new(Node.getRoot());
 InputMap.bindKey(map, "up", Input.KEY_W)
 InputMap.bindKey(map, "down", Input.KEY_D)
 -- print(Node.dump(map))
@@ -26,4 +26,4 @@ Node.delete(transforms[0])
 -- Disk.mount("cart.bin")
 -- Disk.log()
 
-Texture.load(0, "ideas/gui/pannel19.jpg")
+Texture.load(Node.getRoot(), "ideas/gui/pannel19.jpg")

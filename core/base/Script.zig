@@ -40,7 +40,7 @@ pub fn load(self: *Self, parent: nux.NodeID, path: []const u8) !nux.NodeID {
     const node = try self.nodes.new(parent);
     const source = try self.disk.read(path, self.allocator);
     errdefer self.allocator.free(source);
-    try self.lua.doString(source);
+    try self.lua.doString(source, path);
     const path_copy = try self.allocator.dupe(u8, path);
     errdefer self.allocator.free(path_copy);
     node.data.* = .{ .lua = .{

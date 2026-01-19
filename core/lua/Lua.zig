@@ -46,25 +46,18 @@ export fn lua_printerror(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
     self.logger.err("{s}", .{str});
 }
 
-fn loadString(lua: *c.lua_State, s: []const u8) !void {
-    const ret = c.luaL_loadbufferx(lua, s.ptr, s.len, s.ptr, null);
-    switch (ret) {
-        c.LUA_OK => {},
-        c.LUA_ERRSYNTAX => return error.LuaSyntax,
-        c.LUA_ERRMEM => return error.OutOfMemory,
-        c.LUA_ERRRUN => return error.LuaRuntime,
-        c.LUA_ERRERR => return error.LuaMsgHandler,
-        else => unreachable,
+fn loadString(self: *Self, s: []const u8, name: []const u8) !void {
+    const ret = c.luaL_loadbufferx(self.lua, s.ptr, s.len, name.ptr, null);
+    if (ret != c.LUA_OK) {
+        self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
+        return error.luaLoadingError;
     }
 }
-fn protectedCall(lua: *c.lua_State) !void {
-    const ret = c.lua_pcallk(lua, 0, c.LUA_MULTRET, 0, 0, null);
-    switch (ret) {
-        c.LUA_OK => {},
-        c.LUA_ERRRUN => return error.LuaRuntime,
-        c.LUA_ERRMEM => return error.OutOfMemory,
-        c.LUA_ERRERR => return error.LuaMsgHandler,
-        else => unreachable,
+fn protectedCall(self: *Self) !void {
+    const ret = c.lua_pcallk(self.lua, 0, c.LUA_MULTRET, 0, 0, null);
+    if (ret != c.LUA_OK) {
+        self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
+        return error.luaCallError;
     }
 }
 
@@ -377,13 +370,10 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn deinit(self: *Self) void {
     c.lua_close(self.lua);
 }
-pub fn doString(self: *Self, source: []const u8) !void {
-    try loadString(self.lua, source);
-    protectedCall(self.lua) catch |e| {
-        self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
-        return e;
-    };
+pub fn doString(self: *Self, source: []const u8, name: []const u8) !void {
+    try loadString(self, source, name);
+    try protectedCall(self);
 }
 pub fn callEntryPoint(self: *Self) !void {
-    try self.doString(hello_file);
+    try self.doString(hello_file, "hello_file");
 }

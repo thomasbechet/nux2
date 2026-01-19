@@ -5,7 +5,7 @@ InputMap.bindKey(map, "down", Input.KEY_D)
 Transform.new(map)
 
 local transforms = {}
-local prev = 0
+local prev = Node.getRoot()
 for i = 0, 10 do
     prev = Transform.new(prev)
     transforms[i] = prev

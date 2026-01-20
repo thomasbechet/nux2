@@ -9,6 +9,9 @@ nodes: nux.NodePool(struct {
         return .{ .position = .zero() };
     }
     pub fn deinit(_: *Self, _: *@This()) void {}
+    pub fn save(_: *Self, writer: *nux.Writer, data: *@This()) !void {
+        try writer.write(data.*);
+    }
 }),
 node: *nux.Node,
 logger: *nux.Logger,

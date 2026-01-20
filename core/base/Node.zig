@@ -26,11 +26,26 @@ const NodeEntry = struct {
     version: Version = 1,
     pool_index: PoolIndex = 0,
     type_index: TypeIndex = 0,
-
     parent: EntryIndex = 0,
     prev: EntryIndex = 0,
     next: EntryIndex = 0,
     child: EntryIndex = 0,
+};
+
+pub const Writer = struct {
+    pub fn write(writer: *Writer, v: anytype) !void {
+        _ = writer;
+        switch (@typeInfo(@TypeOf(v))) {
+            .int => {},
+            .float => {},
+            .array => |array| {
+                _ = array;
+                // TODO
+            },
+            .@"struct" => {},
+            else => @compileError("unsupported type"),
+        }
+    }
 };
 
 pub const NodeType = struct {
@@ -39,6 +54,7 @@ pub const NodeType = struct {
     v_new: *const fn (*anyopaque, parent: NodeID) anyerror!NodeID,
     v_delete: *const fn (*anyopaque, id: NodeID) anyerror!void,
     v_deinit: *const fn (*anyopaque) void,
+    v_save: *const fn (*anyopaque, id: NodeID) anyerror!void,
 };
 
 pub fn NodePool(comptime T: type) type {
@@ -99,6 +115,13 @@ pub fn NodePool(comptime T: type) type {
         pub fn get(self: *@This(), id: NodeID) !*T {
             const node = try self.node.getEntry(id);
             return &self.data.items[node.pool_index];
+        }
+        pub fn save(self: *@This(), id: NodeID) !void {
+            const node = try self.node.getEntry(id);
+            var writer = Writer{};
+            if (@hasDecl(T, "save")) {
+                try T.save(@ptrCast(@alignCast(self.mod)), &writer, &self.data.items[node.pool_index]);
+            }
         }
     };
 }
@@ -280,6 +303,10 @@ pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []
                 const mod: *T = @ptrCast(@alignCast(pointer));
                 @field(mod, field_name).deinit();
             }
+            fn save(pointer: *anyopaque, id: NodeID) !void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                return @field(mod, field_name).save(id);
+            }
         };
 
         // register type
@@ -289,6 +316,7 @@ pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []
             .v_new = gen.new,
             .v_delete = gen.delete,
             .v_deinit = gen.deinit,
+            .v_save = gen.save,
         };
     }
 }
@@ -303,6 +331,10 @@ pub fn newEmpty(self: *Self, parent: NodeID) !NodeID {
 pub fn delete(self: *Self, id: NodeID) !void {
     const typ = try self.getType(id);
     return typ.v_delete(typ.v_ptr, id);
+}
+pub fn save(self: *Self, id: NodeID) !void {
+    const typ = try self.getType(id);
+    return typ.v_save(typ.v_ptr, id);
 }
 pub fn valid(self: *Self, id: NodeID) bool {
     _ = self.getEntry(id) catch return false;

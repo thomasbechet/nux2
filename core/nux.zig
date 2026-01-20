@@ -12,6 +12,7 @@ pub const Texture = @import("graphics/Texture.zig");
 
 pub const NodeID = Node.NodeID;
 pub const NodePool = Node.NodePool;
+pub const Writer = Node.Writer;
 pub const vec = @import("math/vec.zig");
 pub const Vec2 = vec.Vec2f;
 pub const Vec3 = vec.Vec3f;

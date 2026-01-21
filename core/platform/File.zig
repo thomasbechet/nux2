@@ -1,25 +1,27 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
+const Self = @This();
+
 ptr: *anyopaque,
 vtable: *const VTable,
 
-pub const OpenMode = enum {
+pub const Mode = enum {
     read,
     write_truncate,
     write_append,
 };
 
-pub const FileStat = struct {
+pub const Stat = struct {
     size: u32,
 };
 
 pub const Handle = *anyopaque;
 
 pub const VTable = struct {
-    open: *const fn (*anyopaque, path: []const u8, mode: OpenMode) anyerror!Handle,
+    open: *const fn (*anyopaque, path: []const u8, mode: Mode) anyerror!Handle,
     close: *const fn (*anyopaque, handle: Handle) void,
-    stat: *const fn (*anyopaque, handle: Handle) anyerror!FileStat,
+    stat: *const fn (*anyopaque, handle: Handle) anyerror!Stat,
     seek: *const fn (*anyopaque, handle: Handle, cursor: u32) anyerror!void,
     read: *const fn (*anyopaque, handle: Handle, data: []u8) anyerror!void,
     write: *const fn (*anyopaque, handle: Handle, data: []const u8) anyerror!void,
@@ -28,10 +30,8 @@ pub const VTable = struct {
 const Default = struct {
     const FileHandle = struct {
         file: std.fs.File,
-        reader: std.fs.File.Reader,
-        buffer: [256]u8,
     };
-    fn open(_: *anyopaque, path: []const u8, mode: OpenMode) anyerror!Handle {
+    fn open(_: *anyopaque, path: []const u8, mode: Mode) anyerror!Handle {
         const alloc = std.heap.page_allocator;
         const file = out: switch (mode) {
             .read => try std.fs.cwd().openFile(path, .{ .mode = .read_only }),
@@ -44,7 +44,6 @@ const Default = struct {
         };
         const handle = try alloc.create(FileHandle);
         handle.file = file;
-        handle.reader = file.reader(&handle.buffer);
         return @ptrCast(handle);
     }
     fn close(_: *anyopaque, handle: Handle) void {
@@ -53,18 +52,18 @@ const Default = struct {
         file.file.close();
         alloc.destroy(file);
     }
-    fn stat(_: *anyopaque, handle: Handle) anyerror!FileStat {
+    fn stat(_: *anyopaque, handle: Handle) anyerror!Stat {
         const file: *FileHandle = @ptrCast(@alignCast(handle));
         const fstat = try file.file.stat();
         return .{ .size = @intCast(fstat.size) };
     }
     fn seek(_: *anyopaque, handle: Handle, offset: u32) anyerror!void {
         const file: *FileHandle = @ptrCast(@alignCast(handle));
-        try file.reader.seekTo(@intCast(offset));
+        try file.file.seekTo(@intCast(offset));
     }
     fn read(_: *anyopaque, handle: Handle, data: []u8) anyerror!void {
         const file: *FileHandle = @ptrCast(@alignCast(handle));
-        try file.reader.interface.readSliceAll(data);
+        _ = try file.file.read(data);
     }
     fn write(_: *anyopaque, handle: Handle, data: []const u8) anyerror!void {
         const file: *FileHandle = @ptrCast(@alignCast(handle));

@@ -33,6 +33,7 @@ const NodeEntry = struct {
 };
 
 pub const Writer = struct {
+
     pub fn write(writer: *Writer, v: anytype) !void {
         _ = writer;
         switch (@typeInfo(@TypeOf(v))) {

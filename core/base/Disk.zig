@@ -26,18 +26,17 @@ const Cart = struct {
 
     fn init(self: *Self, path: []const u8) !@This() {
         // open file
-        const handle = try self.file.vtable.open(self.file.ptr, path, .read);
-        errdefer self.file.vtable.close(self.file.ptr, handle);
+        const handle = try self.platform.vtable.open(self.platform.ptr, path, .read);
+        errdefer self.platform.vtable.close(self.platform.ptr, handle);
+        var buf: [256]u8 = undefined;
+        var r = self.reader(handle, &buf);
         // get file stat
-        const stat = try self.file.vtable.stat(self.file.ptr, handle);
+        const stat = try self.platform.vtable.stat(self.platform.ptr, handle);
         if (stat.size < @sizeOf(HeaderData)) {
             return error.invalidCartSize;
         }
         // read header
-        var headerBuf: [@sizeOf(HeaderData)]u8 = undefined;
-        try self.file.vtable.read(self.file.ptr, handle, &headerBuf);
-        var reader = std.Io.Reader.fixed(&headerBuf);
-        const header = try reader.takeStruct(HeaderData, .little);
+        const header = try r.interface.takeStruct(HeaderData, .little);
         if (!std.mem.eql(u8, &header.magic, &magic)) {
             return error.invalidCartMagic;
         }
@@ -52,15 +51,12 @@ const Cart = struct {
         var it: u32 = @sizeOf(HeaderData); // start after header
         while (it < stat.size) {
             // seek to entry
-            try self.file.vtable.seek(self.file.ptr, handle, it);
+            try self.platform.vtable.seek(self.platform.ptr, handle, it);
+            r = self.reader(handle, &buf); // reset reader to update logical seek
             // read entry
-            var entryBuf: [@sizeOf(EntryData)]u8 = undefined;
-            try self.file.vtable.read(self.file.ptr, handle, &entryBuf);
-            reader = std.Io.Reader.fixed(&entryBuf);
-            const entry = try reader.takeStruct(EntryData, .little);
+            const entry = try r.interface.takeStruct(EntryData, .little);
             // read path
-            const path_data = try self.allocator.alloc(u8, entry.path_len);
-            try self.file.vtable.read(self.file.ptr, handle, path_data);
+            const path_data = try r.interface.readAlloc(self.allocator, entry.path_len);
             // insert entry
             const new_entry = try entries.getOrPut(path_data);
             if (new_entry.found_existing) {
@@ -83,7 +79,7 @@ const Cart = struct {
     }
     fn deinit(cart: *@This(), self: *Self) void {
         // free carts
-        self.file.vtable.close(self.file.ptr, cart.handle);
+        self.platform.vtable.close(self.platform.ptr, cart.handle);
         self.allocator.free(cart.path);
         // free entries
         var it = cart.entries.iterator();
@@ -96,8 +92,8 @@ const Cart = struct {
         if (cart.entries.get(path)) |entry| {
             std.debug.assert(entry.length > 0);
             const buffer = try allocator.alloc(u8, entry.length);
-            try self.file.vtable.seek(self.file.ptr, cart.handle, entry.offset);
-            try self.file.vtable.read(self.file.ptr, cart.handle, buffer);
+            try self.platform.vtable.seek(self.platform.ptr, cart.handle, entry.offset);
+            try self.platform.vtable.read(self.platform.ptr, cart.handle, buffer);
             return buffer;
         }
         return error.entryNotFound;
@@ -118,11 +114,11 @@ const FileSystem = struct {
     fn read(fs: *@This(), self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
         const final_path = try std.mem.concat(self.allocator, u8, &.{ fs.path, "/", path });
         defer self.allocator.free(final_path);
-        const handle = try self.file.vtable.open(self.file.ptr, final_path, .read);
-        defer self.file.vtable.close(self.file.ptr, handle);
-        const stat = try self.file.vtable.stat(self.file.ptr, handle);
+        const handle = try self.platform.vtable.open(self.platform.ptr, final_path, .read);
+        defer self.platform.vtable.close(self.platform.ptr, handle);
+        const stat = try self.platform.vtable.stat(self.platform.ptr, handle);
         const buffer = try allocator.alloc(u8, stat.size);
-        try self.file.vtable.read(self.file.ptr, handle, buffer);
+        try self.platform.vtable.read(self.platform.ptr, handle, buffer);
         return buffer;
     }
 };
@@ -139,20 +135,108 @@ const Disk = union(enum) {
     }
 };
 
+const Reader = struct {
+    self: *Self,
+    handle: nux.Platform.File.Handle,
+    interface: std.Io.Reader,
+
+    fn stream(io_reader: *std.Io.Reader, w: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
+        const r: *Reader = @alignCast(@fieldParentPtr("interface", io_reader));
+        const self = r.self;
+        const dest = limit.slice(try w.writableSliceGreedy(1));
+        self.platform.vtable.read(self.platform.ptr, r.handle, dest) catch {
+            return error.ReadFailed;
+        };
+        w.advance(dest.len);
+        return dest.len;
+    }
+
+    fn init(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Reader {
+        return .{
+            .self = self,
+            .handle = handle,
+            .interface = .{
+                .vtable = &.{
+                    .stream = stream,
+                },
+                .buffer = buffer,
+                .seek = 0,
+                .end = 0,
+            },
+        };
+    }
+};
+const Writer = struct {
+    self: *Self,
+    handle: nux.Platform.File.Handle,
+    interface: std.Io.Writer,
+
+    fn drain(io_w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        const w: *Writer = @alignCast(@fieldParentPtr("interface", io_w));
+        const self: *Self = w.self;
+        const buffered = io_w.buffered();
+        if (buffered.len != 0) {
+            self.platform.vtable.write(self.platform.ptr, w.handle, buffered) catch {
+                return error.WriteFailed;
+            };
+            return io_w.consume(buffered.len);
+        }
+        for (data[0 .. data.len - 1]) |buf| {
+            if (buf.len == 0) continue;
+            self.platform.vtable.write(self.platform.ptr, w.handle, buf) catch {
+                return error.WriteFailed;
+            };
+            return io_w.consume(buf.len);
+        }
+        const pattern = data[data.len - 1];
+        if (pattern.len == 0 or splat == 0) return 0;
+        self.platform.vtable.write(self.platform.ptr, w.handle, pattern) catch {
+            return error.WriteFailed;
+        };
+        return io_w.consume(pattern.len);
+    }
+
+    fn init(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Writer {
+        return .{
+            .self = self,
+            .handle = handle,
+            .interface = .{
+                .vtable = &.{
+                    .drain = drain,
+                },
+                .buffer = buffer,
+            },
+        };
+    }
+};
+
+pub fn writer(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Writer {
+    return .init(self, handle, buffer);
+}
+pub fn reader(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Reader {
+    return .init(self, handle, buffer);
+}
+
 allocator: std.mem.Allocator,
-file: nux.Platform.File,
+platform: nux.Platform.File,
 write_handle: ?nux.Platform.File.Handle,
 disks: std.ArrayList(Disk),
 logger: *nux.Logger,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.file = core.platform.file;
+    self.platform = core.platform.file;
     self.disks = try .initCapacity(core.platform.allocator, 8);
 
     // add platform filesystem by default
     const fs: FileSystem = try .init(self, ".");
     try self.disks.append(self.allocator, .{ .fs = fs });
+
+    try self.writeCart("mycart.bin");
+    try self.writeEntry("myentry1", "myentry1");
+    try self.writeEntry("myentry2", "myentry2");
+    try self.mount("mycart.bin");
+    self.log();
 }
 pub fn deinit(self: *Self) void {
     for (self.disks.items) |*disk| {
@@ -195,35 +279,34 @@ pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
 
 fn closeWriteFile(self: *Self) void {
     if (self.write_handle) |handle| {
-        self.file.vtable.close(self.file.ptr, handle);
+        self.platform.vtable.close(self.platform.ptr, handle);
         self.write_handle = null;
     }
 }
 pub fn writeCart(self: *Self, path: []const u8) !void {
     // create file
-    self.write_handle = try self.file.vtable.open(self.file.ptr, path, .write_truncate);
+    self.write_handle = try self.platform.vtable.open(self.platform.ptr, path, .write_truncate);
     errdefer self.closeWriteFile();
     // write header
-    var buf: [@sizeOf(Cart.HeaderData)]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buf);
-    try writer.writeStruct(Cart.HeaderData{}, .little);
-    try self.file.vtable.write(self.file.ptr, self.write_handle.?, &buf);
+    var buf: [256]u8 = undefined;
+    var w = self.writer(self.write_handle.?, &buf);
+    _ = try w.interface.writeStruct(Cart.HeaderData{}, .little);
+    try w.interface.flush();
 }
 pub fn writeEntry(self: *Self, path: []const u8, data: []const u8) !void {
     if (self.write_handle) |handle| {
+        var buf: [256]u8 = undefined;
+        var w = self.writer(handle, &buf);
         // write entry
-        const entry = Cart.EntryData{
+        try w.interface.writeStruct(Cart.EntryData{
             .typ = 1,
             .data_len = @intCast(data.len),
             .path_len = @intCast(path.len),
-        };
-        var buf: [@sizeOf(Cart.EntryData)]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        try writer.writeStruct(entry, .little);
-        try self.file.vtable.write(self.file.ptr, handle, &buf);
+        }, .little);
         // write path
-        try self.file.vtable.write(self.file.ptr, handle, path);
+        _ = try w.interface.write(path);
         // write data
-        try self.file.vtable.write(self.file.ptr, handle, data);
+        _ = try w.interface.write(data);
+        try w.interface.flush();
     }
 }

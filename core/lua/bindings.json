@@ -10,13 +10,17 @@
                 "NodeType",
                 "registerNodeModule",
                 "getType",
-                "findType"
+                "findType",
+                "iterChildren",
+                "visit"
             ]
         },
         {
             "path": "base/Disk.zig",
             "ignore": [
-                "read"
+                "read",
+                "reader",
+                "writer"
             ]
         },
         {

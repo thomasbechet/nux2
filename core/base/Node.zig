@@ -32,22 +32,7 @@ const NodeEntry = struct {
     child: EntryIndex = 0,
 };
 
-pub const Writer = struct {
-
-    pub fn write(writer: *Writer, v: anytype) !void {
-        _ = writer;
-        switch (@typeInfo(@TypeOf(v))) {
-            .int => {},
-            .float => {},
-            .array => |array| {
-                _ = array;
-                // TODO
-            },
-            .@"struct" => {},
-            else => @compileError("unsupported type"),
-        }
-    }
-};
+pub const Writer = std.Io.Writer;
 
 pub const NodeType = struct {
     name: []const u8,
@@ -55,7 +40,7 @@ pub const NodeType = struct {
     v_new: *const fn (*anyopaque, parent: NodeID) anyerror!NodeID,
     v_delete: *const fn (*anyopaque, id: NodeID) anyerror!void,
     v_deinit: *const fn (*anyopaque) void,
-    v_save: *const fn (*anyopaque, id: NodeID) anyerror!void,
+    v_save: *const fn (*anyopaque, writer: *Writer, id: NodeID) anyerror!void,
 };
 
 pub fn NodePool(comptime T: type) type {
@@ -92,14 +77,9 @@ pub fn NodePool(comptime T: type) type {
         fn delete(self: *@This(), id: NodeID) !void {
             const node = try self.node.getEntry(id);
             // delete children
-            var it = node.child;
-            while (it != 0) {
-                const child = &self.node.entries.items[it];
-                try self.node.delete(.{
-                    .version = child.version,
-                    .index = it,
-                });
-                it = child.next;
+            var it = try self.node.iterChildren(id);
+            while (it.next()) |child| {
+                try self.node.delete(child);
             }
             // deinit node
             if (@hasDecl(T, "deinit")) {
@@ -117,49 +97,50 @@ pub fn NodePool(comptime T: type) type {
             const node = try self.node.getEntry(id);
             return &self.data.items[node.pool_index];
         }
-        pub fn save(self: *@This(), id: NodeID) !void {
+        pub fn save(self: *@This(), writer: *Writer, id: NodeID) !void {
             const node = try self.node.getEntry(id);
-            var writer = Writer{};
             if (@hasDecl(T, "save")) {
-                try T.save(@ptrCast(@alignCast(self.mod)), &writer, &self.data.items[node.pool_index]);
+                try T.save(@ptrCast(@alignCast(self.mod)), writer, &self.data.items[node.pool_index]);
             }
         }
     };
 }
 
-fn Iterator(S: comptime_int) type {
-    return struct {
-        node: *Self,
-        current: u32,
-        stack: [S]u32,
-        size: u32,
-
-        fn init(self: *Self) @This() {
-            return .{
-                .node = self,
-                .current = 0,
-                .size = 0,
-            };
-        }
-        fn next(it: *@This()) ?NodeID {
-            while (it.size > 0) {
-                // pop stack
-                it.size -= 1;
-                const idx = it.stack[it.size];
-                // get current node
-                const cur = it.node.entries.items[idx];
-                // push childs
-                var child = cur.child;
-                while (!child.isNull()) {
-                    it.stack[it.size] = child.index;
-                    it.size += 1;
-                    child = it.node.entries.items[child.index].next;
-                }
-                return idx;
-            }
-            return null;
-        }
-    };
+const ChildIterator = struct {
+    self: *Self,
+    current: EntryIndex,
+    fn init(self: *Self, id: NodeID) !@This() {
+        return .{
+            .self = self,
+            .current = (try self.getEntry(id)).child,
+        };
+    }
+    fn next(it: *@This()) ?NodeID {
+        const index = it.current;
+        if (index == 0) return null;
+        const entry = it.self.entries.items[index];
+        it.current = entry.next;
+        return .{
+            .index = index,
+            .version = entry.version,
+        };
+    }
+};
+pub fn iterChildren(self: *Self, id: NodeID) !ChildIterator {
+    return try .init(self, id);
+}
+pub fn visit(self: *Self, id: NodeID, visitor: anytype) !void {
+    var it = try self.iterChildren(id);
+    const T = @typeInfo(@TypeOf(visitor)).pointer.child;
+    if (@hasDecl(T, "onPreOrder")) {
+        try visitor.onPreOrder(id);
+    }
+    while (it.next()) |next| {
+        try self.visit(next, visitor);
+    }
+    if (@hasDecl(T, "onPostOrder")) {
+        try visitor.onPostOrder(id);
+    }
 }
 
 allocator: std.mem.Allocator,
@@ -272,17 +253,6 @@ fn getEntry(self: *Self, id: NodeID) !*NodeEntry {
 pub fn getRoot(self: *Self) NodeID {
     return self.root;
 }
-pub fn deleteAll(self: *Self) void {
-    var it = self.root.index;
-    while (it != 0) {
-        const child = &self.entries.items[it];
-        self.delete(.{
-            .version = child.version,
-            .index = it,
-        }) catch {};
-        it = child.next;
-    }
-}
 pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []const u8, module: *T) !void {
     if (@hasField(T, field_name)) {
 
@@ -304,9 +274,9 @@ pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []
                 const mod: *T = @ptrCast(@alignCast(pointer));
                 @field(mod, field_name).deinit();
             }
-            fn save(pointer: *anyopaque, id: NodeID) !void {
+            fn save(pointer: *anyopaque, writer: *Writer, id: NodeID) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, field_name).save(id);
+                return @field(mod, field_name).save(writer, id);
             }
         };
 
@@ -335,7 +305,9 @@ pub fn delete(self: *Self, id: NodeID) !void {
 }
 pub fn save(self: *Self, id: NodeID) !void {
     const typ = try self.getType(id);
-    return typ.v_save(typ.v_ptr, id);
+    var buf: [256]u8 = undefined;
+    var w = Writer.fixed(&buf);
+    return typ.v_save(typ.v_ptr, &w, id);
 }
 pub fn valid(self: *Self, id: NodeID) bool {
     _ = self.getEntry(id) catch return false;
@@ -389,8 +361,30 @@ fn dumpRecursive(self: *Self, index: EntryIndex, depth: u32) void {
         next = child.next;
     }
 }
-pub fn dump(self: *Self, id: NodeID) void {
-    if (self.valid(id)) {
-        dumpRecursive(self, id.index, 0);
+const Dumper = struct {
+    node: *Self,
+    depth: u32 = 0,
+    fn onPreOrder(self: *@This(), id: NodeID) !void {
+        const entry = try self.node.getEntry(id);
+        const typ = self.node.types.items[entry.type_index];
+        if (self.depth > 0) {
+            for (0..self.depth - 1) |_| {
+                std.debug.print(" ", .{});
+            }
+            if (entry.next != 0) {
+                std.debug.print("├─ ", .{});
+            } else {
+                std.debug.print("└─ ", .{});
+            }
+        }
+        std.debug.print("0x{x:0>8} ({s})\n", .{ @as(u32, @bitCast(id)), typ.name });
+        self.depth += 1;
     }
+    fn onPostOrder(self: *@This(), _: NodeID) !void {
+        self.depth -= 1;
+    }
+};
+pub fn dump(self: *Self, id: NodeID) void {
+    var dumper = Dumper{ .node = self };
+    self.visit(id, &dumper) catch {};
 }

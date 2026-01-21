@@ -10,7 +10,9 @@ nodes: nux.NodePool(struct {
     }
     pub fn deinit(_: *Self, _: *@This()) void {}
     pub fn save(_: *Self, writer: *nux.Writer, data: *@This()) !void {
-        try writer.write(data.*);
+        _ = writer;
+        _ = data;
+        // try writer.writeStruct(data.*, .little);
     }
 }),
 node: *nux.Node,

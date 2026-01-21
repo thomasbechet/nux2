@@ -158,7 +158,7 @@ pub const Core = struct {
     }
 
     pub fn deinit(self: *Core) void {
-        self.node.deleteAll();
+        self.node.delete(self.node.getRoot()) catch {};
 
         var i = self.modules.items.len;
         while (i > 0) : (i -= 1) {

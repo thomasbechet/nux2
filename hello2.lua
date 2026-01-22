@@ -28,4 +28,4 @@ end
 -- Node.delete(Node.getRoot())
 Texture.load(Node.getRoot(), "ideas/gui/pannel19.jpg")
 Node.dump(Node.getRoot())
--- Node.exportNode(Node.getRoot(), )
+Node.exportNode(Node.getRoot(), "root.bin")

@@ -32,7 +32,14 @@ const NodeEntry = struct {
     child: EntryIndex = 0,
 };
 
-pub const Writer = std.Io.Writer;
+pub const Writer = struct {
+    writer: nux.Disk.FileWriter,
+
+    pub fn write(self: *@This(), v: anytype) !void {
+        _ = self;
+        _ = v;
+    }
+};
 
 pub const NodeType = struct {
     name: []const u8,
@@ -304,12 +311,6 @@ pub fn delete(self: *Self, id: NodeID) !void {
     const typ = try self.getType(id);
     return typ.v_delete(typ.v_ptr, id);
 }
-pub fn save(self: *Self, id: NodeID) !void {
-    const typ = try self.getType(id);
-    var buf: [256]u8 = undefined;
-    var w = Writer.fixed(&buf);
-    return typ.v_save(typ.v_ptr, &w, id);
-}
 pub fn valid(self: *Self, id: NodeID) bool {
     _ = self.getEntry(id) catch return false;
     return true;
@@ -409,14 +410,20 @@ pub fn dump(self: *Self, id: NodeID) void {
 
 const Exporter = struct {
     node: *Self,
-    writer: nux.Disk.FileWriter,
-    fn onPreOrder(_: *@This(), _: NodeID) !void {}
+    writer: Writer,
+    fn onPreOrder(self: *@This(), id: NodeID) !void {
+        const typ = try self.node.getType(id);
+        return typ.v_save(typ.v_ptr, &self.writer, id);
+    }
 };
 pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
-    const writer = try self.disk.writeFile(path);
+    var writer = try self.disk.writeFile(path);
     var exporter = Exporter{
         .node = self,
-        .writer = writer,
+        .writer = .{
+            .writer = writer,
+        },
     };
     try self.visit(id, &exporter);
+    writer.close();
 }

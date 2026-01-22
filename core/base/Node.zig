@@ -365,20 +365,37 @@ fn dumpRecursive(self: *Self, index: EntryIndex, depth: u32) void {
 const Dumper = struct {
     node: *Self,
     depth: u32 = 0,
+    header: [256]u8 = undefined,
+    // header_len: usize = 0,
     fn onPreOrder(self: *@This(), id: NodeID) !void {
         const entry = try self.node.getEntry(id);
         const typ = self.node.types.items[entry.type_index];
-        if (self.depth > 0) {
-            for (0..self.depth - 1) |_| {
-                std.debug.print(" ", .{});
-            }
-            if (entry.next != 0) {
-                std.debug.print("├─ ", .{});
-            } else {
-                std.debug.print("└─ ", .{});
+        // append header
+        if (entry.next != 0) {
+            self.header[self.depth] = 0;
+        } else {
+            self.header[self.depth] = 1;
+        }
+        // print header
+        var buf: [256]u8 = undefined;
+        var w = std.Io.Writer.fixed(&buf);
+        for (1..(self.depth + 1)) |i| {
+            switch (self.header[i]) {
+                0 => try w.print("├─", .{}),
+                1 => try w.print("└─", .{}),
+                2 => try w.print("│ ", .{}),
+                3 => try w.print("  ", .{}),
+                else => {},
             }
         }
-        std.debug.print("0x{x:0>8} ({s})\n", .{ @as(u32, @bitCast(id)), typ.name });
+        // replace header
+        if (entry.next != 0) {
+            self.header[self.depth] = 2;
+        } else {
+            self.header[self.depth] = 3;
+        }
+        // print entry
+        std.debug.print("{s}0x{x:0>8} ({s})\n", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name });
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: NodeID) !void {

@@ -17,12 +17,15 @@ for i, v in ipairs(transforms) do
 end
 
 -- Node.delete(0)
-Node.dump(transforms[0])
-Node.delete(transforms[0])
+-- Node.dump(transforms[0])
+-- Node.delete(transforms[0])
 
 -- Disk.writeCart("cart.bin")
 -- Disk.writeEntry("mypath", "hello world")
 -- Disk.mount("cart.bin")
 -- Disk.log()
 
+-- Node.delete(Node.getRoot())
 Texture.load(Node.getRoot(), "ideas/gui/pannel19.jpg")
+Node.dump(Node.getRoot())
+-- Node.exportNode(Node.getRoot(), )

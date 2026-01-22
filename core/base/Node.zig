@@ -149,6 +149,7 @@ entries: std.ArrayList(NodeEntry),
 free: std.ArrayList(EntryIndex),
 empty_nodes: NodePool(struct { dummy: u32 }),
 root: NodeID,
+disk: *nux.Disk,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -387,4 +388,18 @@ const Dumper = struct {
 pub fn dump(self: *Self, id: NodeID) void {
     var dumper = Dumper{ .node = self };
     self.visit(id, &dumper) catch {};
+}
+
+const Exporter = struct {
+    node: *Self,
+    writer: nux.Disk.FileWriter,
+    fn onPreOrder(_: *@This(), _: NodeID) !void {}
+};
+pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
+    const writer = try self.disk.writeFile(path);
+    var exporter = Exporter{
+        .node = self,
+        .writer = writer,
+    };
+    try self.visit(id, &exporter);
 }

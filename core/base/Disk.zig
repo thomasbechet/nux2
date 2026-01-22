@@ -210,10 +210,30 @@ const Writer = struct {
     }
 };
 
-pub fn writer(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Writer {
+pub const FileWriter = struct {
+    disk: *Self,
+    handle: nux.Platform.File.Handle,
+    fn open(self: *Self, path: []const u8) !@This() {
+        return .{
+            .disk = self,
+            .handle = try self.platform.vtable.open(self.platform.ptr, path, .write_truncate),
+        };
+    }
+    pub fn close(w: *@This()) void {
+        w.disk.platform.vtable.close(w.disk.platform.ptr, w.handle);
+    }
+    pub fn writer(w: *@This(), buffer: []u8) Writer {
+        return w.disk.writer(w.handle, buffer);
+    }
+};
+
+pub fn writeFile(self: *Self, path: []const u8) !FileWriter {
+    return .open(self, path);
+}
+fn writer(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Writer {
     return .init(self, handle, buffer);
 }
-pub fn reader(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Reader {
+fn reader(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Reader {
     return .init(self, handle, buffer);
 }
 
@@ -263,7 +283,7 @@ pub fn log(self: *Self) void {
         }
     }
 }
-pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+pub fn readEntry(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
     for (self.disks.items) |*disk| {
         switch (disk.*) {
             .cart => |*cart| return cart.read(self, path, allocator) catch {
@@ -276,7 +296,6 @@ pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
     }
     return error.entryNotFound;
 }
-
 fn closeWriteFile(self: *Self) void {
     if (self.write_handle) |handle| {
         self.platform.vtable.close(self.platform.ptr, handle);

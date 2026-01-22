@@ -27,7 +27,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn load(self: *Self, parent: nux.NodeID, path: []const u8) !nux.NodeID {
     const node = try self.nodes.new(parent);
 
-    const data = try self.disk.read(path, self.allocator);
+    const data = try self.disk.readEntry(path, self.allocator);
     errdefer self.allocator.free(data);
     var image = try zigimg.Image.fromMemory(self.allocator, data);
     defer image.deinit(self.allocator);

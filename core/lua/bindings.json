@@ -18,9 +18,9 @@
         {
             "path": "base/Disk.zig",
             "ignore": [
-                "read",
-                "reader",
-                "writer"
+                "readEntry",
+                "writeFile",
+                "FileWriter"
             ]
         },
         {

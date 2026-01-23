@@ -148,7 +148,7 @@ pub const Context = struct {
 
         gl.makeProcTableCurrent(&procs);
         defer gl.makeProcTableCurrent(null);
-        if (!procs.init(c.glfwGetProcAddress)) return error.InitFailed;
+        if (!procs.init(c.glfwGetProcAddress)) return error.initFailed;
 
         _ = c.glfwSetKeyCallback(window, keyCallback);
         c.glfwSetWindowUserPointer(window, @ptrCast(self));

@@ -34,17 +34,76 @@ const NodeEntry = struct {
 
 pub const Writer = struct {
     writer: *std.Io.Writer,
+    node: *Self,
 
     pub fn write(self: *@This(), v: anytype) !void {
         const T = @TypeOf(v);
-        switch (@typeInfo(T)) {
-            .int => {
-                try self.writer.writeInt(u32, v, .little);
+        switch (T) {
+            nux.NodeID => {
+                if (self.node.valid(v)) {
+                    // TODO find the node id in the written nodes to find its index
+                } else {
+                    self.write(null);
+                }
             },
-            .comptime_int => {
-                try self.writer.writeInt(u32, v, .little);
+            nux.Vec2, nux.Vec3, nux.Vec4 => {
+                try self.write(v.data);
             },
-            else => {},
+            nux.Quat => {
+                try self.write(v.w);
+                try self.write(v.x);
+                try self.write(v.y);
+                try self.write(v.z);
+            },
+            else => switch (@typeInfo(T)) {
+                .int => {
+                    try self.writer.writeInt(u32, v, .little);
+                },
+                .comptime_int => {
+                    try self.writer.writeInt(u32, v, .little);
+                },
+                .float, .comptime_float => {
+                    try self.writer.writeInt(u32, @bitCast(v), .little);
+                },
+                .bool => {
+                    try self.writer.writeByte(@bitCast(v));
+                },
+                .@"struct" => |S| {
+                    inline for (S.fields) |F| {
+                        if (F.type == void) continue;
+                        if (@typeInfo(F.type) == .optional) {
+                            if (@field(v, F.name) == null) {}
+                        }
+                        try self.write(@field(v, F.name));
+                    }
+                },
+                .pointer => |info| switch (info.size) {
+                    .one => switch (@typeInfo(info.child)) {
+                        .array => {
+                            const Slice = []const std.meta.Elem(info.child);
+                            return self.write(@as(Slice, v));
+                        },
+                        else => {
+                            return self.write(v.*);
+                        },
+                    },
+                    .many, .slice => {
+                        const slice = if (info.size == .many) std.mem.span(v) else v;
+                        for (slice) |x| {
+                            try self.write(x);
+                        }
+                    },
+                    else => @compileError("Unable to serialize type '" ++ @typeName(T) ++ "'"),
+                },
+                .array => {
+                    try self.write(&v);
+                },
+                .vector => |info| {
+                    const array: [info.len]info.child = v;
+                    try self.write(&array);
+                },
+                else => @compileError("Unable to serialize type '" ++ @typeName(T) ++ "'"),
+            },
         }
     }
 };
@@ -165,6 +224,7 @@ free: std.ArrayList(EntryIndex),
 empty_nodes: NodePool(struct { dummy: u32 }),
 root: NodeID,
 disk: *nux.Disk,
+logger: *nux.Logger,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -404,7 +464,7 @@ const Dumper = struct {
             self.header[self.depth] = 3;
         }
         // print entry
-        std.debug.print("{s}0x{x:0>8} ({s})\n", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name });
+        self.node.logger.info("{s}0x{x:0>8} ({s})", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name });
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: NodeID) !void {
@@ -418,6 +478,13 @@ pub fn dump(self: *Self, id: NodeID) void {
 
 const Exporter = struct {
     node: *Self,
+    writer: Writer,
+    fn onPreOrder(self: *@This(), id: NodeID) !void {
+        const typ = try self.node.getType(id);
+        return typ.v_save(typ.v_ptr, &self.writer, id);
+    }
+};
+const ExportStage1 = struct {
     writer: Writer,
     fn onPreOrder(self: *@This(), id: NodeID) !void {
         const typ = try self.node.getType(id);

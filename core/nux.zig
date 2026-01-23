@@ -17,6 +17,8 @@ pub const vec = @import("math/vec.zig");
 pub const Vec2 = vec.Vec2f;
 pub const Vec3 = vec.Vec3f;
 pub const Vec4 = vec.Vec4f;
+pub const quat = @import("math/quat.zig");
+pub const Quat = quat.Quat;
 
 pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;

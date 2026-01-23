@@ -6,7 +6,7 @@ pub fn Quaternion(comptime T: type) type {
     const type_info = @typeInfo(T);
     switch (type_info) {
         .float => {},
-        else => @compileError("QuaternionBase only defined for floating point types. Type '" ++ @typeName(T) ++ "' is not supported"),
+        else => @compileError("Quaternion only defined for floating point types. Type '" ++ @typeName(T) ++ "' is not supported"),
     }
 
     return struct {
@@ -227,3 +227,5 @@ pub fn Quaternion(comptime T: type) type {
         }
     };
 }
+
+pub const Quat = Quaternion(f32);

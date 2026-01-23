@@ -4,15 +4,16 @@ const nux = @import("../nux.zig");
 const Self = @This();
 
 nodes: nux.NodePool(struct {
-    position: nux.Vec3,
+    position: nux.Vec3 = .zero(),
+    scale: nux.Vec3 = .scalar(1),
+    rotation: nux.Quat = .identity(),
     pub fn init(_: *Self) !@This() {
-        return .{ .position = .zero() };
+        return .{};
     }
     pub fn deinit(_: *Self, _: *@This()) void {}
     pub fn save(self: *Self, writer: *nux.Writer, data: *@This()) !void {
-        _ = data;
         _ = self;
-        try writer.write(32);
+        try writer.write(data.*);
     }
 }),
 node: *nux.Node,

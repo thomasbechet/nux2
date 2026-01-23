@@ -166,40 +166,16 @@ const Reader = struct {
         };
     }
 };
-const Writer = struct {
-    self: *Self,
+
+pub const FileWriter = struct {
+    disk: *Self,
     handle: nux.Platform.File.Handle,
     interface: std.Io.Writer,
 
-    fn drain(io_w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
-        const w: *Writer = @alignCast(@fieldParentPtr("interface", io_w));
-        const self: *Self = w.self;
-        const buffered = io_w.buffered();
-        if (buffered.len != 0) {
-            self.platform.vtable.write(self.platform.ptr, w.handle, buffered) catch {
-                return error.WriteFailed;
-            };
-            return io_w.consume(buffered.len);
-        }
-        for (data[0 .. data.len - 1]) |buf| {
-            if (buf.len == 0) continue;
-            self.platform.vtable.write(self.platform.ptr, w.handle, buf) catch {
-                return error.WriteFailed;
-            };
-            return io_w.consume(buf.len);
-        }
-        const pattern = data[data.len - 1];
-        if (pattern.len == 0 or splat == 0) return 0;
-        self.platform.vtable.write(self.platform.ptr, w.handle, pattern) catch {
-            return error.WriteFailed;
-        };
-        return io_w.consume(pattern.len);
-    }
-
-    fn init(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Writer {
+    pub fn open(self: *Self, path: []const u8, buffer: []u8) !@This() {
         return .{
-            .self = self,
-            .handle = handle,
+            .disk = self,
+            .handle = try self.platform.vtable.open(self.platform.ptr, path, .write_truncate),
             .interface = .{
                 .vtable = &.{
                     .drain = drain,
@@ -208,38 +184,44 @@ const Writer = struct {
             },
         };
     }
-};
-
-pub const FileWriter = struct {
-    disk: *Self,
-    handle: nux.Platform.File.Handle,
-    fn open(self: *Self, path: []const u8) !@This() {
-        return .{
-            .disk = self,
-            .handle = try self.platform.vtable.open(self.platform.ptr, path, .write_truncate),
-        };
-    }
     pub fn close(w: *@This()) void {
+        w.interface.flush() catch {};
         w.disk.platform.vtable.close(w.disk.platform.ptr, w.handle);
     }
-    pub fn writer(w: *@This(), buffer: []u8) Writer {
-        return w.disk.writer(w.handle, buffer);
+
+    fn drain(io_w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        const w: *FileWriter = @alignCast(@fieldParentPtr("interface", io_w));
+        const disk = w.disk;
+        const buffered = io_w.buffered();
+        if (buffered.len != 0) {
+            disk.platform.vtable.write(disk.platform.ptr, w.handle, buffered) catch {
+                return error.WriteFailed;
+            };
+            return io_w.consume(buffered.len);
+        }
+        for (data[0 .. data.len - 1]) |buf| {
+            if (buf.len == 0) continue;
+            disk.platform.vtable.write(disk.platform.ptr, w.handle, buf) catch {
+                return error.WriteFailed;
+            };
+            return io_w.consume(buf.len);
+        }
+        const pattern = data[data.len - 1];
+        if (pattern.len == 0 or splat == 0) return 0;
+        disk.platform.vtable.write(disk.platform.ptr, w.handle, pattern) catch {
+            return error.WriteFailed;
+        };
+        return io_w.consume(pattern.len);
     }
 };
 
-pub fn writeFile(self: *Self, path: []const u8) !FileWriter {
-    return .open(self, path);
-}
-fn writer(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Writer {
-    return .init(self, handle, buffer);
-}
 fn reader(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Reader {
     return .init(self, handle, buffer);
 }
 
 allocator: std.mem.Allocator,
 platform: nux.Platform.File,
-write_handle: ?nux.Platform.File.Handle,
+cart_writer: ?FileWriter,
 disks: std.ArrayList(Disk),
 logger: *nux.Logger,
 
@@ -296,26 +278,23 @@ pub fn readEntry(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![
     }
     return error.entryNotFound;
 }
-fn closeWriteFile(self: *Self) void {
-    if (self.write_handle) |handle| {
-        self.platform.vtable.close(self.platform.ptr, handle);
-        self.write_handle = null;
+fn closeCartWriter(self: *Self) void {
+    if (self.cart_writer) |*w| {
+        w.close();
+        self.cart_writer = null;
     }
 }
 pub fn writeCart(self: *Self, path: []const u8) !void {
     // create file
-    self.write_handle = try self.platform.vtable.open(self.platform.ptr, path, .write_truncate);
-    errdefer self.closeWriteFile();
+    self.cart_writer = try .open(self, path, &.{});
+    errdefer self.closeCartWriter();
     // write header
-    var buf: [256]u8 = undefined;
-    var w = self.writer(self.write_handle.?, &buf);
+    const w = &self.cart_writer.?;
     _ = try w.interface.writeStruct(Cart.HeaderData{}, .little);
     try w.interface.flush();
 }
 pub fn writeEntry(self: *Self, path: []const u8, data: []const u8) !void {
-    if (self.write_handle) |handle| {
-        var buf: [256]u8 = undefined;
-        var w = self.writer(handle, &buf);
+    if (self.cart_writer) |*w| {
         // write entry
         try w.interface.writeStruct(Cart.EntryData{
             .typ = 1,

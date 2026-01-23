@@ -33,11 +33,19 @@ const NodeEntry = struct {
 };
 
 pub const Writer = struct {
-    writer: nux.Disk.FileWriter,
+    writer: *std.Io.Writer,
 
     pub fn write(self: *@This(), v: anytype) !void {
-        _ = self;
-        _ = v;
+        const T = @TypeOf(v);
+        switch (@typeInfo(T)) {
+            .int => {
+                try self.writer.writeInt(u32, v, .little);
+            },
+            .comptime_int => {
+                try self.writer.writeInt(u32, v, .little);
+            },
+            else => {},
+        }
     }
 };
 
@@ -417,13 +425,14 @@ const Exporter = struct {
     }
 };
 pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
-    var writer = try self.disk.writeFile(path);
+    var buf: [256]u8 = undefined;
+    var w: nux.Disk.FileWriter = try .open(self.disk, path, &buf);
+    defer w.close();
     var exporter = Exporter{
         .node = self,
         .writer = .{
-            .writer = writer,
+            .writer = &w.interface,
         },
     };
     try self.visit(id, &exporter);
-    writer.close();
 }

@@ -12,10 +12,6 @@ for i = 0, 10 do
 end
 Transform.new(transforms[3])
 
-for i, v in ipairs(transforms) do
-    print(v)
-end
-
 -- Node.delete(0)
 -- Node.dump(transforms[0])
 -- Node.delete(transforms[0])

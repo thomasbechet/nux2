@@ -135,25 +135,14 @@ const Disk = union(enum) {
     }
 };
 
-const Reader = struct {
-    self: *Self,
+const FileReader = struct {
+    disk: *Self,
     handle: nux.Platform.File.Handle,
     interface: std.Io.Reader,
 
-    fn stream(io_reader: *std.Io.Reader, w: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
-        const r: *Reader = @alignCast(@fieldParentPtr("interface", io_reader));
-        const self = r.self;
-        const dest = limit.slice(try w.writableSliceGreedy(1));
-        self.platform.vtable.read(self.platform.ptr, r.handle, dest) catch {
-            return error.ReadFailed;
-        };
-        w.advance(dest.len);
-        return dest.len;
-    }
-
-    fn init(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Reader {
+    fn init(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) FileReader {
         return .{
-            .self = self,
+            .disk = self,
             .handle = handle,
             .interface = .{
                 .vtable = &.{
@@ -164,6 +153,21 @@ const Reader = struct {
                 .end = 0,
             },
         };
+    }
+
+    pub fn close(w: *@This()) void {
+        w.disk.platform.vtable.close(w.disk.platform.ptr, w.handle);
+    }
+
+    fn stream(io_reader: *std.Io.Reader, w: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
+        const r: *FileReader = @alignCast(@fieldParentPtr("interface", io_reader));
+        const disk = r.disk;
+        const dest = limit.slice(try w.writableSliceGreedy(1));
+        disk.platform.vtable.read(disk.platform.ptr, r.handle, dest) catch {
+            return error.ReadFailed;
+        };
+        w.advance(dest.len);
+        return dest.len;
     }
 };
 
@@ -215,7 +219,7 @@ pub const FileWriter = struct {
     }
 };
 
-fn reader(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) Reader {
+fn reader(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) FileReader {
     return .init(self, handle, buffer);
 }
 

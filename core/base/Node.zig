@@ -56,11 +56,8 @@ pub const Writer = struct {
                 try self.write(v.z);
             },
             else => switch (@typeInfo(T)) {
-                .int => {
-                    try self.writer.writeInt(u32, v, .little);
-                },
-                .comptime_int => {
-                    try self.writer.writeInt(u32, v, .little);
+                .int, .comptime_int => {
+                    try self.writer.writeInt(T, v, .little);
                 },
                 .float, .comptime_float => {
                     try self.writer.writeInt(u32, @bitCast(v), .little);
@@ -103,6 +100,57 @@ pub const Writer = struct {
                     try self.write(&array);
                 },
                 else => @compileError("Unable to serialize type '" ++ @typeName(T) ++ "'"),
+            },
+        }
+    }
+};
+pub const Reader = struct {
+    reader: *std.Io.Reader,
+    node: *Self,
+
+    pub fn read(_: *@This(), comptime T: type) !T {
+        switch (T) {
+            nux.NodeID => {},
+            nux.Vec2, nux.Vec3, nux.Vec4 => {},
+            nux.Quat => {},
+            else => switch (@typeInfo(T)) {
+                .int, .comptime_int => {},
+                .float, .comptime_float => {},
+                .bool => {},
+                .@"struct" => |S| {
+                    inline for (S.fields) |F| {
+                        if (F.type == void) continue;
+                        if (@typeInfo(F.type) == .optional) {}
+                    }
+                },
+                .pointer => |info| switch (info.size) {
+                    .one => switch (@typeInfo(info.child)) {
+                        .array => {
+                            const Slice = []const std.meta.Elem(info.child);
+                            _ = Slice;
+                            // return self.write(@as(Slice, v));
+                        },
+                        else => {
+                            // return self.write(v.*);
+                        },
+                    },
+                    .many, .slice => {
+                        // const slice = if (info.size == .many) std.mem.span(v) else v;
+                        // for (slice) |x| {
+                        //     try self.write(x);
+                        // }
+                    },
+                    else => @compileError("Unable to deserialize type '" ++ @typeName(T) ++ "'"),
+                },
+                .array => {
+                    // try self.read(&v);
+                },
+                .vector => |info| {
+                    _ = info;
+                    // const array: [info.len]info.child = v;
+                    // try self.write(&array);
+                },
+                else => @compileError("Unable to deserialize type '" ++ @typeName(T) ++ "'"),
             },
         }
     }
@@ -203,18 +251,34 @@ const ChildIterator = struct {
 pub fn iterChildren(self: *Self, id: NodeID) !ChildIterator {
     return try .init(self, id);
 }
-pub fn visit(self: *Self, id: NodeID, visitor: anytype) !void {
-    var it = try self.iterChildren(id);
+pub fn visitDFS(self: *Self, id: NodeID, visitor: anytype) !void {
     const T = @typeInfo(@TypeOf(visitor)).pointer.child;
     if (@hasDecl(T, "onPreOrder")) {
         try visitor.onPreOrder(id);
     }
+    var it = try self.iterChildren(id);
     while (it.next()) |next| {
-        try self.visit(next, visitor);
+        try self.visitDFS(next, visitor);
     }
     if (@hasDecl(T, "onPostOrder")) {
         try visitor.onPostOrder(id);
     }
+}
+pub fn collectAll(self: *Self, allocator: std.mem.Allocator, id: NodeID) !std.ArrayList(NodeID) {
+    const Collector = struct {
+        nodes: std.ArrayList(NodeID),
+        allocator: std.mem.Allocator,
+        fn onPreOrder(collector: *@This(), node: NodeID) !void {
+            try collector.nodes.append(collector.allocator, node);
+        }
+    };
+    var collector = Collector{
+        .allocator = allocator,
+        .nodes = try .initCapacity(allocator, 32),
+    };
+    errdefer collector.nodes.deinit(self.allocator);
+    try self.visitDFS(id, &collector);
+    return collector.nodes;
 }
 
 allocator: std.mem.Allocator,
@@ -473,33 +537,50 @@ const Dumper = struct {
 };
 pub fn dump(self: *Self, id: NodeID) void {
     var dumper = Dumper{ .node = self };
-    self.visit(id, &dumper) catch {};
+    self.visitDFS(id, &dumper) catch {};
 }
 
-const Exporter = struct {
-    node: *Self,
-    writer: Writer,
-    fn onPreOrder(self: *@This(), id: NodeID) !void {
-        const typ = try self.node.getType(id);
-        return typ.v_save(typ.v_ptr, &self.writer, id);
-    }
-};
-const ExportStage1 = struct {
-    writer: Writer,
-    fn onPreOrder(self: *@This(), id: NodeID) !void {
-        const typ = try self.node.getType(id);
-        return typ.v_save(typ.v_ptr, &self.writer, id);
-    }
-};
 pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
     var buf: [256]u8 = undefined;
-    var w: nux.Disk.FileWriter = try .open(self.disk, path, &buf);
-    defer w.close();
-    var exporter = Exporter{
+    var file_writer: nux.Disk.FileWriter = try .open(self.disk, path, &buf);
+    defer file_writer.close();
+    var writer: Writer = .{
         .node = self,
-        .writer = .{
-            .writer = &w.interface,
-        },
+        .writer = &file_writer.interface,
     };
-    try self.visit(id, &exporter);
+    // collect nodes
+    var nodes = try self.collectAll(self.allocator, id);
+    defer nodes.deinit(self.allocator);
+    // write structure
+    try writer.write(@as(u32, @intCast(nodes.items.len)));
+    for (nodes.items) |node| {
+        const parent = try self.getParent(node);
+        var parent_index: u32 = 0;
+        for (nodes.items, 0..) |item, index| {
+            if (item == parent) {
+                parent_index = @intCast(index);
+                break;
+            }
+        }
+        const typ = try self.getType(node);
+        try writer.write(typ.name);
+        try writer.write(parent_index);
+    }
+    // write data
+    for (nodes.items) |node| {
+        const typ = try self.getType(node);
+        try typ.v_save(typ.v_ptr, &writer, node);
+    }
+}
+pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !void {
+    _ = self;
+    _ = parent;
+    _ = path;
+    // var buf: [256]u8 = undefined;
+    // var file_reader: nux.Disk.FileReader = try .open(self.disk, path, &buf);
+    // defer file_reader.close();
+    // var writer: Writer = .{
+    //     .node = self,
+    //     .writer = &file_writer.interface,
+    // };
 }

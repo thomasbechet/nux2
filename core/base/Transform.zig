@@ -11,9 +11,11 @@ nodes: nux.NodePool(struct {
         return .{};
     }
     pub fn deinit(_: *Self, _: *@This()) void {}
-    pub fn save(self: *Self, writer: *nux.Writer, data: *@This()) !void {
-        _ = self;
+    pub fn save(_: *Self, writer: *nux.Writer, data: *@This()) !void {
         try writer.write(data.*);
+    }
+    pub fn load(_: *Self, reader: *nux.Reader, data: *@This()) !void {
+        data.* = try reader.read(@This());
     }
 }),
 node: *nux.Node,

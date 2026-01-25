@@ -56,11 +56,16 @@ pub const Writer = struct {
                 try self.write(v.z);
             },
             else => switch (@typeInfo(T)) {
+                .null => {
+                    try self.writer.writeByte(0);
+                },
                 .int, .comptime_int => {
-                    try self.writer.writeInt(T, v, .little);
+                    // try self.writer.writeInt(T, v, .little);
+                    try self.writer.writeLeb128(v);
                 },
                 .float, .comptime_float => {
-                    try self.writer.writeInt(u32, @bitCast(v), .little);
+                    // try self.writer.writeInt(u32, @bitCast(v), .little);
+                    try self.writer.writeLeb128(@as(u32, @bitCast(v)));
                 },
                 .bool => {
                     try self.writer.writeByte(@bitCast(v));
@@ -75,29 +80,27 @@ pub const Writer = struct {
                     }
                 },
                 .pointer => |info| switch (info.size) {
-                    .one => switch (@typeInfo(info.child)) {
-                        .array => {
-                            const Slice = []const std.meta.Elem(info.child);
-                            return self.write(@as(Slice, v));
-                        },
-                        else => {
-                            return self.write(v.*);
-                        },
+                    .one => {
+                        return self.write(v.*);
                     },
-                    .many, .slice => {
-                        const slice = if (info.size == .many) std.mem.span(v) else v;
-                        for (slice) |x| {
+                    .slice => {
+                        // try self.write(@as(u32, @intCast(v.len)));
+                        try self.writer.writeLeb128(@as(u32, @intCast(v.len)));
+                        for (v) |x| {
                             try self.write(x);
                         }
                     },
                     else => @compileError("Unable to serialize type '" ++ @typeName(T) ++ "'"),
                 },
                 .array => {
-                    try self.write(&v);
+                    for (v) |x| {
+                        try self.write(x);
+                    }
                 },
                 .vector => |info| {
+                    // Write as an array.
                     const array: [info.len]info.child = v;
-                    try self.write(&array);
+                    try self.write(array);
                 },
                 else => @compileError("Unable to serialize type '" ++ @typeName(T) ++ "'"),
             },
@@ -108,47 +111,71 @@ pub const Reader = struct {
     reader: *std.Io.Reader,
     node: *Self,
 
-    pub fn read(_: *@This(), comptime T: type) !T {
+    pub fn readString(self: *@This()) ![]u8 {
+        const size = try self.read(u32);
+        return try self.reader.take(size);
+    }
+    pub fn read(self: *@This(), comptime T: type) !T {
         switch (T) {
-            nux.NodeID => {},
-            nux.Vec2, nux.Vec3, nux.Vec4 => {},
-            nux.Quat => {},
+            nux.NodeID => {
+                const data = self.reader.takeInt(u32, .little);
+                if (data != 0) {
+                    return data;
+                } else {
+                    return NodeID.null;
+                }
+            },
+            nux.Vec2, nux.Vec3, nux.Vec4 => {
+                return .init(try self.read(@FieldType(T, "data")));
+            },
+            nux.Quat => {
+                return .init(
+                    try self.read(f32),
+                    try self.read(f32),
+                    try self.read(f32),
+                    try self.read(f32),
+                );
+            },
             else => switch (@typeInfo(T)) {
-                .int, .comptime_int => {},
-                .float, .comptime_float => {},
-                .bool => {},
+                .int, .comptime_int => {
+                    // return try self.reader.takeInt(T, .little);
+                    return try self.reader.takeLeb128(T);
+                },
+                .float, .comptime_float => {
+                    // return @as(T, @bitCast(try self.reader.takeInt(u32, .little)));
+                    return @as(T, @bitCast(try self.reader.takeLeb128(u32)));
+                },
+                .bool => {
+                    return try self.reader.takeByte();
+                },
                 .@"struct" => |S| {
+                    var s: T = undefined;
                     inline for (S.fields) |F| {
                         if (F.type == void) continue;
-                        if (@typeInfo(F.type) == .optional) {}
+                        if (@typeInfo(F.type) == .optional) {
+                            if ((try self.read(bool))) {} else {}
+                        }
+                        @field(s, F.name) = try self.read(F.type);
                     }
+                    return s;
                 },
                 .pointer => |info| switch (info.size) {
-                    .one => switch (@typeInfo(info.child)) {
-                        .array => {
-                            const Slice = []const std.meta.Elem(info.child);
-                            _ = Slice;
-                            // return self.write(@as(Slice, v));
-                        },
-                        else => {
-                            // return self.write(v.*);
-                        },
-                    },
-                    .many, .slice => {
-                        // const slice = if (info.size == .many) std.mem.span(v) else v;
-                        // for (slice) |x| {
-                        //     try self.write(x);
-                        // }
-                    },
+                    // .one => {
+                    //     return self.write(v.*);
+                    //     const slice = try allocator.alloc(info.child, size);
+                    // },
+                    .slice => {},
                     else => @compileError("Unable to deserialize type '" ++ @typeName(T) ++ "'"),
                 },
-                .array => {
-                    // try self.read(&v);
+                .array => |info| {
+                    var s: T = undefined;
+                    for (&s) |*x| {
+                        x.* = try self.read(info.child);
+                    }
+                    return s;
                 },
                 .vector => |info| {
-                    _ = info;
-                    // const array: [info.len]info.child = v;
-                    // try self.write(&array);
+                    return try self.read([info.len]info.child);
                 },
                 else => @compileError("Unable to deserialize type '" ++ @typeName(T) ++ "'"),
             },
@@ -163,6 +190,7 @@ pub const NodeType = struct {
     v_delete: *const fn (*anyopaque, id: NodeID) anyerror!void,
     v_deinit: *const fn (*anyopaque) void,
     v_save: *const fn (*anyopaque, writer: *Writer, id: NodeID) anyerror!void,
+    v_load: *const fn (*anyopaque, reader: *Reader, id: NodeID) anyerror!void,
 };
 
 pub fn NodePool(comptime T: type) type {
@@ -183,14 +211,14 @@ pub fn NodePool(comptime T: type) type {
         }
 
         pub fn new(self: *@This(), parent: NodeID) !struct { id: NodeID, data: *T } {
-            // add entry
+            // Add entry
             const pool_index = self.data.items.len;
             const id = try self.node.addEntry(parent, @intCast(pool_index), self.type_index);
-            // add data entry
+            // Add data entry
             const data_ptr = try self.data.addOne(self.allocator);
             const id_ptr = try self.ids.addOne(self.allocator);
             id_ptr.* = id;
-            // init node
+            // Init node
             if (@hasDecl(T, "init")) {
                 data_ptr.* = try T.init(@ptrCast(@alignCast(self.mod)));
             }
@@ -198,20 +226,20 @@ pub fn NodePool(comptime T: type) type {
         }
         fn delete(self: *@This(), id: NodeID) !void {
             const node = try self.node.getEntry(id);
-            // delete children
+            // Delete children
             var it = try self.node.iterChildren(id);
             while (it.next()) |child| {
                 try self.node.delete(child);
             }
-            // deinit node
+            // Deinit node
             if (@hasDecl(T, "deinit")) {
                 T.deinit(@ptrCast(@alignCast(self.mod)), &self.data.items[node.pool_index]);
             }
-            // remove node from graph
+            // Remove node from graph
             try self.node.removeEntry(id);
-            // update last item before swap remove
+            // Update last item before swap remove
             self.node.updateEntry(self.ids.items[node.pool_index], node.pool_index);
-            // remove from pool
+            // Remove from pool
             _ = self.data.swapRemove(node.pool_index);
             _ = self.ids.swapRemove(node.pool_index);
         }
@@ -223,6 +251,12 @@ pub fn NodePool(comptime T: type) type {
             const node = try self.node.getEntry(id);
             if (@hasDecl(T, "save")) {
                 try T.save(@ptrCast(@alignCast(self.mod)), writer, &self.data.items[node.pool_index]);
+            }
+        }
+        pub fn load(self: *@This(), reader: *Reader, id: NodeID) !void {
+            const node = try self.node.getEntry(id);
+            if (@hasDecl(T, "save")) {
+                try T.load(@ptrCast(@alignCast(self.mod)), reader, &self.data.items[node.pool_index]);
             }
         }
     };
@@ -251,20 +285,20 @@ const ChildIterator = struct {
 pub fn iterChildren(self: *Self, id: NodeID) !ChildIterator {
     return try .init(self, id);
 }
-pub fn visitDFS(self: *Self, id: NodeID, visitor: anytype) !void {
+pub fn visit(self: *Self, id: NodeID, visitor: anytype) !void {
     const T = @typeInfo(@TypeOf(visitor)).pointer.child;
     if (@hasDecl(T, "onPreOrder")) {
         try visitor.onPreOrder(id);
     }
     var it = try self.iterChildren(id);
     while (it.next()) |next| {
-        try self.visitDFS(next, visitor);
+        try self.visit(next, visitor);
     }
     if (@hasDecl(T, "onPostOrder")) {
         try visitor.onPostOrder(id);
     }
 }
-pub fn collectAll(self: *Self, allocator: std.mem.Allocator, id: NodeID) !std.ArrayList(NodeID) {
+pub fn collect(self: *Self, allocator: std.mem.Allocator, id: NodeID) !std.ArrayList(NodeID) {
     const Collector = struct {
         nodes: std.ArrayList(NodeID),
         allocator: std.mem.Allocator,
@@ -277,7 +311,7 @@ pub fn collectAll(self: *Self, allocator: std.mem.Allocator, id: NodeID) !std.Ar
         .nodes = try .initCapacity(allocator, 32),
     };
     errdefer collector.nodes.deinit(self.allocator);
-    try self.visitDFS(id, &collector);
+    try self.visit(id, &collector);
     return collector.nodes;
 }
 
@@ -295,11 +329,11 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.types = try .initCapacity(self.allocator, 64);
     self.entries = try .initCapacity(self.allocator, 1024);
     self.free = try .initCapacity(self.allocator, 1024);
-    // reserve index 0 for null id
+    // Reserve index 0 for null id.
     try self.entries.append(self.allocator, .{});
-    // register empty node type
+    // Register empty node type.
     try self.registerNodeModule(Self, "empty_nodes", self);
-    // create root node
+    // Create root node.
     self.root = NodeID{
         .index = 1,
         .version = 1,
@@ -322,12 +356,12 @@ pub fn deinit(self: *Self) void {
 }
 
 fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: TypeIndex) !NodeID {
-    // check parent
+    // Check parent
     if (!self.valid(parent)) {
         return error.invalidParent;
     }
 
-    // find free entry
+    // Find free entry
     var index: EntryIndex = undefined;
     if (self.free.pop()) |idx| {
         index = idx;
@@ -337,7 +371,7 @@ fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: Type
         node.version = 0;
     }
 
-    // initialize node
+    // Initialize node
     const node = &self.entries.items[index];
     node.* = .{
         .pool_index = pool_index,
@@ -349,7 +383,7 @@ fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: Type
         .version = node.version,
     };
 
-    // update parent
+    // Update parent
     if (parent.index != 0) {
         const p = &self.entries.items[parent.index];
         if (p.child != 0) {
@@ -369,7 +403,7 @@ fn removeEntry(self: *Self, id: NodeID) !void {
             p.child = node.next;
         }
     }
-    // update version and add to freelist
+    // Update version and add to freelist
     node.version += 1;
     (try self.free.addOne(self.allocator)).* = id.index;
 }
@@ -396,11 +430,11 @@ pub fn getRoot(self: *Self) NodeID {
 pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []const u8, module: *T) !void {
     if (@hasField(T, field_name)) {
 
-        // init pool
+        // Init pool
         const type_index: TypeIndex = @intCast(self.types.items.len);
         @field(module, field_name) = try .init(self, module, type_index);
 
-        // create vtable
+        // Create vtable
         const gen = struct {
             fn new(pointer: *anyopaque, parent: NodeID) !NodeID {
                 const mod: *T = @ptrCast(@alignCast(pointer));
@@ -418,9 +452,13 @@ pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []
                 const mod: *T = @ptrCast(@alignCast(pointer));
                 return @field(mod, field_name).save(writer, id);
             }
+            fn load(pointer: *anyopaque, reader: *Reader, id: NodeID) !void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                return @field(mod, field_name).load(reader, id);
+            }
         };
 
-        // register type
+        // Register type
         (try self.types.addOne(self.allocator)).* = .{
             .name = @typeName(T),
             .v_ptr = module,
@@ -428,6 +466,7 @@ pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []
             .v_delete = gen.delete,
             .v_deinit = gen.deinit,
             .v_save = gen.save,
+            .v_load = gen.load,
         };
     }
 }
@@ -503,13 +542,13 @@ const Dumper = struct {
     fn onPreOrder(self: *@This(), id: NodeID) !void {
         const entry = try self.node.getEntry(id);
         const typ = self.node.types.items[entry.type_index];
-        // append header
+        // Append header
         if (entry.next != 0) {
             self.header[self.depth] = 0;
         } else {
             self.header[self.depth] = 1;
         }
-        // print header
+        // Print header
         var buf: [256]u8 = undefined;
         var w = std.Io.Writer.fixed(&buf);
         for (1..(self.depth + 1)) |i| {
@@ -521,13 +560,13 @@ const Dumper = struct {
                 else => {},
             }
         }
-        // replace header
+        // Replace header.
         if (entry.next != 0) {
             self.header[self.depth] = 2;
         } else {
             self.header[self.depth] = 3;
         }
-        // print entry
+        // Print entry.
         self.node.logger.info("{s}0x{x:0>8} ({s})", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name });
         self.depth += 1;
     }
@@ -537,7 +576,7 @@ const Dumper = struct {
 };
 pub fn dump(self: *Self, id: NodeID) void {
     var dumper = Dumper{ .node = self };
-    self.visitDFS(id, &dumper) catch {};
+    self.visit(id, &dumper) catch {};
 }
 
 pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
@@ -548,12 +587,34 @@ pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
         .node = self,
         .writer = &file_writer.interface,
     };
-    // collect nodes
-    var nodes = try self.collectAll(self.allocator, id);
+    // Collect nodes
+    var nodes = try self.collect(self.allocator, id);
     defer nodes.deinit(self.allocator);
-    // write structure
+    // Collect types
+    var types: std.ArrayList([]const u8) = try .initCapacity(self.allocator, 64);
+    defer types.deinit(self.allocator);
+    for (nodes.items) |node| {
+        const typ = try self.getType(node);
+        var found = false;
+        for (types.items) |t| {
+            if (std.mem.eql(u8, typ.name, t)) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            try types.append(self.allocator, typ.name);
+        }
+    }
+    // Write type table
+    try writer.write(@as(u32, @intCast(types.items.len)));
+    for (types.items) |typ| {
+        try writer.write(typ);
+    }
+    // Write node table
     try writer.write(@as(u32, @intCast(nodes.items.len)));
     for (nodes.items) |node| {
+        // Find parent index
         const parent = try self.getParent(node);
         var parent_index: u32 = 0;
         for (nodes.items, 0..) |item, index| {
@@ -562,25 +623,68 @@ pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
                 break;
             }
         }
+
+        // Find type index
         const typ = try self.getType(node);
-        try writer.write(typ.name);
+        var type_index: u32 = undefined;
+        for (types.items, 0..) |t, index| {
+            if (std.mem.eql(u8, t, typ.name)) {
+                type_index = @intCast(index);
+            }
+        }
+
+        try writer.write(type_index);
         try writer.write(parent_index);
     }
-    // write data
+    // Write nodes data
     for (nodes.items) |node| {
         const typ = try self.getType(node);
         try typ.v_save(typ.v_ptr, &writer, node);
     }
 }
 pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !void {
-    _ = self;
-    _ = parent;
-    _ = path;
-    // var buf: [256]u8 = undefined;
-    // var file_reader: nux.Disk.FileReader = try .open(self.disk, path, &buf);
-    // defer file_reader.close();
-    // var writer: Writer = .{
-    //     .node = self,
-    //     .writer = &file_writer.interface,
-    // };
+    // TODO validation
+    // Read entry
+    const data = try self.disk.readEntry(path, self.allocator);
+    defer self.allocator.free(data);
+    var data_reader = std.Io.Reader.fixed(data);
+    var reader: Reader = .{
+        .reader = &data_reader,
+        .node = self,
+    };
+    // Read type table
+    const type_table_len = try reader.read(u32);
+    if (type_table_len == 0) return error.emptyNodeFile;
+    const type_table = try self.allocator.alloc([]const u8, type_table_len);
+    defer self.allocator.free(type_table);
+    for (0..type_table_len) |index| {
+        type_table[index] = try reader.readString();
+        _ = self.findType(type_table[index]) catch {
+            return error.nodeTypeNotFound;
+        };
+    }
+    // Read node table
+    const node_count = try reader.read(u32);
+    self.logger.info("COUNT {d}", .{node_count});
+    var nodes = try self.allocator.alloc(NodeID, node_count);
+    defer self.allocator.free(nodes);
+    for (0..node_count) |index| {
+        const type_index = try reader.read(u32);
+        const parent_index = try reader.read(u32);
+        if (type_index > type_table_len) {
+            return error.invalidTypeIndex;
+        }
+        if (parent_index > nodes.len) {
+            return error.invalidParentIndex;
+        }
+        const typ = try self.findType(type_table[type_index]);
+        self.logger.info("TYPE {s} PARENT {d}", .{ typ.name, parent_index });
+        const parent_node = if (parent_index != 0) nodes[parent_index] else parent;
+        nodes[index] = try typ.v_new(typ.v_ptr, parent_node);
+    }
+    // Read node data
+    for (nodes) |node| {
+        const typ = try self.getType(node);
+        try typ.v_load(typ.v_ptr, &reader, node);
+    }
 }

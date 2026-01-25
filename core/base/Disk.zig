@@ -28,15 +28,18 @@ const Cart = struct {
         // open file
         const handle = try self.platform.vtable.open(self.platform.ptr, path, .read);
         errdefer self.platform.vtable.close(self.platform.ptr, handle);
-        var buf: [256]u8 = undefined;
-        var r = self.reader(handle, &buf);
+        // var buf: [256]u8 = undefined;
+        // var r: FileReader = .open(self, handle, &buf);
         // get file stat
         const stat = try self.platform.vtable.stat(self.platform.ptr, handle);
         if (stat.size < @sizeOf(HeaderData)) {
             return error.invalidCartSize;
         }
         // read header
-        const header = try r.interface.takeStruct(HeaderData, .little);
+        var buf: [@sizeOf(HeaderData)]u8 = undefined;
+        try self.platform.vtable.read(self.platform.ptr, handle, &buf);
+        var reader = std.Io.Reader.fixed(&buf);
+        const header = try reader.takeStruct(HeaderData, .little);
         if (!std.mem.eql(u8, &header.magic, &magic)) {
             return error.invalidCartMagic;
         }
@@ -48,15 +51,18 @@ const Cart = struct {
         errdefer self.allocator.free(path_copy);
         var entries: std.StringHashMap(Entry) = .init(self.allocator);
         // read entries
+        var entry_buf: [@sizeOf(EntryData)]u8 = undefined;
         var it: u32 = @sizeOf(HeaderData); // start after header
         while (it < stat.size) {
             // seek to entry
             try self.platform.vtable.seek(self.platform.ptr, handle, it);
-            r = self.reader(handle, &buf); // reset reader to update logical seek
+            try self.platform.vtable.read(self.platform.ptr, handle, &entry_buf);
             // read entry
-            const entry = try r.interface.takeStruct(EntryData, .little);
+            reader = std.Io.Reader.fixed(&entry_buf);
+            const entry = try reader.takeStruct(EntryData, .little);
             // read path
-            const path_data = try r.interface.readAlloc(self.allocator, entry.path_len);
+            const path_data = try self.allocator.alloc(u8, entry.path_len);
+            try self.platform.vtable.read(self.platform.ptr, handle, path_data);
             // insert entry
             const new_entry = try entries.getOrPut(path_data);
             if (new_entry.found_existing) {
@@ -135,42 +141,6 @@ const Disk = union(enum) {
     }
 };
 
-const FileReader = struct {
-    disk: *Self,
-    handle: nux.Platform.File.Handle,
-    interface: std.Io.Reader,
-
-    fn init(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) FileReader {
-        return .{
-            .disk = self,
-            .handle = handle,
-            .interface = .{
-                .vtable = &.{
-                    .stream = stream,
-                },
-                .buffer = buffer,
-                .seek = 0,
-                .end = 0,
-            },
-        };
-    }
-
-    pub fn close(w: *@This()) void {
-        w.disk.platform.vtable.close(w.disk.platform.ptr, w.handle);
-    }
-
-    fn stream(io_reader: *std.Io.Reader, w: *std.Io.Writer, limit: std.Io.Limit) std.Io.Reader.StreamError!usize {
-        const r: *FileReader = @alignCast(@fieldParentPtr("interface", io_reader));
-        const disk = r.disk;
-        const dest = limit.slice(try w.writableSliceGreedy(1));
-        disk.platform.vtable.read(disk.platform.ptr, r.handle, dest) catch {
-            return error.ReadFailed;
-        };
-        w.advance(dest.len);
-        return dest.len;
-    }
-};
-
 pub const FileWriter = struct {
     disk: *Self,
     handle: nux.Platform.File.Handle,
@@ -218,10 +188,6 @@ pub const FileWriter = struct {
         return io_w.consume(pattern.len);
     }
 };
-
-fn reader(self: *Self, handle: nux.Platform.File.Handle, buffer: []u8) FileReader {
-    return .init(self, handle, buffer);
-}
 
 allocator: std.mem.Allocator,
 platform: nux.Platform.File,

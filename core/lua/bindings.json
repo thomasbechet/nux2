@@ -12,7 +12,10 @@
                 "getType",
                 "findType",
                 "iterChildren",
-                "visit"
+                "visit",
+                "collect",
+                "Reader",
+                "Writer"
             ]
         },
         {

@@ -25,17 +25,15 @@ const Cart = struct {
     entries: std.StringHashMap(Entry),
 
     fn init(self: *Self, path: []const u8) !@This() {
-        // open file
+        // Open file
         const handle = try self.platform.vtable.open(self.platform.ptr, path, .read);
         errdefer self.platform.vtable.close(self.platform.ptr, handle);
-        // var buf: [256]u8 = undefined;
-        // var r: FileReader = .open(self, handle, &buf);
-        // get file stat
+        // Get file stat
         const stat = try self.platform.vtable.stat(self.platform.ptr, handle);
         if (stat.size < @sizeOf(HeaderData)) {
             return error.invalidCartSize;
         }
-        // read header
+        // Read header
         var buf: [@sizeOf(HeaderData)]u8 = undefined;
         try self.platform.vtable.read(self.platform.ptr, handle, &buf);
         var reader = std.Io.Reader.fixed(&buf);
@@ -46,24 +44,24 @@ const Cart = struct {
         if (header.version != 1) {
             return error.invalidCartVersion;
         }
-        // allocate cart resources
+        // Allocate cart resources
         const path_copy = try self.allocator.dupe(u8, path);
         errdefer self.allocator.free(path_copy);
         var entries: std.StringHashMap(Entry) = .init(self.allocator);
-        // read entries
+        // Read entries
         var entry_buf: [@sizeOf(EntryData)]u8 = undefined;
         var it: u32 = @sizeOf(HeaderData); // start after header
         while (it < stat.size) {
-            // seek to entry
+            // Seek to entry
             try self.platform.vtable.seek(self.platform.ptr, handle, it);
             try self.platform.vtable.read(self.platform.ptr, handle, &entry_buf);
-            // read entry
+            // Read entry
             reader = std.Io.Reader.fixed(&entry_buf);
             const entry = try reader.takeStruct(EntryData, .little);
-            // read path
+            // Read path
             const path_data = try self.allocator.alloc(u8, entry.path_len);
             try self.platform.vtable.read(self.platform.ptr, handle, path_data);
-            // insert entry
+            // Insert entry
             const new_entry = try entries.getOrPut(path_data);
             if (new_entry.found_existing) {
                 self.logger.err("ignore duplicated entry '{s}' from '{s}'", .{ path_data, path });
@@ -74,7 +72,7 @@ const Cart = struct {
                     .offset = it + @sizeOf(EntryData) + entry.path_len,
                 };
             }
-            // go to next entry
+            // Go to next entry
             it += @sizeOf(EntryData) + entry.path_len + entry.data_len;
         }
         return .{
@@ -84,10 +82,10 @@ const Cart = struct {
         };
     }
     fn deinit(cart: *@This(), self: *Self) void {
-        // free carts
+        // Free carts
         self.platform.vtable.close(self.platform.ptr, cart.handle);
         self.allocator.free(cart.path);
-        // free entries
+        // Free entries
         var it = cart.entries.iterator();
         while (it.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
@@ -96,7 +94,6 @@ const Cart = struct {
     }
     fn read(cart: *@This(), self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
         if (cart.entries.get(path)) |entry| {
-            std.debug.assert(entry.length > 0);
             const buffer = try allocator.alloc(u8, entry.length);
             try self.platform.vtable.seek(self.platform.ptr, cart.handle, entry.offset);
             try self.platform.vtable.read(self.platform.ptr, cart.handle, buffer);
@@ -255,25 +252,25 @@ fn closeCartWriter(self: *Self) void {
     }
 }
 pub fn writeCart(self: *Self, path: []const u8) !void {
-    // create file
+    // Create file
     self.cart_writer = try .open(self, path, &.{});
     errdefer self.closeCartWriter();
-    // write header
+    // Write header
     const w = &self.cart_writer.?;
     _ = try w.interface.writeStruct(Cart.HeaderData{}, .little);
     try w.interface.flush();
 }
 pub fn writeEntry(self: *Self, path: []const u8, data: []const u8) !void {
     if (self.cart_writer) |*w| {
-        // write entry
+        // Write entry
         try w.interface.writeStruct(Cart.EntryData{
             .typ = 1,
             .data_len = @intCast(data.len),
             .path_len = @intCast(path.len),
         }, .little);
-        // write path
+        // Write path
         _ = try w.interface.write(path);
-        // write data
+        // Write data
         _ = try w.interface.write(data);
         try w.interface.flush();
     }

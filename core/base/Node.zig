@@ -567,7 +567,7 @@ const Dumper = struct {
             self.header[self.depth] = 3;
         }
         // Print entry.
-        self.node.logger.info("{s}0x{x:0>8} ({s})", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name });
+        self.node.logger.info("{s}{d} {s}", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name });
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: NodeID) !void {
@@ -615,11 +615,12 @@ pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
     try writer.write(@as(u32, @intCast(nodes.items.len)));
     for (nodes.items) |node| {
         // Find parent index
+        // 0 => no local parent, only valid for root node
         const parent = try self.getParent(node);
         var parent_index: u32 = 0;
         for (nodes.items, 0..) |item, index| {
             if (item == parent) {
-                parent_index = @intCast(index);
+                parent_index = @intCast(index + 1);
                 break;
             }
         }
@@ -642,8 +643,7 @@ pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
         try typ.v_save(typ.v_ptr, &writer, node);
     }
 }
-pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !void {
-    // TODO validation
+pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !NodeID {
     // Read entry
     const data = try self.disk.readEntry(path, self.allocator);
     defer self.allocator.free(data);
@@ -665,7 +665,6 @@ pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !void {
     }
     // Read node table
     const node_count = try reader.read(u32);
-    self.logger.info("COUNT {d}", .{node_count});
     var nodes = try self.allocator.alloc(NodeID, node_count);
     defer self.allocator.free(nodes);
     for (0..node_count) |index| {
@@ -674,12 +673,11 @@ pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !void {
         if (type_index > type_table_len) {
             return error.invalidTypeIndex;
         }
-        if (parent_index > nodes.len) {
+        if (parent_index > nodes.len + 1) {
             return error.invalidParentIndex;
         }
         const typ = try self.findType(type_table[type_index]);
-        self.logger.info("TYPE {s} PARENT {d}", .{ typ.name, parent_index });
-        const parent_node = if (parent_index != 0) nodes[parent_index] else parent;
+        const parent_node = if (parent_index != 0) nodes[parent_index - 1] else parent;
         nodes[index] = try typ.v_new(typ.v_ptr, parent_node);
     }
     // Read node data
@@ -687,4 +685,5 @@ pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !void {
         const typ = try self.getType(node);
         try typ.v_load(typ.v_ptr, &reader, node);
     }
+    return nodes[0];
 }

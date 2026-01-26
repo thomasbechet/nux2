@@ -30,6 +30,16 @@ const NodeEntry = struct {
     prev: EntryIndex = 0,
     next: EntryIndex = 0,
     child: EntryIndex = 0,
+    name: [64]u8 = undefined,
+    name_len: usize = 0,
+
+    fn getName(self: *@This()) []const u8 {
+        return self.name[0..self.name_len];
+    }
+    fn setName(self: *@This(), name: []const u8) void {
+        std.mem.copyForwards(u8, self.name, name);
+        self.name_len = name.len;
+    }
 };
 
 pub const Writer = struct {

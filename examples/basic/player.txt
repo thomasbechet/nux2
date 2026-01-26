@@ -1,0 +1,9 @@
+type transform
+
+    type staticmesh
+    transform transform
+    mesh /assets/meshes/player
+    texture /assets/textures/player
+
+    type script
+    path /assets/scripts/player

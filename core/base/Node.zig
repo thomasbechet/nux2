@@ -319,6 +319,7 @@ allocator: std.mem.Allocator,
 types: std.ArrayList(NodeType),
 entries: std.ArrayList(NodeEntry),
 free: std.ArrayList(EntryIndex),
+names: std.StringHashMap(NodeID),
 empty_nodes: NodePool(struct { dummy: u32 }),
 root: NodeID,
 disk: *nux.Disk,
@@ -329,6 +330,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.types = try .initCapacity(self.allocator, 64);
     self.entries = try .initCapacity(self.allocator, 1024);
     self.free = try .initCapacity(self.allocator, 1024);
+    self.names = .init(self.allocator);
     // Reserve index 0 for null id.
     try self.entries.append(self.allocator, .{});
     // Register empty node type.
@@ -347,6 +349,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     _ = try self.empty_nodes.ids.append(self.allocator, self.root);
 }
 pub fn deinit(self: *Self) void {
+    self.names.deinit();
     self.entries.deinit(self.allocator);
     self.free.deinit(self.allocator);
     for (self.types.items) |typ| {
@@ -507,6 +510,21 @@ pub fn findType(self: *Self, name: []const u8) !*NodeType {
         }
     }
     return error.unknownType;
+}
+pub fn find(self: *Self, name: []const u8) !NodeID {
+    _ = self;
+    _ = name;
+    return .null;
+}
+pub fn setName(self: *Self, id: NodeID, name: []const u8) !void {
+    _ = self;
+    _ = id;
+    _ = name;
+}
+pub fn getName(self: *Self, id: NodeID) ![]const u8 {
+    _ = self;
+    _ = id;
+    return "test";
 }
 fn dumpRecursive(self: *Self, index: EntryIndex, depth: u32) void {
     const node = self.entries.items[index];

@@ -1,0 +1,15 @@
+type empty
+
+    type empty
+    name textures
+
+        type texture
+        name player
+        path player_texture.png
+
+    type empty
+    name meshes
+
+        type mesh
+        name player
+        path player_mesh.gltf

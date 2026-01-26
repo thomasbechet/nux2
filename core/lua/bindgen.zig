@@ -120,6 +120,10 @@ const AstIter = struct {
                 if (std.mem.eql(u8, return_type, ".")) {
                     return_type = self.ast.tokenSlice(ret_token + 1);
                 }
+                // patch for strings parameter
+                if (std.mem.eql(u8, return_type, "[")) {
+                    return_type = "string";
+                }
 
                 // find if function throw error
                 var throw_error = false;
@@ -448,6 +452,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                     switch (typ) {
                         .void => {},
                         .bool => try writer.print("c.lua_pushboolean(lua, @intFromBool(ret));\n", .{}),
+                        .string => try writer.print("_ = c.lua_pushlstring(lua, ret.ptr, ret.len);\n", .{}),
                         .NodeID => try writer.print("c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));\n", .{}),
                         .Vec2 => try writer.print("Lua.pushUserData(lua, .vec2, ret);\n", .{}),
                         .Vec3 => try writer.print("Lua.pushUserData(lua, .vec3, ret);\n", .{}),

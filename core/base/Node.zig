@@ -37,7 +37,7 @@ const NodeEntry = struct {
         return self.name[0..self.name_len];
     }
     fn setName(self: *@This(), name: []const u8) void {
-        std.mem.copyForwards(u8, self.name, name);
+        std.mem.copyForwards(u8, &self.name, name);
         self.name_len = name.len;
     }
 };
@@ -527,14 +527,12 @@ pub fn find(self: *Self, name: []const u8) !NodeID {
     return .null;
 }
 pub fn setName(self: *Self, id: NodeID, name: []const u8) !void {
-    _ = self;
-    _ = id;
-    _ = name;
+    const entry = try self.getEntry(id);
+    entry.setName(name);
 }
 pub fn getName(self: *Self, id: NodeID) ![]const u8 {
-    _ = self;
-    _ = id;
-    return "test";
+    const entry = try self.getEntry(id);
+    return entry.getName();
 }
 fn dumpRecursive(self: *Self, index: EntryIndex, depth: u32) void {
     const node = self.entries.items[index];
@@ -595,7 +593,7 @@ const Dumper = struct {
             self.header[self.depth] = 3;
         }
         // Print entry.
-        self.node.logger.info("{s}{d} {s}", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name });
+        self.node.logger.info("{s}{d} {s} \"{s}\"", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name, entry.getName() });
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: NodeID) !void {

@@ -6,7 +6,7 @@ const api = @import("api.zig");
 pub fn main() !void {
     var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer _ = gpa.deinit();
-    var core: *nux.Core = try .init(.{ .allocator = gpa.allocator() }, .{});
+    var core: *nux.Core = try .init(.{ .allocator = gpa.allocator() }, .{}, .{});
     defer core.deinit();
     try core.update();
     var context: window.Context = .init(core);

@@ -31,9 +31,6 @@ pub fn load(self: *Self, parent: nux.NodeID, path: []const u8) !nux.NodeID {
     errdefer self.allocator.free(data);
     var image = try zigimg.Image.fromMemory(self.allocator, data);
     defer image.deinit(self.allocator);
-
-    self.logger.info("{d}x{d}", .{ image.width, image.height });
-
     node.data.data = data;
     return node.id;
 }

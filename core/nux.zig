@@ -54,7 +54,9 @@ pub const Module = struct {
                     switch (@typeInfo(field.type)) {
                         .pointer => |info| {
                             if (core.findModule(info.child)) |dependency| {
-                                core.log("inject {s} to {s}", .{ @typeName(info.child), @typeName(T) });
+                                if (core.config.logModuleInjection) {
+                                    core.log("inject {s} to {s}", .{ @typeName(info.child), @typeName(T) });
+                                }
                                 @field(self, field.name) = dependency;
                             }
                         },
@@ -122,9 +124,14 @@ pub const Module = struct {
     }
 };
 
+pub const Config = struct {
+    logModuleInjection: bool = false,
+};
+
 pub const Core = struct {
     modules: std.ArrayList(Module),
     platform: Platform,
+    config: Config,
 
     fn log(
         self: *Core,
@@ -136,10 +143,11 @@ pub const Core = struct {
         }
     }
 
-    pub fn init(platform: Platform, comptime mods: anytype) !*Core {
+    pub fn init(platform: Platform, config: Config, comptime mods: anytype) !*Core {
         var core = try platform.allocator.create(@This());
         core.platform = platform;
         core.modules = try .initCapacity(platform.allocator, 32);
+        core.config = config;
 
         // Register core modules
         try core.registerModules(.{Logger});
@@ -173,7 +181,9 @@ pub const Core = struct {
         var i = self.modules.items.len;
         while (i > 0) : (i -= 1) {
             const module = &self.modules.items[i - 1];
-            self.log("deinit module {s}...", .{module.name});
+            if (self.config.logModuleInjection) {
+                self.log("deinit module {s}...", .{module.name});
+            }
             module.call_deinit();
         }
         i = self.modules.items.len;
@@ -205,7 +215,9 @@ pub const Core = struct {
             module.* = try .init(mod, self.platform.allocator);
         }
         for (self.modules.items[first..]) |*module| {
-            self.log("init module {s}...", .{module.name});
+            if (self.config.logModuleInjection) {
+                self.log("init module {s}...", .{module.name});
+            }
             try module.call_init(self);
         }
     }

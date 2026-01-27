@@ -1,6 +1,8 @@
 type transform
 position 0 0 0
+children [
 
+]
     type staticmesh
     transform transform
     mesh /assets/meshes/player
@@ -8,3 +10,7 @@ position 0 0 0
 
     type script
     path /assets/scripts/player
+
+TAbstractAppearanceChildNode
+
+TAbstractSingleTextureCoordinateNode

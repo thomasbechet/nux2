@@ -17,6 +17,9 @@ pub const NodeID = packed struct(u32) {
     pub fn setNull(self: *@This()) void {
         self.index = 0;
     }
+    pub fn value(self: @This()) u32 {
+        return @bitCast(self);
+    }
 
     version: Version,
     index: EntryIndex,
@@ -32,14 +35,23 @@ const NodeEntry = struct {
     child: EntryIndex = 0,
     name: [64]u8 = undefined,
     name_len: usize = 0,
+    hash: u64,
 
-    fn getName(self: *@This()) ?[]const u8 {
-        if (self.name_len == 0) return null;
+    fn sdbmHash(input: []const u8) u64 {
+        var hash: u64 = 0;
+        for (input) |char| {
+            hash = char + (hash << 6) + (hash << 16) - hash; // SDBM hash formula
+        }
+        return hash;
+    }
+
+    fn getName(self: *@This()) []const u8 {
         return self.name[0..self.name_len];
     }
     fn setName(self: *@This(), name: []const u8) void {
         std.mem.copyForwards(u8, &self.name, name);
         self.name_len = name.len;
+        self.hash = sdbmHash(self.getName());
     }
 };
 
@@ -358,6 +370,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     });
     _ = try self.empty_nodes.data.addOne(self.allocator);
     _ = try self.empty_nodes.ids.append(self.allocator, self.root);
+    try self.setName(self.root, "root");
 }
 pub fn deinit(self: *Self) void {
     self.names.deinit();
@@ -406,6 +419,12 @@ fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: Type
         }
         p.child = index;
     }
+
+    // Set default name
+    var w = std.Io.Writer.fixed(&node.name);
+    try w.print("{x}", .{id.value()});
+    node.name_len = w.end;
+
     return id;
 }
 fn removeEntry(self: *Self, id: NodeID) !void {
@@ -535,34 +554,9 @@ pub fn setName(self: *Self, id: NodeID, name: []const u8) !void {
 }
 pub fn getName(self: *Self, id: NodeID) ![]const u8 {
     const entry = try self.getEntry(id);
-    return entry.getName() orelse "";
+    return entry.getName();
 }
-fn dumpRecursive(self: *Self, index: EntryIndex, depth: u32) void {
-    const node = self.entries.items[index];
-    const typ = self.types.items[node.type_index];
-    if (depth > 0) {
-        for (0..depth - 1) |_| {
-            std.debug.print(" ", .{});
-        }
-        if (node.next != 0) {
-            std.debug.print("├─ ", .{});
-        } else {
-            std.debug.print("└─ ", .{});
-        }
-    }
-    const id = NodeID{
-        .index = index,
-        .version = node.version,
-    };
-    std.debug.print("0x{x:0>8} ({s})\n", .{ @as(u32, @bitCast(id)), typ.name });
 
-    var next = node.child;
-    while (next != 0) {
-        const child = self.entries.items[next];
-        dumpRecursive(self, next, depth + 1);
-        next = child.next;
-    }
-}
 const Dumper = struct {
     node: *Self,
     depth: u32 = 0,
@@ -582,10 +576,10 @@ const Dumper = struct {
         var w = std.Io.Writer.fixed(&buf);
         for (1..(self.depth + 1)) |i| {
             switch (self.header[i]) {
-                0 => try w.print("├─", .{}),
-                1 => try w.print("└─", .{}),
+                0 => try w.print("├─ ", .{}),
+                1 => try w.print("└─ ", .{}),
                 2 => try w.print("│ ", .{}),
-                3 => try w.print("  ", .{}),
+                3 => try w.print("   ", .{}),
                 else => {},
             }
         }
@@ -596,11 +590,7 @@ const Dumper = struct {
             self.header[self.depth] = 3;
         }
         // Print entry.
-        if (entry.getName()) |name| {
-            self.node.logger.info("{s}{s} {s}", .{ buf[0..w.end], name, typ.name });
-        } else {
-            self.node.logger.info("{s}0x{x:0>8} {s}", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name });
-        }
+        self.node.logger.info("{s}{s} ({s}) 0x{x}", .{ buf[0..w.end], entry.getName(), typ.name, id.value() });
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: NodeID) !void {

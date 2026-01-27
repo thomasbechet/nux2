@@ -33,7 +33,8 @@ const NodeEntry = struct {
     name: [64]u8 = undefined,
     name_len: usize = 0,
 
-    fn getName(self: *@This()) []const u8 {
+    fn getName(self: *@This()) ?[]const u8 {
+        if (self.name_len == 0) return null;
         return self.name[0..self.name_len];
     }
     fn setName(self: *@This(), name: []const u8) void {
@@ -472,8 +473,10 @@ pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []
         };
 
         // Register type
+        var it = std.mem.splitBackwardsScalar(u8, @typeName(T), '.');
+        const name = it.first();
         (try self.types.addOne(self.allocator)).* = .{
-            .name = @typeName(T),
+            .name = name,
             .v_ptr = module,
             .v_new = gen.new,
             .v_delete = gen.delete,
@@ -532,7 +535,7 @@ pub fn setName(self: *Self, id: NodeID, name: []const u8) !void {
 }
 pub fn getName(self: *Self, id: NodeID) ![]const u8 {
     const entry = try self.getEntry(id);
-    return entry.getName();
+    return entry.getName() orelse "";
 }
 fn dumpRecursive(self: *Self, index: EntryIndex, depth: u32) void {
     const node = self.entries.items[index];
@@ -593,7 +596,11 @@ const Dumper = struct {
             self.header[self.depth] = 3;
         }
         // Print entry.
-        self.node.logger.info("{s}{d} {s} \"{s}\"", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name, entry.getName() });
+        if (entry.getName()) |name| {
+            self.node.logger.info("{s}{s} {s}", .{ buf[0..w.end], name, typ.name });
+        } else {
+            self.node.logger.info("{s}0x{x:0>8} {s}", .{ buf[0..w.end], @as(u32, @bitCast(id)), typ.name });
+        }
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: NodeID) !void {

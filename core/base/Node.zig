@@ -434,27 +434,39 @@ fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: Type
     // Update parent
     if (parent.index != 0) {
         const p = &self.entries.items[parent.index];
-        if (p.first_child != 0) {
-            self.entries.items[p.first_child].prev = index;
-            node.next = p.first_child;
+        if (p.last_child != 0) {
+            self.entries.items[p.last_child].next = index;
+            node.prev = p.last_child;
+            p.last_child = index;
+        } else {
+            p.first_child = index;
+            p.last_child = index;
         }
-        p.first_child = index;
     }
 
     // Set default name
     var w = std.Io.Writer.fixed(&node.name);
-    try w.print("{x}", .{id.value()});
+    try w.print("node{d}", .{id.value()});
     node.name_len = w.end;
 
     return id;
 }
 fn removeEntry(self: *Self, id: NodeID) !void {
     var node = &self.entries.items[id.index];
-    // remove from parent
+    // Remove from parent
     if (node.parent != 0) {
         const p = &self.entries.items[node.parent];
         if (p.first_child == id.index) {
             p.first_child = node.next;
+        }
+        if (p.last_child == id.index) {
+            p.last_child = node.prev;
+        }
+        if (node.next != 0) {
+            self.entries.items[node.next].prev = node.prev;
+        }
+        if (node.prev != 0) {
+            self.entries.items[node.prev].next = node.next;
         }
     }
     // Update version and add to freelist
@@ -605,7 +617,6 @@ pub fn findChild(self: *Self, id: NodeID, name: []const u8) !NodeID {
 }
 pub fn setName(self: *Self, id: NodeID, name: []const u8) !void {
     const entry = try self.getEntry(id);
-    self.logger.info("{s} {d}", .{ name, entry.parent });
     if (self.getParent(id)) |parent| {
         // TODO implement bloom filter to optimize O(1)
         var it = try self.iterChildren(parent);
@@ -790,7 +801,9 @@ pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !NodeID {
         const typ = try self.findType(type_table[type_index]);
         const parent_node = if (parent_index != 0) nodes[parent_index - 1] else parent;
         nodes[index] = try typ.v_new(typ.v_ptr, parent_node);
-        try self.setName(nodes[index], name);
+        if (index != 0) { // Do not rename root node
+            try self.setName(nodes[index], name);
+        }
     }
     // Read node data
     for (nodes) |node| {

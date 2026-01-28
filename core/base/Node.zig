@@ -225,8 +225,8 @@ pub fn NodePool(comptime T: type) type {
 
         pub fn new(self: *@This(), parent: NodeID) !struct { id: NodeID, data: *T } {
             // Add entry
-            const pool_index = self.data.items.len;
-            const id = try self.node.addEntry(parent, @intCast(pool_index), self.type_index);
+            const pool_index: u32 = @intCast(self.data.items.len);
+            const id = try self.node.addEntry(parent, pool_index, self.type_index);
             // Add data entry
             const data_ptr = try self.data.addOne(self.allocator);
             const id_ptr = try self.ids.addOne(self.allocator);
@@ -250,8 +250,10 @@ pub fn NodePool(comptime T: type) type {
             }
             // Remove node from graph
             try self.node.removeEntry(id);
-            // Update last item before swap remove
-            self.node.updateEntry(self.ids.items[node.pool_index], node.pool_index);
+            if (self.data.items.len > 1) {
+                // Update last item before swap remove
+                self.node.updateEntry(self.ids.items[self.ids.items.len - 1], node.pool_index);
+            }
             // Remove from pool
             _ = self.data.swapRemove(node.pool_index);
             _ = self.ids.swapRemove(node.pool_index);
@@ -348,7 +350,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     try self.entries.append(self.allocator, .{});
     // Register empty node type.
     try self.registerNodeModule(Self, "empty_nodes", self);
-    // Create root node.
+    // Create root node manually.
     self.root = NodeID{
         .index = 1,
         .version = 1,
@@ -533,12 +535,37 @@ pub fn findType(self: *Self, name: []const u8) !*NodeType {
     }
     return error.unknownType;
 }
-pub fn find(self: *Self, path: []const u8) !NodeID {
-    _ = self;
-    _ = path;
+pub fn find(self: *Self, relativeTo: NodeID, path: []const u8) !NodeID {
+    const id = if (relativeTo.isNull() or std.mem.startsWith(u8, path, "/")) self.getRoot() else relativeTo;
+    const entry = try self.getEntry(id);
+    _ = entry;
+    var it = std.mem.splitScalar(u8, path, '/');
+    var ret = id;
+    while (it.next()) |part| {
+        if (part.len > 0) {
+            if (part[0] == '$') {
+                ret = try self.findChildType(ret, part[1..]);
+            } else {
+                ret = try self.findChild(ret, part);
+            }
+        }
+    }
+    return ret;
+}
+pub fn findGlobal(self: *Self, path: []const u8) !NodeID {
+    return self.find(self.getRoot(), path);
+}
+pub fn findChildType(self: *Self, id: NodeID, typename: []const u8) !NodeID {
+    var it = try self.iterChildren(id);
+    while (it.next()) |child| {
+        const typ = try self.getType(child);
+        if (std.mem.eql(u8, typ.name, typename)) {
+            return child;
+        }
+    }
     return .null;
 }
-pub fn findChildren(self: *Self, id: NodeID, name: []const u8) !NodeID {
+pub fn findChild(self: *Self, id: NodeID, name: []const u8) !NodeID {
     var it = try self.iterChildren(id);
     while (it.next()) |child| {
         if (std.mem.eql(u8, try self.getName(child), name)) {
@@ -589,7 +616,7 @@ const Dumper = struct {
             self.header[self.depth] = 3;
         }
         // Print entry.
-        self.node.logger.info("{s}{s} ({s}) {x}", .{ buf[0..w.end], entry.getName(), typ.name, id.value() });
+        self.node.logger.info("{s}{s} ({s}) {d}", .{ buf[0..w.end], entry.getName(), typ.name, id.value() });
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: NodeID) !void {

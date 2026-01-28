@@ -8,3 +8,4 @@ Node.newEmpty(Node.getRoot())
 
 Node.dump(Node.getRoot())
 Node.exportNode(Node.getRoot(), "scene.bin")
+print(Node.getParent(Node.getRoot()))

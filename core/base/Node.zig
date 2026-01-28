@@ -35,15 +35,6 @@ const NodeEntry = struct {
     child: EntryIndex = 0,
     name: [64]u8 = undefined,
     name_len: usize = 0,
-    hash: u64,
-
-    fn sdbmHash(input: []const u8) u64 {
-        var hash: u64 = 0;
-        for (input) |char| {
-            hash = char + (hash << 6) + (hash << 16) - hash; // SDBM hash formula
-        }
-        return hash;
-    }
 
     fn getName(self: *@This()) []const u8 {
         return self.name[0..self.name_len];
@@ -51,7 +42,6 @@ const NodeEntry = struct {
     fn setName(self: *@This(), name: []const u8) void {
         std.mem.copyForwards(u8, &self.name, name);
         self.name_len = name.len;
-        self.hash = sdbmHash(self.getName());
     }
 };
 
@@ -342,7 +332,7 @@ allocator: std.mem.Allocator,
 types: std.ArrayList(NodeType),
 entries: std.ArrayList(NodeEntry),
 free: std.ArrayList(EntryIndex),
-names: std.StringHashMap(NodeID),
+names: std.AutoArrayHashMap(u64, NodeID),
 empty_nodes: NodePool(struct { dummy: u32 }),
 root: NodeID,
 disk: *nux.Disk,
@@ -543,9 +533,18 @@ pub fn findType(self: *Self, name: []const u8) !*NodeType {
     }
     return error.unknownType;
 }
-pub fn find(self: *Self, name: []const u8) !NodeID {
+pub fn find(self: *Self, path: []const u8) !NodeID {
     _ = self;
-    _ = name;
+    _ = path;
+    return .null;
+}
+pub fn findChildren(self: *Self, id: NodeID, name: []const u8) !NodeID {
+    var it = try self.iterChildren(id);
+    while (it.next()) |child| {
+        if (std.mem.eql(u8, try self.getName(child), name)) {
+            return child;
+        }
+    }
     return .null;
 }
 pub fn setName(self: *Self, id: NodeID, name: []const u8) !void {
@@ -590,7 +589,7 @@ const Dumper = struct {
             self.header[self.depth] = 3;
         }
         // Print entry.
-        self.node.logger.info("{s}{s} ({s}) 0x{x}", .{ buf[0..w.end], entry.getName(), typ.name, id.value() });
+        self.node.logger.info("{s}{s} ({s}) {x}", .{ buf[0..w.end], entry.getName(), typ.name, id.value() });
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: NodeID) !void {

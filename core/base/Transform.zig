@@ -4,6 +4,7 @@ const nux = @import("../nux.zig");
 const Self = @This();
 
 nodes: nux.NodePool(struct {
+    parent: nux.NodeID = .null,
     position: nux.Vec3 = .zero(),
     scale: nux.Vec3 = .scalar(1),
     rotation: nux.Quat = .identity(),
@@ -29,4 +30,7 @@ pub fn getPosition(self: *Self, id: nux.NodeID) !nux.Vec3 {
 }
 pub fn setPosition(self: *Self, id: nux.NodeID, position: nux.Vec3) !void {
     (try self.nodes.get(id)).position = position;
+}
+pub fn setParent(self: *Self, id: nux.NodeID, parent: nux.NodeID) !void {
+    (try self.nodes.get(id)).position = parent;
 }

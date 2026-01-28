@@ -16,6 +16,7 @@ Node.newEmpty(assets)
 
 Node.dump(Node.getRoot())
 Node.exportNode(Node.getRoot(), "scene.bin")
-print(Node.getParent(Node.getRoot()))
 local tex = Node.find(Node.getRoot(), "/assets/$Texture")
 print(Node.getName(tex))
+Node.importNode(Node.getRoot(), "scene.bin")
+Node.dump(Node.getRoot())

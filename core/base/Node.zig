@@ -32,7 +32,8 @@ const NodeEntry = struct {
     parent: EntryIndex = 0,
     prev: EntryIndex = 0,
     next: EntryIndex = 0,
-    child: EntryIndex = 0,
+    first_child: EntryIndex = 0,
+    last_child: EntryIndex = 0,
     name: [64]u8 = undefined,
     name_len: usize = 0,
 
@@ -48,15 +49,28 @@ const NodeEntry = struct {
 pub const Writer = struct {
     writer: *std.Io.Writer,
     node: *Self,
+    nodes: []const NodeID,
 
     pub fn write(self: *@This(), v: anytype) !void {
         const T = @TypeOf(v);
         switch (T) {
             nux.NodeID => {
                 if (self.node.valid(v)) {
-                    // TODO find the node id in the written nodes to find its index
+                    try self.node.writePath(v, self.writer);
+                    var found = false;
+                    for (self.nodes, 0..) |id, index| {
+                        if (v == id) {
+                            try self.writer.writeByte(1); // Local path
+                            try self.writer.writeInt(u32, @intCast(index), .little);
+                            found = true;
+                        }
+                    }
+                    if (!found) { // write full path
+                        try self.writer.writeByte(2); // Global path
+                        try self.node.writePath(v, self.writer);
+                    }
                 } else {
-                    self.write(null);
+                    try self.writer.writeByte(0); // null
                 }
             },
             nux.Vec2, nux.Vec3, nux.Vec4 => {
@@ -123,6 +137,7 @@ pub const Writer = struct {
 pub const Reader = struct {
     reader: *std.Io.Reader,
     node: *Self,
+    nodes: []const NodeID,
 
     pub fn readString(self: *@This()) ![]u8 {
         const size = try self.read(u32);
@@ -131,11 +146,25 @@ pub const Reader = struct {
     pub fn read(self: *@This(), comptime T: type) !T {
         switch (T) {
             nux.NodeID => {
-                const data = self.reader.takeInt(u32, .little);
-                if (data != 0) {
-                    return data;
-                } else {
-                    return NodeID.null;
+                const path_type = try self.reader.takeByte();
+                switch (path_type) {
+                    0 => {
+                        return .null;
+                    },
+                    1 => {
+                        const local_index = try self.reader.takeInt(u32, .little);
+                        if (local_index > self.nodes.len) {
+                            return error.invalidLocalNodeIndex;
+                        }
+                        return self.nodes[local_index];
+                    },
+                    2 => {
+                        const global_path = try self.readString();
+                        return try self.node.findGlobal(global_path);
+                    },
+                    else => {
+                        return error.invalidPathType;
+                    },
                 }
             },
             nux.Vec2, nux.Vec3, nux.Vec4 => {
@@ -283,7 +312,7 @@ const ChildIterator = struct {
     fn init(self: *Self, id: NodeID) !@This() {
         return .{
             .self = self,
-            .current = (try self.getEntry(id)).child,
+            .current = (try self.getEntry(id)).first_child,
         };
     }
     fn next(it: *@This()) ?NodeID {
@@ -405,11 +434,11 @@ fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: Type
     // Update parent
     if (parent.index != 0) {
         const p = &self.entries.items[parent.index];
-        if (p.child != 0) {
-            self.entries.items[p.child].prev = index;
-            node.next = p.child;
+        if (p.first_child != 0) {
+            self.entries.items[p.first_child].prev = index;
+            node.next = p.first_child;
         }
-        p.child = index;
+        p.first_child = index;
     }
 
     // Set default name
@@ -424,8 +453,8 @@ fn removeEntry(self: *Self, id: NodeID) !void {
     // remove from parent
     if (node.parent != 0) {
         const p = &self.entries.items[node.parent];
-        if (p.child == id.index) {
-            p.child = node.next;
+        if (p.first_child == id.index) {
+            p.first_child = node.next;
         }
     }
     // Update version and add to freelist
@@ -521,7 +550,7 @@ pub fn getParent(self: *Self, id: NodeID) !NodeID {
             .version = self.entries.items[node.parent].version,
         };
     }
-    return .null;
+    return error.noParent;
 }
 pub fn getType(self: *Self, id: NodeID) !*NodeType {
     const node = try self.getEntry(id);
@@ -576,11 +605,39 @@ pub fn findChild(self: *Self, id: NodeID, name: []const u8) !NodeID {
 }
 pub fn setName(self: *Self, id: NodeID, name: []const u8) !void {
     const entry = try self.getEntry(id);
+    self.logger.info("{s} {d}", .{ name, entry.parent });
+    if (self.getParent(id)) |parent| {
+        // TODO implement bloom filter to optimize O(1)
+        var it = try self.iterChildren(parent);
+        while (it.next()) |child| {
+            if (child != id) {
+                if (std.mem.eql(u8, name, try self.getName(child))) {
+                    return error.duplicatedName;
+                }
+            }
+        }
+    } else |_| {}
     entry.setName(name);
 }
 pub fn getName(self: *Self, id: NodeID) ![]const u8 {
     const entry = try self.getEntry(id);
     return entry.getName();
+}
+fn writeEntryPath(self: *Self, entry: *NodeEntry, writer: *std.Io.Writer) !void {
+    if (entry.parent == 0) { // root node
+        return;
+    }
+    try self.writeEntryPath(&self.entries.items[entry.parent], writer);
+    _ = try writer.write("/");
+    _ = try writer.write(entry.getName());
+}
+fn writePath(self: *Self, id: NodeID, writer: *std.Io.Writer) !void {
+    const entry = try self.getEntry(id);
+    if (self.root == id) {
+        _ = try writer.write("/");
+    } else {
+        try self.writeEntryPath(entry, writer);
+    }
 }
 
 const Dumper = struct {
@@ -604,7 +661,7 @@ const Dumper = struct {
             switch (self.header[i]) {
                 0 => try w.print("├─ ", .{}),
                 1 => try w.print("└─ ", .{}),
-                2 => try w.print("│ ", .{}),
+                2 => try w.print("│  ", .{}),
                 3 => try w.print("   ", .{}),
                 else => {},
             }
@@ -632,10 +689,6 @@ pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
     var buf: [256]u8 = undefined;
     var file_writer: nux.Disk.FileWriter = try .open(self.disk, path, &buf);
     defer file_writer.close();
-    var writer: Writer = .{
-        .node = self,
-        .writer = &file_writer.interface,
-    };
     // Collect nodes
     var nodes = try self.collect(self.allocator, id);
     defer nodes.deinit(self.allocator);
@@ -655,6 +708,12 @@ pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
             try types.append(self.allocator, typ.name);
         }
     }
+    // Initialize writer
+    var writer: Writer = .{
+        .node = self,
+        .writer = &file_writer.interface,
+        .nodes = nodes.items,
+    };
     // Write type table
     try writer.write(@as(u32, @intCast(types.items.len)));
     for (types.items) |typ| {
@@ -665,15 +724,15 @@ pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
     for (nodes.items) |node| {
         // Find parent index
         // 0 => no local parent, only valid for root node
-        const parent = try self.getParent(node);
         var parent_index: u32 = 0;
-        for (nodes.items, 0..) |item, index| {
-            if (item == parent) {
-                parent_index = @intCast(index + 1);
-                break;
+        if (self.getParent(node)) |parent| {
+            for (nodes.items, 0..) |item, index| {
+                if (item == parent) {
+                    parent_index = @intCast(index + 1);
+                    break;
+                }
             }
-        }
-
+        } else |_| {}
         // Find type index
         const typ = try self.getType(node);
         var type_index: u32 = undefined;
@@ -682,9 +741,9 @@ pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
                 type_index = @intCast(index);
             }
         }
-
         try writer.write(type_index);
         try writer.write(parent_index);
+        try writer.write(try self.getName(node));
     }
     // Write nodes data
     for (nodes.items) |node| {
@@ -700,6 +759,7 @@ pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !NodeID {
     var reader: Reader = .{
         .reader = &data_reader,
         .node = self,
+        .nodes = &.{},
     };
     // Read type table
     const type_table_len = try reader.read(u32);
@@ -716,9 +776,11 @@ pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !NodeID {
     const node_count = try reader.read(u32);
     var nodes = try self.allocator.alloc(NodeID, node_count);
     defer self.allocator.free(nodes);
+    reader.nodes = nodes;
     for (0..node_count) |index| {
         const type_index = try reader.read(u32);
         const parent_index = try reader.read(u32);
+        const name = try reader.readString();
         if (type_index > type_table_len) {
             return error.invalidTypeIndex;
         }
@@ -728,6 +790,7 @@ pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !NodeID {
         const typ = try self.findType(type_table[type_index]);
         const parent_node = if (parent_index != 0) nodes[parent_index - 1] else parent;
         nodes[index] = try typ.v_new(typ.v_ptr, parent_node);
+        try self.setName(nodes[index], name);
     }
     // Read node data
     for (nodes) |node| {

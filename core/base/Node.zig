@@ -590,11 +590,10 @@ pub fn findType(self: *Self, name: []const u8) !*NodeType {
     return error.unknownType;
 }
 pub fn find(self: *Self, relativeTo: NodeID, path: []const u8) !NodeID {
-    const id = if (relativeTo.isNull() or std.mem.startsWith(u8, path, "/")) self.getRoot() else relativeTo;
-    const entry = try self.getEntry(id);
+    const entry = try self.getEntry(relativeTo);
     _ = entry;
     var it = std.mem.splitScalar(u8, path, '/');
-    var ret = id;
+    var ret = relativeTo;
     while (it.next()) |part| {
         if (part.len > 0) {
             if (part[0] == '$') {
@@ -617,7 +616,7 @@ pub fn findFirstChildType(self: *Self, id: NodeID, typename: []const u8) !NodeID
             return child;
         }
     }
-    return .null;
+    return error.childNotFound;
 }
 pub fn findChild(self: *Self, id: NodeID, name: []const u8) !NodeID {
     var it = try self.iterChildren(id);
@@ -626,7 +625,7 @@ pub fn findChild(self: *Self, id: NodeID, name: []const u8) !NodeID {
             return child;
         }
     }
-    return .null;
+    return error.childNotFound;
 }
 pub fn setName(self: *Self, id: NodeID, name: []const u8) !void {
     const entry = try self.getEntry(id);
@@ -697,7 +696,7 @@ const Dumper = struct {
             self.header[self.depth] = 3;
         }
         // Print entry.
-        self.node.logger.info("{s}{s} ({s}) {d}", .{ buf[0..w.end], entry.getName(), typ.name, id.value() });
+        self.node.logger.info("{s}\x1b[36m{s}\x1b[37m ({s}) {d}", .{ buf[0..w.end], entry.getName(), typ.name, id.value() });
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: NodeID) !void {

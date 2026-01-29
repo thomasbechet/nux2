@@ -546,6 +546,19 @@ pub fn new(self: *Self, typename: []const u8, parent: NodeID) !NodeID {
 pub fn newEmpty(self: *Self, parent: NodeID) !NodeID {
     return (try self.empty_nodes.new(parent)).id;
 }
+pub fn newPath(self: *Self, base: NodeID, path: []const u8) !NodeID {
+    var it = std.mem.splitScalar(u8, path, '/');
+    var node = base;
+    while (it.next()) |part| {
+        if (self.findChild(node, part)) |child| {
+            node = child;
+        } else |_| {
+            node = try self.newEmpty(node);
+            try self.setName(node, part);
+        }
+    }
+    return node;
+}
 pub fn delete(self: *Self, id: NodeID) !void {
     const typ = try self.getType(id);
     return typ.v_delete(typ.v_ptr, id);
@@ -585,7 +598,7 @@ pub fn find(self: *Self, relativeTo: NodeID, path: []const u8) !NodeID {
     while (it.next()) |part| {
         if (part.len > 0) {
             if (part[0] == '$') {
-                ret = try self.findChildType(ret, part[1..]);
+                ret = try self.findFirstChildType(ret, part[1..]);
             } else {
                 ret = try self.findChild(ret, part);
             }
@@ -596,7 +609,7 @@ pub fn find(self: *Self, relativeTo: NodeID, path: []const u8) !NodeID {
 pub fn findGlobal(self: *Self, path: []const u8) !NodeID {
     return self.find(self.getRoot(), path);
 }
-pub fn findChildType(self: *Self, id: NodeID, typename: []const u8) !NodeID {
+pub fn findFirstChildType(self: *Self, id: NodeID, typename: []const u8) !NodeID {
     var it = try self.iterChildren(id);
     while (it.next()) |child| {
         const typ = try self.getType(child);

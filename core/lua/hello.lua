@@ -1,3 +1,4 @@
+print(require)
 -- local n = Node.newEmpty(Node.getRoot())
 -- n = Node.newEmpty(n)
 -- n = Node.newEmpty(n)

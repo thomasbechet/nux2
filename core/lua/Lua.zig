@@ -26,10 +26,6 @@ const Error = error{
     LuaMsgHandler,
 };
 
-const Context = struct {
-    L: *c.lua_State,
-};
-
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
 lua: *c.lua_State,
@@ -336,6 +332,14 @@ fn openMath(lua: *c.lua_State) !void {
     c.luaL_setfuncs(lua, math_lib, 0);
     c.lua_setglobal(lua, "Math");
 }
+fn require(lua: ?*c.lua_State) callconv(.c) c_int {
+    _ = lua;
+    return 0;
+}
+fn openRequire(lua: *c.lua_State) !void {
+    c.lua_pushcfunction(lua, require);
+    c.lua_setglobal(lua, "require");
+}
 
 fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv(.c) ?*anyopaque {
     const alignment = @alignOf(UserData);
@@ -365,6 +369,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     // open api
     c.luaL_openlibs(self.lua);
     try openMath(self.lua);
+    try openRequire(self.lua);
     self.bindings.openModules(self.lua, core);
 }
 pub fn deinit(self: *Self) void {

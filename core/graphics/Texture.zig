@@ -7,12 +7,22 @@ const Self = @This();
 nodes: nux.NodePool(struct {
     data: ?[]u8 = null,
     size: nux.Vec2 = .zero(),
+    path: ?[]const u8 = null,
     pub fn init(_: *Self) !@This() {
         return .{};
     }
     pub fn deinit(self: *Self, texture: *@This()) void {
         if (texture.data) |data| {
             self.allocator.free(data);
+        }
+    }
+    pub fn save(_: *Self, writer: *nux.Writer, data: *@This()) !void {
+        try writer.write(data.path);
+    }
+    pub fn load(self: *Self, reader: *nux.Reader, data: *@This()) !void {
+        _ = data;
+        if (try reader.read(?[]const u8)) |path| {
+            self.logger.info("PATH {s}", .{path});
         }
     }
 }),

@@ -97,6 +97,14 @@ pub const Writer = struct {
                 .bool => {
                     try self.writer.writeByte(@bitCast(v));
                 },
+                .optional => {
+                    if (v) |data| {
+                        try self.writer.writeByte(1);
+                        try self.write(data);
+                    } else {
+                        try self.writer.writeByte(0);
+                    }
+                },
                 .@"struct" => |S| {
                     inline for (S.fields) |F| {
                         if (F.type == void) continue;
@@ -188,7 +196,14 @@ pub const Reader = struct {
                     return @as(T, @bitCast(try self.reader.takeLeb128(u32)));
                 },
                 .bool => {
-                    return try self.reader.takeByte();
+                    return try self.reader.takeByte() != 0;
+                },
+                .optional => |info| {
+                    if (try self.reader.takeByte() != 0) {
+                        return try self.read(info.child);
+                    } else {
+                        return null;
+                    }
                 },
                 .@"struct" => |S| {
                     var s: T = undefined;
@@ -539,11 +554,11 @@ pub fn registerNodeModule(self: *Self, comptime T: type, comptime field_name: []
     }
 }
 
-pub fn new(self: *Self, typename: []const u8, parent: NodeID) !NodeID {
+pub fn newFromName(self: *Self, typename: []const u8, parent: NodeID) !NodeID {
     const typ = try self.findType(typename);
     return typ.v_new(typ.v_ptr, parent);
 }
-pub fn newEmpty(self: *Self, parent: NodeID) !NodeID {
+pub fn new(self: *Self, parent: NodeID) !NodeID {
     return (try self.empty_nodes.new(parent)).id;
 }
 pub fn newPath(self: *Self, base: NodeID, path: []const u8) !NodeID {
@@ -553,7 +568,7 @@ pub fn newPath(self: *Self, base: NodeID, path: []const u8) !NodeID {
         if (self.findChild(node, part)) |child| {
             node = child;
         } else |_| {
-            node = try self.newEmpty(node);
+            node = try self.new(node);
             try self.setName(node, part);
         }
     }
@@ -696,7 +711,7 @@ const Dumper = struct {
             self.header[self.depth] = 3;
         }
         // Print entry.
-        self.node.logger.info("{s}\x1b[36m{s}\x1b[37m ({s}) {d}", .{ buf[0..w.end], entry.getName(), typ.name, id.value() });
+        self.node.logger.info("{s}\x1b[36m{s}\x1b[37m \x1b[31m{s}\x1b[37m", .{ buf[0..w.end], entry.getName(), typ.name });
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: NodeID) !void {

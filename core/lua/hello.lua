@@ -1,19 +1,20 @@
 print(require)
--- local n = Node.newEmpty(Node.getRoot())
--- n = Node.newEmpty(n)
--- n = Node.newEmpty(n)
--- n = Node.newEmpty(n)
--- n = Node.newEmpty(n)
--- n = Node.newEmpty(n)
+-- local n = Node.new(Node.getRoot())
+-- n = Node.new(n)
+-- n = Node.new(n)
+-- n = Node.new(n)
+-- n = Node.new(n)
+-- n = Node.new(n)
 -- Node.dump(Node.getRoot())
-local assets = Node.newEmpty(Node.getRoot())
+local assets = Node.new(Node.getRoot())
 Node.setName(assets, "assets")
 list = { 0, 1, 2, 3, 4, 5, 7, 9, 10, 11, 18, 19 }
 for _, i in ipairs(list) do
-    Node.setName(Texture.load(assets, "ideas/gui/pannel"..i..".jpg"), "texture"..i);
+    Node.setName(Texture.load(assets, "ideas/gui/pannel" .. i .. ".jpg"), "texture" .. i);
 end
-Node.newEmpty(Node.getRoot())
-Node.newEmpty(assets)
+Node.new(Node.getRoot())
+Node.new(assets)
 
-Node.newPath(Node.getRoot(), "hello/world")
+Node.newPath(Node.getRoot(), "coucou/Julia/Comment/ça/va")
+Node.newPath(Node.getRoot(), "coucou/Julia/Comment/coucou/va")
 Node.dump(Node.getRoot())

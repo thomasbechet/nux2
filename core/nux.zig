@@ -26,12 +26,14 @@ pub const Platform = struct {
     pub const Logger = @import("platform/Logger.zig");
     pub const Input = @import("platform/Input.zig");
     pub const File = @import("platform/File.zig");
+    pub const Dir = @import("platform/Dir.zig");
     pub const Event = union(enum) {
         input: Platform.Input.Event,
     };
     allocator: Platform.Allocator = std.heap.page_allocator,
     logger: Platform.Logger = .default,
     file: Platform.File = .default,
+    dir: Platform.Dir = .default,
 };
 
 pub const Module = struct {

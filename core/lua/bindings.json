@@ -36,6 +36,9 @@
             "path": "input/InputMap.zig"
         },
         {
+            "path": "base/SourceFile.zig"
+        },
+        {
             "path": "base/Script.zig"
         },
         {

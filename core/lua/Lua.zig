@@ -11,6 +11,10 @@ pub const c = @cImport({
 const Module = @This();
 const hello_file = @embedFile("hello.lua");
 
+pub const LuaModule = struct {
+    ref: c_int = 0,
+};
+
 const UserData = union(enum) {
     const Field = enum { x, y, z, w, normal, position };
     vec2: nux.Vec2,
@@ -29,10 +33,8 @@ const Error = error{
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
 node: *nux.Node,
-script: *nux.Script,
-lua: *c.lua_State,
+L: *c.lua_State,
 bindings: Bindings(c, nux, @This()),
-package: nux.NodeID,
 
 export fn lua_print(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
     const self: *Module = @ptrCast(@alignCast(ud));
@@ -46,16 +48,16 @@ export fn lua_printerror(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
 }
 
 fn loadString(self: *Module, s: []const u8, name: []const u8) !void {
-    const ret = c.luaL_loadbufferx(self.lua, s.ptr, s.len, name.ptr, null);
+    const ret = c.luaL_loadbufferx(self.L, s.ptr, s.len, name.ptr, null);
     if (ret != c.LUA_OK) {
-        self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
+        self.logger.err("{s}", .{c.lua_tolstring(self.L, -1, 0)});
         return error.luaLoadingError;
     }
 }
 fn protectedCall(self: *Module) !void {
-    const ret = c.lua_pcallk(self.lua, 0, c.LUA_MULTRET, 0, 0, null);
+    const ret = c.lua_pcallk(self.L, 0, c.LUA_MULTRET, 0, 0, null);
     if (ret != c.LUA_OK) {
-        self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
+        self.logger.err("{s}", .{c.lua_tolstring(self.L, -1, 0)});
         return error.luaCallError;
     }
 }
@@ -341,22 +343,23 @@ fn context(lua: ?*c.lua_State) *@This() {
     return @as(*Module, @ptrCast(@alignCast(ud)));
 }
 fn require(lua: ?*c.lua_State) callconv(.c) c_int {
-    const self = context(lua);
-    const path = std.mem.span(c.luaL_checklstring(lua, 1, null));
-    if (self.node.findChild(self.package, path)) |_| {
-        self.logger.info("FOUND {s}", .{path});
-    } else |_| {
-        var buf: [256]u8 = undefined;
-        var w = std.Io.Writer.fixed(&buf);
-        w.print("{s}.lua", .{path}) catch {
-            return c.luaL_error(lua, "invalid lua file path");
-        };
-        const final_path = buf[0..w.end];
-        const id = self.script.load(self.package, final_path) catch {
-            return c.luaL_error(lua, "failed to load lua file");
-        };
-        self.node.setName(id, path) catch unreachable;
-    }
+    _ = lua;
+    // const self = context(lua);
+    // const path = std.mem.span(c.luaL_checklstring(lua, 1, null));
+    // if (self.node.findChild(self.package, path)) |_| {
+    //     self.logger.info("FOUND {s}", .{path});
+    // } else |_| {
+    //     var buf: [256]u8 = undefined;
+    //     var w = std.Io.Writer.fixed(&buf);
+    //     w.print("{s}.lua", .{path}) catch {
+    //         return c.luaL_error(lua, "invalid lua file path");
+    //     };
+    //     const final_path = buf[0..w.end];
+    //     const id = self.script.load(self.package, final_path) catch {
+    //         return c.luaL_error(lua, "failed to load lua file");
+    //     };
+    //     self.node.setName(id, path) catch unreachable;
+    // }
     return 0;
 }
 fn openRequire(lua: *c.lua_State) !void {
@@ -387,20 +390,17 @@ fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv
 pub fn init(self: *Module, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 
-    // Create lua module node
-    self.package = try self.node.new(self.node.getRoot());
-    try self.node.setName(self.package, "lua");
     // Create lua VM
-    self.lua = c.lua_newstate(alloc, self, 0) orelse return error.newstate;
-    errdefer c.lua_close(self.lua);
+    self.L = c.lua_newstate(alloc, self, 0) orelse return error.newstate;
+    errdefer c.lua_close(self.L);
     // Open api
-    c.luaL_openlibs(self.lua);
-    try openMath(self.lua);
-    try openRequire(self.lua);
-    self.bindings.openModules(self.lua, core);
+    c.luaL_openlibs(self.L);
+    try openMath(self.L);
+    try openRequire(self.L);
+    self.bindings.openModules(self.L, core);
 }
 pub fn deinit(self: *Module) void {
-    c.lua_close(self.lua);
+    c.lua_close(self.L);
 }
 pub fn doString(self: *Module, source: []const u8, name: []const u8) !void {
     try loadString(self, source, name);
@@ -408,4 +408,51 @@ pub fn doString(self: *Module, source: []const u8, name: []const u8) !void {
 }
 pub fn callEntryPoint(self: *Module) !void {
     try self.doString(hello_file, "hello_file");
+}
+pub fn loadModule(self: *Module, previous: ?LuaModule, id: nux.NodeID, source: []const u8) !LuaModule {
+    const module_table = "M";
+    const module_id = "id";
+    var module: LuaModule = previous orelse .{};
+
+    // 1. keep previous module on stack
+    _ = c.lua_getglobal(self.L, module_table);
+
+    // 2. set global MODULE
+    if (module.ref != 0) {
+        _ = c.lua_rawgeti(self.L, c.LUA_REGISTRYINDEX, module.ref);
+        c.luaL_unref(self.L, c.LUA_REGISTRYINDEX, module.ref);
+    } else {
+        c.lua_newtable(self.L);
+        _ = c.lua_pushinteger(self.L, id.value());
+        c.lua_setfield(self.L, -2, module_id);
+    }
+    std.debug.assert(c.lua_istable(self.L, -1));
+    c.lua_setglobal(self.L, module_table);
+
+    // 3. execute module
+    const prev = c.lua_gettop(self.L);
+    try self.doString(source, "MODULE");
+
+    // 4. assign module table to registry
+    const nret = c.lua_gettop(self.L) - prev;
+    if (nret != 0) {
+        if (nret != 1 or !c.lua_istable(self.L, -1)) {
+            // return NUX_FAILURE,
+            // "lua module '%s' returned value is not a table",
+            // path);
+            return error.invalidReturnedLuaScript;
+        }
+    } else {
+        _ = c.lua_getglobal(self.L, module_table);
+        if (!c.lua_istable(self.L, -1)) {
+            // nux_ensure(lua_istable(L, -1), return NUX_FAILURE, "lua module table '%s' removed", path);
+            return error.luaTableRemoved;
+        }
+    }
+    module.ref = c.luaL_ref(self.L, c.LUA_REGISTRYINDEX);
+
+    // 5. reset previous MODULE global
+    c.lua_setglobal(self.L, module_table); // reset previous module
+
+    return module;
 }

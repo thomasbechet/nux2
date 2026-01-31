@@ -7,6 +7,7 @@ pub const Transform = @import("base/Transform.zig");
 pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
 pub const Lua = @import("lua/Lua.zig");
+pub const SourceFile = @import("base/SourceFile.zig");
 pub const Script = @import("base/Script.zig");
 pub const Texture = @import("graphics/Texture.zig");
 
@@ -161,6 +162,7 @@ pub const Core = struct {
             Disk,
             Transform,
             InputMap,
+            SourceFile,
             Script,
             Texture,
             Lua,

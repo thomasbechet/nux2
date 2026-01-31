@@ -8,6 +8,10 @@ pub const EntryIndex = u24;
 pub const PoolIndex = u32;
 pub const TypeIndex = u32;
 
+const EmptyNode = struct {
+    dummy: u32,
+};
+
 pub const NodeID = packed struct(u32) {
     pub const @"null" = @This(){ .version = 0, .index = 0 };
 
@@ -389,10 +393,6 @@ pub fn collect(self: *Module, allocator: std.mem.Allocator, id: NodeID) !std.Arr
     try self.visit(id, &collector);
     return collector.nodes;
 }
-
-const EmptyNode = struct {
-    dummy: u32,
-};
 
 allocator: std.mem.Allocator,
 types: std.ArrayList(NodeType),

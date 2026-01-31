@@ -18,8 +18,7 @@ const Node = struct {
             mod.allocator.free(path);
         }
     }
-    pub fn save(self: *@This(), mod: *Module, writer: *nux.Writer) !void {
-        _ = mod;
+    pub fn save(self: *@This(), _: *Module, writer: *nux.Writer) !void {
         try writer.write(self.path);
     }
     pub fn load(self: *@This(), mod: *Module, reader: *nux.Reader) !void {
@@ -33,7 +32,9 @@ const Node = struct {
         errdefer mod.allocator.free(data);
         var image = try zigimg.Image.fromMemory(mod.allocator, data);
         defer image.deinit(mod.allocator);
+        self.deinit(mod); // Free previous memory
         self.data = data;
+        self.path = try mod.allocator.dupe(u8, path);
     }
 };
 

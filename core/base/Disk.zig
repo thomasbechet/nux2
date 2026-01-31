@@ -1,7 +1,7 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
-const Self = @This();
+const Module = @This();
 
 const Cart = struct {
     const magic: [3]u8 = .{ 'n', 'u', 'x' };
@@ -24,18 +24,18 @@ const Cart = struct {
     path: []const u8,
     entries: std.StringHashMap(Entry),
 
-    fn init(self: *Self, path: []const u8) !@This() {
+    fn init(mod: *Module, path: []const u8) !@This() {
         // Open file
-        const handle = try self.platform.vtable.open(self.platform.ptr, path, .read);
-        errdefer self.platform.vtable.close(self.platform.ptr, handle);
+        const handle = try mod.platform.vtable.open(mod.platform.ptr, path, .read);
+        errdefer mod.platform.vtable.close(mod.platform.ptr, handle);
         // Get file stat
-        const stat = try self.platform.vtable.stat(self.platform.ptr, handle);
+        const stat = try mod.platform.vtable.stat(mod.platform.ptr, handle);
         if (stat.size < @sizeOf(HeaderData)) {
             return error.invalidCartSize;
         }
         // Read header
         var buf: [@sizeOf(HeaderData)]u8 = undefined;
-        try self.platform.vtable.read(self.platform.ptr, handle, &buf);
+        try mod.platform.vtable.read(mod.platform.ptr, handle, &buf);
         var reader = std.Io.Reader.fixed(&buf);
         const header = try reader.takeStruct(HeaderData, .little);
         if (!std.mem.eql(u8, &header.magic, &magic)) {
@@ -45,27 +45,27 @@ const Cart = struct {
             return error.invalidCartVersion;
         }
         // Allocate cart resources
-        const path_copy = try self.allocator.dupe(u8, path);
-        errdefer self.allocator.free(path_copy);
-        var entries: std.StringHashMap(Entry) = .init(self.allocator);
+        const path_copy = try mod.allocator.dupe(u8, path);
+        errdefer mod.allocator.free(path_copy);
+        var entries: std.StringHashMap(Entry) = .init(mod.allocator);
         // Read entries
         var entry_buf: [@sizeOf(EntryData)]u8 = undefined;
         var it: u32 = @sizeOf(HeaderData); // start after header
         while (it < stat.size) {
             // Seek to entry
-            try self.platform.vtable.seek(self.platform.ptr, handle, it);
-            try self.platform.vtable.read(self.platform.ptr, handle, &entry_buf);
+            try mod.platform.vtable.seek(mod.platform.ptr, handle, it);
+            try mod.platform.vtable.read(mod.platform.ptr, handle, &entry_buf);
             // Read entry
             reader = std.Io.Reader.fixed(&entry_buf);
             const entry = try reader.takeStruct(EntryData, .little);
             // Read path
-            const path_data = try self.allocator.alloc(u8, entry.path_len);
-            try self.platform.vtable.read(self.platform.ptr, handle, path_data);
+            const path_data = try mod.allocator.alloc(u8, entry.path_len);
+            try mod.platform.vtable.read(mod.platform.ptr, handle, path_data);
             // Insert entry
             const new_entry = try entries.getOrPut(path_data);
             if (new_entry.found_existing) {
-                self.logger.err("ignore duplicated entry '{s}' from '{s}'", .{ path_data, path });
-                self.allocator.free(path_data);
+                mod.logger.err("ignore duplicated entry '{s}' from '{s}'", .{ path_data, path });
+                mod.allocator.free(path_data);
             } else {
                 new_entry.value_ptr.* = .{
                     .length = entry.data_len,
@@ -81,22 +81,22 @@ const Cart = struct {
             .entries = entries,
         };
     }
-    fn deinit(cart: *@This(), self: *Self) void {
+    fn deinit(self: *@This(), mod: *Module) void {
         // Free carts
-        self.platform.vtable.close(self.platform.ptr, cart.handle);
-        self.allocator.free(cart.path);
+        mod.platform.vtable.close(mod.platform.ptr, self.handle);
+        mod.allocator.free(self.path);
         // Free entries
-        var it = cart.entries.iterator();
+        var it = self.entries.iterator();
         while (it.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
+            mod.allocator.free(entry.key_ptr.*);
         }
-        cart.entries.deinit();
+        self.entries.deinit();
     }
-    fn read(cart: *@This(), self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
-        if (cart.entries.get(path)) |entry| {
+    fn read(self: *@This(), mod: *Module, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+        if (self.entries.get(path)) |entry| {
             const buffer = try allocator.alloc(u8, entry.length);
-            try self.platform.vtable.seek(self.platform.ptr, cart.handle, entry.offset);
-            try self.platform.vtable.read(self.platform.ptr, cart.handle, buffer);
+            try mod.platform.vtable.seek(mod.platform.ptr, self.handle, entry.offset);
+            try mod.platform.vtable.read(mod.platform.ptr, self.handle, buffer);
             return buffer;
         }
         return error.entryNotFound;
@@ -106,22 +106,22 @@ const Cart = struct {
 const FileSystem = struct {
     path: []const u8,
 
-    fn init(self: *Self, path: []const u8) !@This() {
+    fn init(mod: *Module, path: []const u8) !@This() {
         return .{
-            .path = try self.allocator.dupe(u8, path),
+            .path = try mod.allocator.dupe(u8, path),
         };
     }
-    fn deinit(fs: *@This(), self: *Self) void {
-        self.allocator.free(fs.path);
+    fn deinit(self: *@This(), mod: *Module) void {
+        mod.allocator.free(self.path);
     }
-    fn read(fs: *@This(), self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
-        const final_path = try std.mem.concat(self.allocator, u8, &.{ fs.path, "/", path });
-        defer self.allocator.free(final_path);
-        const handle = try self.platform.vtable.open(self.platform.ptr, final_path, .read);
-        defer self.platform.vtable.close(self.platform.ptr, handle);
-        const stat = try self.platform.vtable.stat(self.platform.ptr, handle);
+    fn read(self: *@This(), mod: *Module, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+        const final_path = try std.mem.concat(mod.allocator, u8, &.{ self.path, "/", path });
+        defer mod.allocator.free(final_path);
+        const handle = try mod.platform.vtable.open(mod.platform.ptr, final_path, .read);
+        defer mod.platform.vtable.close(mod.platform.ptr, handle);
+        const stat = try mod.platform.vtable.stat(mod.platform.ptr, handle);
         const buffer = try allocator.alloc(u8, stat.size);
-        try self.platform.vtable.read(self.platform.ptr, handle, buffer);
+        try mod.platform.vtable.read(mod.platform.ptr, handle, buffer);
         return buffer;
     }
 };
@@ -130,23 +130,23 @@ const Disk = union(enum) {
     cart: Cart,
     fs: FileSystem,
 
-    fn deinit(disk: *@This(), self: *Self) void {
-        switch (disk.*) {
-            .cart => |*cart| cart.deinit(self),
-            .fs => |*fs| fs.deinit(self),
+    fn deinit(self: *@This(), mod: *Module) void {
+        switch (self.*) {
+            .cart => |*cart| cart.deinit(mod),
+            .fs => |*fs| fs.deinit(mod),
         }
     }
 };
 
 pub const FileWriter = struct {
-    disk: *Self,
+    disk: *Module,
     handle: nux.Platform.File.Handle,
     interface: std.Io.Writer,
 
-    pub fn open(self: *Self, path: []const u8, buffer: []u8) !@This() {
+    pub fn open(mod: *Module, path: []const u8, buffer: []u8) !@This() {
         return .{
-            .disk = self,
-            .handle = try self.platform.vtable.open(self.platform.ptr, path, .write_truncate),
+            .disk = mod,
+            .handle = try mod.platform.vtable.open(mod.platform.ptr, path, .write_truncate),
             .interface = .{
                 .vtable = &.{
                     .drain = drain,
@@ -155,34 +155,37 @@ pub const FileWriter = struct {
             },
         };
     }
-    pub fn close(w: *@This()) void {
-        w.interface.flush() catch {};
-        w.disk.platform.vtable.close(w.disk.platform.ptr, w.handle);
+    pub fn close(self: *@This()) void {
+        self.interface.flush() catch {};
+        self.disk.platform.vtable.close(self.disk.platform.ptr, self.handle);
     }
 
     fn drain(io_w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
         const w: *FileWriter = @alignCast(@fieldParentPtr("interface", io_w));
         const disk = w.disk;
         const buffered = io_w.buffered();
+        // Process buffered
         if (buffered.len != 0) {
             disk.platform.vtable.write(disk.platform.ptr, w.handle, buffered) catch {
                 return error.WriteFailed;
             };
-            return io_w.consume(buffered.len);
+            io_w.end = 0;
         }
+        // Process in data
         for (data[0 .. data.len - 1]) |buf| {
             if (buf.len == 0) continue;
             disk.platform.vtable.write(disk.platform.ptr, w.handle, buf) catch {
                 return error.WriteFailed;
             };
-            return io_w.consume(buf.len);
         }
+        // Process splat
         const pattern = data[data.len - 1];
         if (pattern.len == 0 or splat == 0) return 0;
         disk.platform.vtable.write(disk.platform.ptr, w.handle, pattern) catch {
             return error.WriteFailed;
         };
-        return io_w.consume(pattern.len);
+        // On success, we always process everything in `data`
+        return std.Io.Writer.countSplat(data, splat);
     }
 };
 
@@ -192,7 +195,7 @@ cart_writer: ?FileWriter,
 disks: std.ArrayList(Disk),
 logger: *nux.Logger,
 
-pub fn init(self: *Self, core: *const nux.Core) !void {
+pub fn init(self: *Module, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.platform = core.platform.file;
     self.disks = try .initCapacity(core.platform.allocator, 8);
@@ -207,18 +210,18 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     try self.mount("mycart.bin");
     self.log();
 }
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: *Module) void {
     for (self.disks.items) |*disk| {
         disk.deinit(self);
     }
     self.disks.deinit(self.allocator);
 }
 
-pub fn mount(self: *Self, path: []const u8) !void {
+pub fn mount(self: *Module, path: []const u8) !void {
     const cart: Cart = try .init(self, path);
     try self.disks.append(self.allocator, .{ .cart = cart });
 }
-pub fn log(self: *Self) void {
+pub fn log(self: *Module) void {
     for (self.disks.items) |disk| {
         switch (disk) {
             .cart => |cart| {
@@ -232,7 +235,7 @@ pub fn log(self: *Self) void {
         }
     }
 }
-pub fn readEntry(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+pub fn readEntry(self: *Module, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
     for (self.disks.items) |*disk| {
         switch (disk.*) {
             .cart => |*cart| return cart.read(self, path, allocator) catch {
@@ -245,13 +248,13 @@ pub fn readEntry(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![
     }
     return error.entryNotFound;
 }
-fn closeCartWriter(self: *Self) void {
+fn closeCartWriter(self: *Module) void {
     if (self.cart_writer) |*w| {
         w.close();
         self.cart_writer = null;
     }
 }
-pub fn writeCart(self: *Self, path: []const u8) !void {
+pub fn writeCart(self: *Module, path: []const u8) !void {
     // Create file
     self.cart_writer = try .open(self, path, &.{});
     errdefer self.closeCartWriter();
@@ -260,7 +263,7 @@ pub fn writeCart(self: *Self, path: []const u8) !void {
     _ = try w.interface.writeStruct(Cart.HeaderData{}, .little);
     try w.interface.flush();
 }
-pub fn writeEntry(self: *Self, path: []const u8, data: []const u8) !void {
+pub fn writeEntry(self: *Module, path: []const u8, data: []const u8) !void {
     if (self.cart_writer) |*w| {
         // Write entry
         try w.interface.writeStruct(Cart.EntryData{

@@ -1,7 +1,27 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
-const Self = @This();
+const Module = @This();
+const Node = union(enum) {
+    lua: struct {
+        path: []const u8,
+        source: []const u8,
+    },
+    none,
+
+    pub fn init(_: *Module) !@This() {
+        return .none;
+    }
+    pub fn deinit(self: *@This(), mod: *Module) void {
+        switch (self.*) {
+            .lua => |*lua| {
+                mod.allocator.free(lua.path);
+                mod.allocator.free(lua.source);
+            },
+            .none => {},
+        }
+    }
+};
 
 const Type = enum {
     lua,
@@ -12,31 +32,12 @@ allocator: std.mem.Allocator,
 lua: *nux.Lua,
 logger: *nux.Logger,
 disk: *nux.Disk,
-nodes: nux.NodePool(union(enum) {
-    lua: struct {
-        path: []const u8,
-        source: []const u8,
-    },
-    none,
+nodes: nux.NodePool(Node),
 
-    pub fn init(_: *Self) !@This() {
-        return .none;
-    }
-    pub fn deinit(self: *Self, script: *@This()) void {
-        switch (script.*) {
-            .lua => |*lua| {
-                self.allocator.free(lua.path);
-                self.allocator.free(lua.source);
-            },
-            .none => {},
-        }
-    }
-}),
-
-pub fn init(self: *Self, core: *const nux.Core) !void {
+pub fn init(self: *Module, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
-pub fn load(self: *Self, parent: nux.NodeID, path: []const u8) !nux.NodeID {
+pub fn load(self: *Module, parent: nux.NodeID, path: []const u8) !nux.NodeID {
     const node = try self.nodes.new(parent);
     const source = try self.disk.readEntry(path, self.allocator);
     errdefer self.allocator.free(source);

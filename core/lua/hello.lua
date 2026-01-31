@@ -16,5 +16,11 @@ Node.new(Node.getRoot())
 Node.new(assets)
 
 Node.newPath(Node.getRoot(), "coucou/Julia/Comment/ça/va")
-Node.newPath(Node.getRoot(), "coucou/Julia/Comment/coucou/va")
+-- Node.newPath(Node.getRoot(), "coucou/Julia/Comment/coucou/va")
+-- Node.dump(Node.getRoot())
+
+Node.exportNode(Node.getRoot(), "scene.bin")
+for i = 0, 10 do
+    Node.importNode(Node.getRoot(), "scene.bin")
+end
 Node.dump(Node.getRoot())

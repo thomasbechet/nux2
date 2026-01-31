@@ -8,7 +8,7 @@ pub const c = @cImport({
     @cInclude("lauxlib.h");
 });
 
-const Self = @This();
+const Module = @This();
 const hello_file = @embedFile("hello.lua");
 
 const UserData = union(enum) {
@@ -32,24 +32,24 @@ lua: *c.lua_State,
 bindings: Bindings(c, nux, @This()),
 
 export fn lua_print(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
-    const self: *Self = @ptrCast(@alignCast(ud));
+    const self: *Module = @ptrCast(@alignCast(ud));
     const str: [*:0]const u8 = std.mem.span(s);
     self.logger.info("{s}", .{str});
 }
 export fn lua_printerror(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
-    const self: *Self = @ptrCast(@alignCast(ud));
+    const self: *Module = @ptrCast(@alignCast(ud));
     const str: [*:0]const u8 = std.mem.span(s);
     self.logger.err("{s}", .{str});
 }
 
-fn loadString(self: *Self, s: []const u8, name: []const u8) !void {
+fn loadString(self: *Module, s: []const u8, name: []const u8) !void {
     const ret = c.luaL_loadbufferx(self.lua, s.ptr, s.len, name.ptr, null);
     if (ret != c.LUA_OK) {
         self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
         return error.luaLoadingError;
     }
 }
-fn protectedCall(self: *Self) !void {
+fn protectedCall(self: *Module) !void {
     const ret = c.lua_pcallk(self.lua, 0, c.LUA_MULTRET, 0, 0, null);
     if (ret != c.LUA_OK) {
         self.logger.err("{s}", .{c.lua_tolstring(self.lua, -1, 0)});
@@ -343,7 +343,7 @@ fn openRequire(lua: *c.lua_State) !void {
 
 fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv(.c) ?*anyopaque {
     const alignment = @alignOf(UserData);
-    const self: *Self = @ptrCast(@alignCast(ud.?));
+    const self: *Module = @ptrCast(@alignCast(ud.?));
     const allocator = self.allocator;
     if (@as(?[*]align(alignment) u8, @ptrCast(@alignCast(ptr)))) |prev_ptr| {
         const prev_slice = prev_ptr[0..osize];
@@ -361,7 +361,7 @@ fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv
     }
 }
 
-pub fn init(self: *Self, core: *const nux.Core) !void {
+pub fn init(self: *Module, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.lua = c.lua_newstate(alloc, self, 0) orelse return error.newstate;
     errdefer c.lua_close(self.lua);
@@ -372,13 +372,13 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     try openRequire(self.lua);
     self.bindings.openModules(self.lua, core);
 }
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: *Module) void {
     c.lua_close(self.lua);
 }
-pub fn doString(self: *Self, source: []const u8, name: []const u8) !void {
+pub fn doString(self: *Module, source: []const u8, name: []const u8) !void {
     try loadString(self, source, name);
     try protectedCall(self);
 }
-pub fn callEntryPoint(self: *Self) !void {
+pub fn callEntryPoint(self: *Module) !void {
     try self.doString(hello_file, "hello_file");
 }

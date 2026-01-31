@@ -27,5 +27,6 @@ Node.dump(Node.getRoot())
 Node.exportNode(Node.getRoot(), "root.bin")
 local c = Node.importNode(Node.getRoot(), "root.bin")
 -- Node.importNode(Node.getRoot(), "root.bin")
+
 Node.importNode(c, "root.bin")
 Node.dump(Node.getRoot())

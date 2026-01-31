@@ -1,18 +1,18 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
-const Self = @This();
+const Module = @This();
 
 initialized: bool = false,
 platform: nux.Platform.Logger,
 
-pub fn init(self: *Self, ctx: *const nux.Core) !void {
+pub fn init(self: *Module, ctx: *const nux.Core) !void {
     self.platform = ctx.platform.logger;
     self.initialized = true;
 }
 
 pub fn log(
-    self: *Self,
+    self: *Module,
     level: std.log.Level,
     comptime format: []const u8,
     args: anytype,
@@ -26,14 +26,14 @@ pub fn log(
     }
 }
 pub fn info(
-    self: *Self,
+    self: *Module,
     comptime format: []const u8,
     args: anytype,
 ) void {
     self.log(.info, format, args);
 }
 pub fn err(
-    self: *Self,
+    self: *Module,
     comptime format: []const u8,
     args: anytype,
 ) void {

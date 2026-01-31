@@ -1,4 +1,5 @@
-print(require)
+require("hello2")
+require("hello2")
 -- local n = Node.new(Node.getRoot())
 -- n = Node.new(n)
 -- n = Node.new(n)
@@ -17,6 +18,6 @@ Node.new(assets)
 
 Node.newPath(Node.getRoot(), "coucou/Julia/Comment/ça/va")
 -- Node.newPath(Node.getRoot(), "coucou/Julia/Comment/coucou/va")
--- Node.dump(Node.getRoot())
+Node.dump(Node.getRoot())
 
-Disk.listFiles()
+-- Disk.listFiles()

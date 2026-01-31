@@ -28,8 +28,11 @@ const Error = error{
 
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
+node: *nux.Node,
+script: *nux.Script,
 lua: *c.lua_State,
 bindings: Bindings(c, nux, @This()),
+package: nux.NodeID,
 
 export fn lua_print(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
     const self: *Module = @ptrCast(@alignCast(ud));
@@ -332,8 +335,28 @@ fn openMath(lua: *c.lua_State) !void {
     c.luaL_setfuncs(lua, math_lib, 0);
     c.lua_setglobal(lua, "Math");
 }
+fn context(lua: ?*c.lua_State) *@This() {
+    var ud: ?*anyopaque = undefined;
+    _ = c.lua_getallocf(lua, &ud);
+    return @as(*Module, @ptrCast(@alignCast(ud)));
+}
 fn require(lua: ?*c.lua_State) callconv(.c) c_int {
-    _ = lua;
+    const self = context(lua);
+    const path = std.mem.span(c.luaL_checklstring(lua, 1, null));
+    if (self.node.findChild(self.package, path)) |_| {
+        self.logger.info("FOUND {s}", .{path});
+    } else |_| {
+        var buf: [256]u8 = undefined;
+        var w = std.Io.Writer.fixed(&buf);
+        w.print("{s}.lua", .{path}) catch {
+            return c.luaL_error(lua, "invalid lua file path");
+        };
+        const final_path = buf[0..w.end];
+        const id = self.script.load(self.package, final_path) catch {
+            return c.luaL_error(lua, "failed to load lua file");
+        };
+        self.node.setName(id, path) catch unreachable;
+    }
     return 0;
 }
 fn openRequire(lua: *c.lua_State) !void {
@@ -363,10 +386,14 @@ fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv
 
 pub fn init(self: *Module, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
+
+    // Create lua module node
+    self.package = try self.node.new(self.node.getRoot());
+    try self.node.setName(self.package, "lua");
+    // Create lua VM
     self.lua = c.lua_newstate(alloc, self, 0) orelse return error.newstate;
     errdefer c.lua_close(self.lua);
-
-    // open api
+    // Open api
     c.luaL_openlibs(self.lua);
     try openMath(self.lua);
     try openRequire(self.lua);

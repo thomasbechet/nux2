@@ -382,13 +382,12 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
     try writer.print("pub fn Bindings(c: anytype, nux: anytype, Lua: anytype) type {{\n", .{});
     try writer.print("\treturn struct {{\n", .{});
     try writer.print(
-        \\      fn context(lua: ?*c.lua_State) *@This() {{
-        \\          var ud: ?*anyopaque = undefined;
-        \\          _ = c.lua_getallocf(lua, &ud);
-        \\          const self: *Lua = @ptrCast(@alignCast(ud));
-        \\          return &@field(self, "bindings");
-        \\      }}
-        \\
+        \\        fn context(lua: ?*c.lua_State) *@This() {{
+        \\            var ud: ?*anyopaque = undefined;
+        \\            _ = c.lua_getallocf(lua, &ud);
+        \\            const self: *Lua = @ptrCast(@alignCast(ud));
+        \\            return &@field(self, "bindings");
+        \\        }}
     , .{});
     for (modules.modules.items, 0..) |*module, module_index| {
         const module_name = std.fs.path.stem(module.path);

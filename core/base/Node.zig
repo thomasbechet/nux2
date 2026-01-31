@@ -398,8 +398,7 @@ allocator: std.mem.Allocator,
 types: std.ArrayList(NodeType),
 entries: std.ArrayList(NodeEntry),
 free: std.ArrayList(EntryIndex),
-names: std.AutoArrayHashMap(u64, NodeID),
-empty_nodes: NodePool(EmptyNode),
+nodes: NodePool(EmptyNode),
 root: NodeID,
 disk: *nux.Disk,
 logger: *nux.Logger,
@@ -409,27 +408,25 @@ pub fn init(self: *Module, core: *const nux.Core) !void {
     self.types = try .initCapacity(self.allocator, 64);
     self.entries = try .initCapacity(self.allocator, 1024);
     self.free = try .initCapacity(self.allocator, 1024);
-    self.names = .init(self.allocator);
     // Reserve index 0 for null id.
     try self.entries.append(self.allocator, .{});
     // Register empty node type.
-    try self.registerNodeModule(Module, "empty_nodes", self);
+    try self.registerNodeModule(self);
     // Create root node manually.
     self.root = NodeID{
         .index = 1,
         .version = 1,
     };
     try self.entries.append(self.allocator, .{
-        .type_index = self.empty_nodes.type_index,
+        .type_index = self.nodes.type_index,
         .pool_index = 0,
         .version = self.root.version,
     });
-    _ = try self.empty_nodes.data.addOne(self.allocator);
-    _ = try self.empty_nodes.ids.append(self.allocator, self.root);
+    _ = try self.nodes.data.addOne(self.allocator);
+    _ = try self.nodes.ids.append(self.allocator, self.root);
     try self.setName(self.root, "root");
 }
 pub fn deinit(self: *Module) void {
-    self.names.deinit();
     self.entries.deinit(self.allocator);
     self.free.deinit(self.allocator);
     for (self.types.items) |typ| {
@@ -528,7 +525,9 @@ fn getEntry(self: *Module, id: NodeID) !*NodeEntry {
 pub fn getRoot(self: *Module) NodeID {
     return self.root;
 }
-pub fn registerNodeModule(self: *Module, comptime T: type, comptime field_name: []const u8, module: *T) !void {
+pub fn registerNodeModule(self: *Module, module: anytype) !void {
+    const field_name = "nodes";
+    const T = @typeInfo(@TypeOf(module)).pointer.child;
     if (@hasField(T, field_name)) {
 
         // Init pool
@@ -579,7 +578,7 @@ pub fn newFromName(self: *Module, typename: []const u8, parent: NodeID) !NodeID 
     return typ.v_new(typ.v_ptr, parent);
 }
 pub fn new(self: *Module, parent: NodeID) !NodeID {
-    return (try self.empty_nodes.new(parent)).id;
+    return (try self.nodes.new(parent)).id;
 }
 pub fn newPath(self: *Module, base: NodeID, path: []const u8) !NodeID {
     var it = std.mem.splitScalar(u8, path, '/');

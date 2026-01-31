@@ -64,8 +64,10 @@ pub const Module = struct {
                     }
                 }
                 // nodes initialization
-                if (core.findModule(Node)) |node| {
-                    try node.registerNodeModule(T, "nodes", self);
+                if (T != Node) { // Node will register itself as node module
+                    if (core.findModule(Node)) |node| {
+                        try node.registerNodeModule(self);
+                    }
                 }
                 // initialize
                 if (@hasDecl(T, "init")) {

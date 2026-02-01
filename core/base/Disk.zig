@@ -202,15 +202,9 @@ pub fn init(self: *Module, core: *const nux.Core) !void {
     self.platform_dir = core.platform.dir;
     self.disks = try .initCapacity(core.platform.allocator, 8);
 
-    // add platform filesystem by default
+    // Add platform filesystem by default
     const fs: FileSystem = try .init(self, ".");
     try self.disks.append(self.allocator, .{ .fs = fs });
-
-    try self.writeCart("mycart.bin");
-    try self.writeEntry("myentry1", "myentry1");
-    try self.writeEntry("myentry2", "myentry2");
-    try self.mount("mycart.bin");
-    self.log();
 }
 pub fn deinit(self: *Module) void {
     for (self.disks.items) |*disk| {
@@ -223,7 +217,7 @@ pub fn mount(self: *Module, path: []const u8) !void {
     const cart: Cart = try .init(self, path);
     try self.disks.append(self.allocator, .{ .cart = cart });
 }
-pub fn log(self: *Module) void {
+pub fn logEntries(self: *Module) void {
     for (self.disks.items) |disk| {
         switch (disk) {
             .cart => |cart| {

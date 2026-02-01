@@ -393,6 +393,7 @@ pub fn init(self: *Module, core: *const nux.Core) !void {
     // Create lua VM
     self.L = c.lua_newstate(alloc, self, 0) orelse return error.newstate;
     errdefer c.lua_close(self.L);
+
     // Open api
     c.luaL_openlibs(self.L);
     try openMath(self.L);
@@ -409,15 +410,14 @@ pub fn doString(self: *Module, source: []const u8, name: []const u8) !void {
 pub fn callEntryPoint(self: *Module) !void {
     try self.doString(hello_file, "hello_file");
 }
-pub fn loadModule(self: *Module, previous: ?LuaModule, id: nux.NodeID, source: []const u8) !LuaModule {
+pub fn loadModule(self: *Module, module: *LuaModule, id: nux.NodeID, name: []const u8, source: []const u8) !void {
     const module_table = "M";
     const module_id = "id";
-    var module: LuaModule = previous orelse .{};
 
-    // 1. keep previous module on stack
+    // 1. Keep previous module on stack
     _ = c.lua_getglobal(self.L, module_table);
 
-    // 2. set global MODULE
+    // 2. Set global MODULE
     if (module.ref != 0) {
         _ = c.lua_rawgeti(self.L, c.LUA_REGISTRYINDEX, module.ref);
         c.luaL_unref(self.L, c.LUA_REGISTRYINDEX, module.ref);
@@ -429,30 +429,51 @@ pub fn loadModule(self: *Module, previous: ?LuaModule, id: nux.NodeID, source: [
     std.debug.assert(c.lua_istable(self.L, -1));
     c.lua_setglobal(self.L, module_table);
 
-    // 3. execute module
+    // 3. Execute module
     const prev = c.lua_gettop(self.L);
-    try self.doString(source, "MODULE");
+    try self.doString(source, name);
 
-    // 4. assign module table to registry
+    // 4. Assign module table to registry
     const nret = c.lua_gettop(self.L) - prev;
     if (nret != 0) {
         if (nret != 1 or !c.lua_istable(self.L, -1)) {
-            // return NUX_FAILURE,
             // "lua module '%s' returned value is not a table",
-            // path);
             return error.invalidReturnedLuaScript;
         }
     } else {
         _ = c.lua_getglobal(self.L, module_table);
         if (!c.lua_istable(self.L, -1)) {
-            // nux_ensure(lua_istable(L, -1), return NUX_FAILURE, "lua module table '%s' removed", path);
+            // "lua module table '%s' removed"
             return error.luaTableRemoved;
         }
     }
     module.ref = c.luaL_ref(self.L, c.LUA_REGISTRYINDEX);
 
-    // 5. reset previous MODULE global
-    c.lua_setglobal(self.L, module_table); // reset previous module
-
-    return module;
+    // 5. Reset previous MODULE global
+    c.lua_setglobal(self.L, module_table);
+}
+pub fn unloadModule(self: *Module, module: *LuaModule) !void {
+    // Unregister lua module
+    if (module.ref != 0) {
+        c.luaL_unref(self.L, c.LUA_REGISTRYINDEX, module.ref);
+    }
+}
+fn callFunction(self: *Module, nargs: c_int, nreturns: c_int) !void {
+    if (c.lua_pcallk(self.L, nargs, nreturns, 0, 0, null) != c.LUA_OK) {
+        return error.luaCallError;
+    }
+}
+pub fn callModule(self: *Module, module: *LuaModule, name: [*c]const u8, nargs: c_int) !void {
+    _ = c.lua_rawgeti(self.L, c.LUA_REGISTRYINDEX, module.ref);
+    std.debug.assert(c.lua_istable(self.L, -1));
+    // -1=M
+    _ = c.lua_getfield(self.L, -1, name);
+    // -2=M -1=F
+    if (c.lua_isfunction(self.L, -1)) {
+        c.lua_insert(self.L, -2 - nargs); // Move function before args
+        c.lua_insert(self.L, -1 - nargs); // Move module before args
+        try self.callFunction(1 + nargs, 0);
+    } else {
+        c.lua_pop(self.L, 2 + nargs); // Remove M + F + args
+    }
 }

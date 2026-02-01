@@ -9,6 +9,7 @@ pub const InputMap = @import("input/InputMap.zig");
 pub const Lua = @import("lua/Lua.zig");
 pub const SourceFile = @import("base/SourceFile.zig");
 pub const Script = @import("base/Script.zig");
+pub const Graphics = @import("graphics/Graphics.zig");
 pub const Texture = @import("graphics/Texture.zig");
 
 pub const NodeID = Node.NodeID;
@@ -164,6 +165,7 @@ pub const Core = struct {
             InputMap,
             SourceFile,
             Script,
+            Graphics,
             Texture,
             Lua,
         });

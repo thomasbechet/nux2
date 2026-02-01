@@ -42,6 +42,9 @@
             "path": "base/Script.zig"
         },
         {
+            "path": "graphics/Graphics.zig"
+        },
+        {
             "path": "graphics/Texture.zig"
         }
     ]

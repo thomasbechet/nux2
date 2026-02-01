@@ -573,7 +573,7 @@ pub fn registerNodeModule(self: *Module, module: anytype) !void {
     }
 }
 
-pub fn newFromName(self: *Module, typename: []const u8, parent: NodeID) !NodeID {
+pub fn newFromType(self: *Module, parent: NodeID, typename: []const u8) !NodeID {
     const typ = try self.findType(typename);
     return typ.v_new(typ.v_ptr, parent);
 }

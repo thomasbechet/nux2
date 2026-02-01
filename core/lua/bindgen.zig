@@ -374,6 +374,7 @@ const PrimitiveType = enum {
     Vec2,
     Vec3,
     Vec4,
+    Quat,
 };
 
 fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
@@ -410,6 +411,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                         .Vec2 => try writer.print("Lua.checkUserData(lua, .vec2, {d}).vec2;\n", .{i}),
                         .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d}).vec3;\n", .{i}),
                         .Vec4 => try writer.print("Lua.checkUserData(lua, .vec4, {d}).vec4;\n", .{i}),
+                        .Quat => try writer.print("Lua.checkUserData(lua, .quat, {d}).quat;\n", .{i}),
                         else => {},
                     }
                 } else { // enum constant
@@ -456,6 +458,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                         .Vec2 => try writer.print("Lua.pushUserData(lua, .vec2, ret);\n", .{}),
                         .Vec3 => try writer.print("Lua.pushUserData(lua, .vec3, ret);\n", .{}),
                         .Vec4 => try writer.print("Lua.pushUserData(lua, .vec4, ret);\n", .{}),
+                        .Quat => try writer.print("Lua.pushUserData(lua, .quat, ret);\n", .{}),
                         else => {
                             try writer.print("c.lua_pushinteger(lua, 1);\n", .{});
                         },

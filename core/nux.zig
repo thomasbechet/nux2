@@ -11,6 +11,10 @@ pub const SourceFile = @import("base/SourceFile.zig");
 pub const Script = @import("base/Script.zig");
 pub const Graphics = @import("graphics/Graphics.zig");
 pub const Texture = @import("graphics/Texture.zig");
+pub const Mesh = @import("graphics/Mesh.zig");
+pub const Material = @import("graphics/Material.zig");
+pub const StaticMesh = @import("graphics/StaticMesh.zig");
+pub const Camera = @import("graphics/Camera.zig");
 
 pub const NodeID = Node.NodeID;
 pub const NodePool = Node.NodePool;

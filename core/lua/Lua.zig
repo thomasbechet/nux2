@@ -20,6 +20,7 @@ const UserData = union(enum) {
     vec2: nux.Vec2,
     vec3: nux.Vec3,
     vec4: nux.Vec4,
+    quat: nux.Quat,
 };
 
 const Error = error{
@@ -141,6 +142,27 @@ fn metaIndex(lua: ?*c.lua_State) callconv(.c) c_int {
                 else => {},
             }
         },
+        .quat => |*v| {
+            switch (field) {
+                .x => {
+                    c.lua_pushnumber(lua, v.x);
+                    return 1;
+                },
+                .y => {
+                    c.lua_pushnumber(lua, v.y);
+                    return 1;
+                },
+                .z => {
+                    c.lua_pushnumber(lua, v.z);
+                    return 1;
+                },
+                .w => {
+                    c.lua_pushnumber(lua, v.w);
+                    return 1;
+                },
+                else => {},
+            }
+        },
     }
     return 0;
 }
@@ -176,6 +198,15 @@ fn metaNewIndex(lua: ?*c.lua_State) callconv(.c) c_int {
                 else => {},
             }
         },
+        .quat => |*v| {
+            switch (field) {
+                .x => v.x = @floatCast(c.luaL_checknumber(lua, 3)),
+                .y => v.y = @floatCast(c.luaL_checknumber(lua, 3)),
+                .z => v.z = @floatCast(c.luaL_checknumber(lua, 3)),
+                .w => v.w = @floatCast(c.luaL_checknumber(lua, 3)),
+                else => {},
+            }
+        },
     }
     return 0;
 }
@@ -185,6 +216,7 @@ fn metaToString(lua: ?*c.lua_State) callconv(.c) c_int {
         .vec2 => |*v| _ = c.lua_pushfstring(lua, "vec2(%f, %f)", v.data[0], v.data[1]),
         .vec3 => |*v| _ = c.lua_pushfstring(lua, "vec3(%f, %f, %f)", v.data[0], v.data[1], v.data[2]),
         .vec4 => |*v| _ = c.lua_pushfstring(lua, "vec4(%f, %f, %f, %f)", v.data[0], v.data[1], v.data[2], v.data[3]),
+        .quat => |*v| _ = c.lua_pushfstring(lua, "quat(%f, %f, %f, %f)", v.x, v.y, v.z, v.w),
     }
     return 1;
 }
@@ -238,6 +270,7 @@ fn metaAdd(lua: ?*c.lua_State) callconv(.c) c_int {
         .vec2 => return metaAddVec(lua, userdata, .vec2),
         .vec3 => return metaAddVec(lua, userdata, .vec3),
         .vec4 => return metaAddVec(lua, userdata, .vec4),
+        else => return c.luaL_error(lua, "invalid add operator on userdata"),
     }
     return 0;
 }
@@ -247,6 +280,7 @@ fn metaSub(lua: ?*c.lua_State) callconv(.c) c_int {
         .vec2 => return metaSubVec(lua, userdata, .vec2),
         .vec3 => return metaSubVec(lua, userdata, .vec3),
         .vec4 => return metaSubVec(lua, userdata, .vec4),
+        else => return c.luaL_error(lua, "invalid sub operator on userdata"),
     }
     return 0;
 }
@@ -256,6 +290,7 @@ fn metaMul(lua: ?*c.lua_State) callconv(.c) c_int {
         .vec2 => return metaMulVec(lua, userdata, .vec2),
         .vec3 => return metaMulVec(lua, userdata, .vec3),
         .vec4 => return metaMulVec(lua, userdata, .vec4),
+        else => return c.luaL_error(lua, "invalid mul operator on userdata"),
     }
     return 0;
 }
@@ -265,6 +300,7 @@ fn metaDiv(lua: ?*c.lua_State) callconv(.c) c_int {
         .vec2 => return metaDivVec(lua, userdata, .vec2),
         .vec3 => return metaDivVec(lua, userdata, .vec3),
         .vec4 => return metaDivVec(lua, userdata, .vec4),
+        else => return c.luaL_error(lua, "invalid div operator on userdata"),
     }
     return 0;
 }
@@ -283,6 +319,7 @@ fn metaNeg(lua: ?*c.lua_State) callconv(.c) c_int {
             pushUserData(lua, .vec4, v.neg());
             return 1;
         },
+        else => return c.luaL_error(lua, "invalid neg operator on userdata"),
     }
     return 0;
 }
@@ -309,6 +346,10 @@ fn mathVec3(lua: ?*c.lua_State) callconv(.c) c_int {
 }
 fn mathVec4(lua: ?*c.lua_State) callconv(.c) c_int {
     pushUserData(lua, .vec4, mathVec(lua, nux.Vec4));
+    return 1;
+}
+fn mathQuat(lua: ?*c.lua_State) callconv(.c) c_int {
+    pushUserData(lua, .quat, mathVec(lua, nux.Quat));
     return 1;
 }
 fn openMath(lua: *c.lua_State) !void {

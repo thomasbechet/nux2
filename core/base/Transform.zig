@@ -20,8 +20,6 @@ const Node = struct {
 };
 
 nodes: nux.NodePool(Node),
-node: *nux.Node,
-logger: *nux.Logger,
 
 pub fn new(self: *Module, parent: nux.NodeID) !nux.NodeID {
     return (try self.nodes.new(parent)).id;
@@ -31,6 +29,18 @@ pub fn getPosition(self: *Module, id: nux.NodeID) !nux.Vec3 {
 }
 pub fn setPosition(self: *Module, id: nux.NodeID, position: nux.Vec3) !void {
     (try self.nodes.get(id)).position = position;
+}
+pub fn getRotation(self: *Module, id: nux.NodeID) !nux.Quat {
+    return (try self.nodes.get(id)).rotation;
+}
+pub fn setRotation(self: *Module, id: nux.NodeID, rotation: nux.Quat) !void {
+    (try self.nodes.get(id)).rotation = rotation;
+}
+pub fn getScale(self: *Module, id: nux.NodeID) !nux.Vec3 {
+    return (try self.nodes.get(id)).scale;
+}
+pub fn setScale(self: *Module, id: nux.NodeID, scale: nux.Vec3) !void {
+    (try self.nodes.get(id)).scale = scale;
 }
 pub fn setParent(self: *Module, id: nux.NodeID, parent: nux.NodeID) !void {
     (try self.nodes.get(id)).parent = parent;

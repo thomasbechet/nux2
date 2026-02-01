@@ -46,6 +46,15 @@
         },
         {
             "path": "graphics/Texture.zig"
+        },
+        {
+            "path": "graphics/Material.zig"
+        },
+        {
+            "path": "graphics/Mesh.zig"
+        },
+        {
+            "path": "graphics/StaticMesh.zig"
         }
     ]
 }

@@ -8,6 +8,10 @@ node: *nux.Node,
 logger: *nux.Logger,
 disk: *nux.Disk,
 allocator: std.mem.Allocator,
+mesh: *nux.Mesh,
+texture: *nux.Texture,
+material: *nux.Material,
+staticmesh: *nux.StaticMesh,
 
 pub fn init(self: *Module, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;

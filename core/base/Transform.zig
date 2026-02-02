@@ -23,21 +23,20 @@ const Node = struct {
     pub fn load(self: *@This(), _: *Module, reader: *nux.Reader) !void {
         self.* = try reader.read(@This());
     }
-    pub fn getProperty(self: *Module, id: nux.NodeID, prop: Property) !nux.PropertyValue {
-        const v = try self.nodes.get(id);
+    pub fn getProperty(id: nux.NodeID, mod: *Module, prop: Property) !nux.PropertyValue {
         switch (prop) {
-            .position => return .{ .vec3 = self.getPosition(id) },
-            .rotation => return .{ .quat = self.getRotation(id) },
-            .scale => return .{ .vec3 = self.getScale(id) },
-            .parent => return .{ .id = v.parent },
+            .position => return .{ .vec3 = mod.getPosition(id) },
+            .rotation => return .{ .quat = mod.getRotation(id) },
+            .scale => return .{ .vec3 = mod.getScale(id) },
+            .parent => return .{ .id = mod.getParent(id) },
         }
     }
-    pub fn setProperty(self: *Module, id: nux.NodeID, prop: Property, value: nux.PropertyValue) void {
+    pub fn setProperty(id: nux.NodeID, mod: *Module, prop: Property, value: nux.PropertyValue) void {
         switch (prop) {
-            .position => self.setPosition(id, value.vec3),
-            .rotation => self.setRotation(id, value.quat),
-            .scale => self.setScale(id, value.vec3),
-            .parent => self.setParent(id, value.id),
+            .position => mod.setPosition(id, value.vec3),
+            .rotation => mod.setRotation(id, value.quat),
+            .scale => mod.setScale(id, value.vec3),
+            .parent => mod.setParent(id, value.id),
         }
     }
 };
@@ -64,6 +63,9 @@ pub fn getScale(self: *Module, id: nux.NodeID) !nux.Vec3 {
 }
 pub fn setScale(self: *Module, id: nux.NodeID, scale: nux.Vec3) !void {
     (try self.nodes.get(id)).scale = scale;
+}
+pub fn getParent(self: *Module, id: nux.NodeID) !nux.NodeID {
+    return (try self.nodes.get(id)).parent;
 }
 pub fn setParent(self: *Module, id: nux.NodeID, parent: nux.NodeID) !void {
     (try self.nodes.get(id)).parent = parent;

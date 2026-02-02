@@ -8,7 +8,7 @@ pub const EntryIndex = u24;
 pub const PoolIndex = u32;
 pub const TypeIndex = u32;
 
-const PropertyValue = union(enum) {
+pub const PropertyValue = union(enum) {
     id: nux.NodeID,
     vec2: nux.Vec2,
     vec3: nux.Vec3,
@@ -265,7 +265,7 @@ pub const NodeType = struct {
     v_deinit: *const fn (*anyopaque) void,
     v_save: *const fn (*anyopaque, writer: *Writer, id: NodeID) anyerror!void,
     v_load: *const fn (*anyopaque, reader: *Reader, id: NodeID) anyerror!void,
-    v_get_property: *const fn (*anyopaque, id: NodeID, name: []const u8) anyerror!PropertyValue,
+    v_get_property: *const fn (*anyopaque, id: NodeID, name: []const u8) anyerror!?PropertyValue,
     v_set_property: *const fn (*anyopaque, id: NodeID, name: []const u8, value: PropertyValue) anyerror!void,
 };
 
@@ -347,6 +347,19 @@ pub fn NodePool(comptime T: type) type {
                     reader,
                 );
             }
+        }
+        fn setProperty(self: *@This(), id: NodeID, name: []const u8, value: PropertyValue) !void {
+            const node = try self.node.getEntry(id);
+            if (@hasDecl(T, "setProperty")) {
+                try T.setProperty(&self.data.items[node.pool_index], @ptrCast(@alignCast(self.mod)), std.meta.stringToEnum(T.Property, name), value);
+            }
+        }
+        fn getProperty(self: *@This(), id: NodeID, name: []const u8) !?PropertyValue {
+            const node = try self.node.getEntry(id);
+            if (@hasDecl(T, "getProperty")) {
+                return try T.getProperty(&self.data.items[node.pool_index], @ptrCast(@alignCast(self.mod)), std.meta.stringToEnum(T.Property, name));
+            }
+            return null;
         }
     };
 }
@@ -566,6 +579,14 @@ pub fn registerNodeModule(self: *Module, module: anytype) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
                 return @field(mod, field_name).load(reader, id);
             }
+            fn setProperty(pointer: *anyopaque, id: NodeID, name: []const u8, value: PropertyValue) !void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                return @field(mod, field_name).setProperty(id, name, value);
+            }
+            fn getProperty(pointer: *anyopaque, id: NodeID, name: []const u8) !?PropertyValue {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                return @field(mod, field_name).getProperty(id, name);
+            }
         };
 
         // Register type
@@ -579,6 +600,8 @@ pub fn registerNodeModule(self: *Module, module: anytype) !void {
             .v_deinit = gen.deinit,
             .v_save = gen.save,
             .v_load = gen.load,
+            .v_get_property = gen.getProperty,
+            .v_set_property = gen.setProperty,
         };
     }
 }

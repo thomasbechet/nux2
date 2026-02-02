@@ -8,7 +8,7 @@ pub const c = @cImport({
     @cInclude("lauxlib.h");
 });
 
-const Module = @This();
+const Self = @This();
 const hello_file = @embedFile("hello.lua");
 
 pub const LuaModule = struct {
@@ -38,24 +38,24 @@ L: *c.lua_State,
 bindings: Bindings(c, nux, @This()),
 
 export fn lua_print(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
-    const self: *Module = @ptrCast(@alignCast(ud));
+    const self: *Self = @ptrCast(@alignCast(ud));
     const str: [*:0]const u8 = std.mem.span(s);
     self.logger.info("{s}", .{str});
 }
 export fn lua_printerror(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
-    const self: *Module = @ptrCast(@alignCast(ud));
+    const self: *Self = @ptrCast(@alignCast(ud));
     const str: [*:0]const u8 = std.mem.span(s);
     self.logger.err("{s}", .{str});
 }
 
-fn loadString(self: *Module, s: []const u8, name: []const u8) !void {
+fn loadString(self: *Self, s: []const u8, name: []const u8) !void {
     const ret = c.luaL_loadbufferx(self.L, s.ptr, s.len, name.ptr, null);
     if (ret != c.LUA_OK) {
         self.logger.err("{s}", .{c.lua_tolstring(self.L, -1, 0)});
         return error.luaLoadingError;
     }
 }
-fn protectedCall(self: *Module) !void {
+fn protectedCall(self: *Self) !void {
     const ret = c.lua_pcallk(self.L, 0, c.LUA_MULTRET, 0, 0, null);
     if (ret != c.LUA_OK) {
         self.logger.err("{s}", .{c.lua_tolstring(self.L, -1, 0)});
@@ -381,7 +381,7 @@ fn openMath(lua: *c.lua_State) !void {
 fn context(lua: ?*c.lua_State) *@This() {
     var ud: ?*anyopaque = undefined;
     _ = c.lua_getallocf(lua, &ud);
-    return @as(*Module, @ptrCast(@alignCast(ud)));
+    return @as(*Self, @ptrCast(@alignCast(ud)));
 }
 fn require(lua: ?*c.lua_State) callconv(.c) c_int {
     _ = lua;
@@ -410,7 +410,7 @@ fn openRequire(lua: *c.lua_State) !void {
 
 fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv(.c) ?*anyopaque {
     const alignment = @alignOf(UserData);
-    const self: *Module = @ptrCast(@alignCast(ud.?));
+    const self: *Self = @ptrCast(@alignCast(ud.?));
     const allocator = self.allocator;
     if (@as(?[*]align(alignment) u8, @ptrCast(@alignCast(ptr)))) |prev_ptr| {
         const prev_slice = prev_ptr[0..osize];
@@ -428,7 +428,7 @@ fn alloc(ud: ?*anyopaque, ptr: ?*anyopaque, osize: usize, nsize: usize) callconv
     }
 }
 
-pub fn init(self: *Module, core: *const nux.Core) !void {
+pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 
     // Create lua VM
@@ -441,17 +441,17 @@ pub fn init(self: *Module, core: *const nux.Core) !void {
     try openRequire(self.L);
     self.bindings.openModules(self.L, core);
 }
-pub fn deinit(self: *Module) void {
+pub fn deinit(self: *Self) void {
     c.lua_close(self.L);
 }
-pub fn doString(self: *Module, source: []const u8, name: []const u8) !void {
+pub fn doString(self: *Self, source: []const u8, name: []const u8) !void {
     try loadString(self, source, name);
     try protectedCall(self);
 }
-pub fn callEntryPoint(self: *Module) !void {
+pub fn callEntryPoint(self: *Self) !void {
     try self.doString(hello_file, "hello_file");
 }
-pub fn loadModule(self: *Module, module: *LuaModule, id: nux.NodeID, name: []const u8, source: []const u8) !void {
+pub fn loadModule(self: *Self, module: *LuaModule, id: nux.NodeID, name: []const u8, source: []const u8) !void {
     const module_table = "M";
     const module_id = "id";
 
@@ -493,18 +493,18 @@ pub fn loadModule(self: *Module, module: *LuaModule, id: nux.NodeID, name: []con
     // 5. Reset previous MODULE global
     c.lua_setglobal(self.L, module_table);
 }
-pub fn unloadModule(self: *Module, module: *LuaModule) !void {
+pub fn unloadModule(self: *Self, module: *LuaModule) !void {
     // Unregister lua module
     if (module.ref != 0) {
         c.luaL_unref(self.L, c.LUA_REGISTRYINDEX, module.ref);
     }
 }
-fn callFunction(self: *Module, nargs: c_int, nreturns: c_int) !void {
+fn callFunction(self: *Self, nargs: c_int, nreturns: c_int) !void {
     if (c.lua_pcallk(self.L, nargs, nreturns, 0, 0, null) != c.LUA_OK) {
         return error.luaCallError;
     }
 }
-pub fn callModule(self: *Module, module: *LuaModule, name: [*c]const u8, nargs: c_int) !void {
+pub fn callModule(self: *Self, module: *LuaModule, name: [*c]const u8, nargs: c_int) !void {
     _ = c.lua_rawgeti(self.L, c.LUA_REGISTRYINDEX, module.ref);
     std.debug.assert(c.lua_istable(self.L, -1));
     // -1=M

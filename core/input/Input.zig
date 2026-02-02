@@ -1,7 +1,7 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
-const Module = @This();
+const Self = @This();
 
 const Controller = struct {
     const max: u32 = 4;
@@ -143,14 +143,14 @@ logger: *nux.Logger,
 input_map: *nux.InputMap,
 events: std.ArrayList(nux.Platform.Input.Event),
 
-pub fn init(self: *Module, core: *const nux.Core) !void {
+pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.events = try .initCapacity(self.allocator, 32);
 }
-pub fn deinit(self: *Module) void {
+pub fn deinit(self: *Self) void {
     self.events.deinit(self.allocator);
 }
-pub fn onEvent(self: *Module, event: nux.Platform.Input.Event) void {
+pub fn onEvent(self: *Self, event: nux.Platform.Input.Event) void {
     self.logger.info("{any} {any}", .{ event.key, event.state });
     self.events.append(self.allocator, event) catch return;
 }
@@ -185,25 +185,25 @@ pub fn onEvent(self: *Module, event: nux.Platform.Input.Event) void {
 //     // map.entries
 // }
 
-pub fn isPressed(self: *Module, controller: u32, name: []const u8) bool {
+pub fn isPressed(self: *Self, controller: u32, name: []const u8) bool {
     _ = controller;
     _ = self;
     _ = name;
     return false;
 }
-pub fn isReleased(self: *Module, controller: u32, name: []const u8) bool {
+pub fn isReleased(self: *Self, controller: u32, name: []const u8) bool {
     _ = self;
     _ = controller;
     _ = name;
     return false;
 }
-pub fn isJustPressed(self: *Module, controller: u32, name: []const u8) bool {
+pub fn isJustPressed(self: *Self, controller: u32, name: []const u8) bool {
     _ = self;
     _ = controller;
     _ = name;
     return false;
 }
-pub fn isJustReleased(self: *Module, controller: u32, name: []const u8) bool {
+pub fn isJustReleased(self: *Self, controller: u32, name: []const u8) bool {
     _ = self;
     _ = controller;
     _ = name;

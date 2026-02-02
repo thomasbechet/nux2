@@ -2,7 +2,7 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 const Gltf = @import("zgltf").Gltf;
 
-const Module = @This();
+const Self = @This();
 
 node: *nux.Node,
 logger: *nux.Logger,
@@ -13,10 +13,10 @@ texture: *nux.Texture,
 material: *nux.Material,
 staticmesh: *nux.StaticMesh,
 
-pub fn init(self: *Module, core: *const nux.Core) !void {
+pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
-pub fn loadGltf(self: *Module, path: []const u8) !nux.NodeID {
+pub fn loadGltf(self: *Self, path: []const u8) !nux.NodeID {
     const buffer = try std.fs.cwd().readFileAllocOptions(self.allocator, path, 2_000_000, null, std.mem.Alignment.@"4", null);
     defer self.allocator.free(buffer);
 

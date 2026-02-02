@@ -1,7 +1,7 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
-const Module = @This();
+const Self = @This();
 
 pub const Version = u8;
 pub const EntryIndex = u24;
@@ -17,7 +17,7 @@ pub const PropertyValue = union(enum) {
 };
 
 const EmptyNode = struct {
-    dummy: u32,
+    dummy: u32 = 0,
 };
 
 pub const NodeID = packed struct(u32) {
@@ -60,7 +60,7 @@ const NodeEntry = struct {
 
 pub const Writer = struct {
     writer: *std.Io.Writer,
-    node: *Module,
+    node: *Self,
     nodes: []const NodeID,
 
     pub fn write(self: *@This(), v: anytype) !void {
@@ -157,7 +157,7 @@ pub const Writer = struct {
 };
 pub const Reader = struct {
     reader: *std.Io.Reader,
-    node: *Module,
+    node: *Self,
     nodes: []const NodeID,
 
     pub fn takeBytes(self: *@This()) ![]const u8 {
@@ -260,9 +260,9 @@ pub const Reader = struct {
 pub const NodeType = struct {
     name: []const u8,
     v_ptr: *anyopaque,
+    v_deinit: *const fn (*anyopaque) void,
     v_new: *const fn (*anyopaque, parent: NodeID) anyerror!NodeID,
     v_delete: *const fn (*anyopaque, id: NodeID) anyerror!void,
-    v_deinit: *const fn (*anyopaque) void,
     v_save: *const fn (*anyopaque, writer: *Writer, id: NodeID) anyerror!void,
     v_load: *const fn (*anyopaque, reader: *Reader, id: NodeID) anyerror!void,
     v_get_property: *const fn (*anyopaque, id: NodeID, name: []const u8) anyerror!?PropertyValue,
@@ -272,13 +272,13 @@ pub const NodeType = struct {
 pub fn NodePool(comptime T: type) type {
     return struct {
         allocator: std.mem.Allocator,
-        node: *Module,
+        node: *Self,
         mod: *anyopaque,
         type_index: TypeIndex,
         data: std.ArrayList(T),
         ids: std.ArrayList(NodeID),
 
-        fn init(mod: *Module, module: *anyopaque, type_index: TypeIndex) !@This() {
+        fn init(mod: *Self, module: *anyopaque, type_index: TypeIndex) !@This() {
             return .{ .allocator = mod.allocator, .type_index = type_index, .node = mod, .data = try .initCapacity(mod.allocator, 32), .ids = try .initCapacity(mod.allocator, 32), .mod = module };
         }
         fn deinit(self: *@This()) void {
@@ -286,7 +286,7 @@ pub fn NodePool(comptime T: type) type {
             self.ids.deinit(self.allocator);
         }
 
-        pub fn new(self: *@This(), parent: NodeID) !struct { id: NodeID, data: *T } {
+        pub fn new(self: *@This(), parent: NodeID, value: T) !NodeID {
             // Add entry
             const pool_index: u32 = @intCast(self.data.items.len);
             const id = try self.node.addEntry(parent, pool_index, self.type_index);
@@ -294,11 +294,8 @@ pub fn NodePool(comptime T: type) type {
             const data_ptr = try self.data.addOne(self.allocator);
             const id_ptr = try self.ids.addOne(self.allocator);
             id_ptr.* = id;
-            // Init node
-            if (@hasDecl(T, "init")) {
-                data_ptr.* = try T.init(@ptrCast(@alignCast(self.mod)));
-            }
-            return .{ .id = id, .data = data_ptr };
+            data_ptr.* = value;
+            return id;
         }
         fn delete(self: *@This(), id: NodeID) !void {
             const node = try self.node.getEntry(id);
@@ -306,13 +303,6 @@ pub fn NodePool(comptime T: type) type {
             var it = try self.node.iterChildren(id);
             while (it.next()) |child| {
                 try self.node.delete(child);
-            }
-            // Deinit node
-            if (@hasDecl(T, "deinit")) {
-                T.deinit(
-                    &self.data.items[node.pool_index],
-                    @ptrCast(@alignCast(self.mod)),
-                );
             }
             // Remove node from graph
             try self.node.removeEntry(id);
@@ -328,46 +318,13 @@ pub fn NodePool(comptime T: type) type {
             const node = try self.node.getEntry(id);
             return &self.data.items[node.pool_index];
         }
-        pub fn save(self: *@This(), writer: *Writer, id: NodeID) !void {
-            const node = try self.node.getEntry(id);
-            if (@hasDecl(T, "save")) {
-                try T.save(
-                    &self.data.items[node.pool_index],
-                    @ptrCast(@alignCast(self.mod)),
-                    writer,
-                );
-            }
-        }
-        pub fn load(self: *@This(), reader: *Reader, id: NodeID) !void {
-            const node = try self.node.getEntry(id);
-            if (@hasDecl(T, "save")) {
-                try T.load(
-                    &self.data.items[node.pool_index],
-                    @ptrCast(@alignCast(self.mod)),
-                    reader,
-                );
-            }
-        }
-        fn setProperty(self: *@This(), id: NodeID, name: []const u8, value: PropertyValue) !void {
-            const node = try self.node.getEntry(id);
-            if (@hasDecl(T, "setProperty")) {
-                try T.setProperty(&self.data.items[node.pool_index], @ptrCast(@alignCast(self.mod)), std.meta.stringToEnum(T.Property, name), value);
-            }
-        }
-        fn getProperty(self: *@This(), id: NodeID, name: []const u8) !?PropertyValue {
-            const node = try self.node.getEntry(id);
-            if (@hasDecl(T, "getProperty")) {
-                return try T.getProperty(&self.data.items[node.pool_index], @ptrCast(@alignCast(self.mod)), std.meta.stringToEnum(T.Property, name));
-            }
-            return null;
-        }
     };
 }
 
 const ChildIterator = struct {
-    self: *Module,
+    self: *Self,
     current: EntryIndex,
-    fn init(mod: *Module, id: NodeID) !@This() {
+    fn init(mod: *Self, id: NodeID) !@This() {
         return .{
             .self = mod,
             .current = (try mod.getEntry(id)).first_child,
@@ -384,10 +341,10 @@ const ChildIterator = struct {
         };
     }
 };
-pub fn iterChildren(self: *Module, id: NodeID) !ChildIterator {
+pub fn iterChildren(self: *Self, id: NodeID) !ChildIterator {
     return try .init(self, id);
 }
-pub fn visit(self: *Module, id: NodeID, visitor: anytype) !void {
+pub fn visit(self: *Self, id: NodeID, visitor: anytype) !void {
     const T = @typeInfo(@TypeOf(visitor)).pointer.child;
     if (@hasDecl(T, "onPreOrder")) {
         try visitor.onPreOrder(id);
@@ -400,7 +357,7 @@ pub fn visit(self: *Module, id: NodeID, visitor: anytype) !void {
         try visitor.onPostOrder(id);
     }
 }
-pub fn collect(self: *Module, allocator: std.mem.Allocator, id: NodeID) !std.ArrayList(NodeID) {
+pub fn collect(self: *Self, allocator: std.mem.Allocator, id: NodeID) !std.ArrayList(NodeID) {
     const Collector = struct {
         nodes: std.ArrayList(NodeID),
         allocator: std.mem.Allocator,
@@ -426,7 +383,7 @@ root: NodeID,
 disk: *nux.Disk,
 logger: *nux.Logger,
 
-pub fn init(self: *Module, core: *const nux.Core) !void {
+pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.types = try .initCapacity(self.allocator, 64);
     self.entries = try .initCapacity(self.allocator, 1024);
@@ -449,7 +406,7 @@ pub fn init(self: *Module, core: *const nux.Core) !void {
     _ = try self.nodes.ids.append(self.allocator, self.root);
     try self.setName(self.root, "root");
 }
-pub fn deinit(self: *Module) void {
+pub fn deinit(self: *Self) void {
     self.entries.deinit(self.allocator);
     self.free.deinit(self.allocator);
     for (self.types.items) |typ| {
@@ -458,7 +415,7 @@ pub fn deinit(self: *Module) void {
     self.types.deinit(self.allocator);
 }
 
-fn addEntry(self: *Module, parent: NodeID, pool_index: PoolIndex, type_index: TypeIndex) !NodeID {
+fn addEntry(self: *Self, parent: NodeID, pool_index: PoolIndex, type_index: TypeIndex) !NodeID {
     // Check parent
     if (!self.valid(parent)) {
         return error.invalidParent;
@@ -506,7 +463,7 @@ fn addEntry(self: *Module, parent: NodeID, pool_index: PoolIndex, type_index: Ty
 
     return id;
 }
-fn removeEntry(self: *Module, id: NodeID) !void {
+fn removeEntry(self: *Self, id: NodeID) !void {
     var node = &self.entries.items[id.index];
     // Remove from parent
     if (node.parent != 0) {
@@ -528,10 +485,10 @@ fn removeEntry(self: *Module, id: NodeID) !void {
     node.version += 1;
     (try self.free.addOne(self.allocator)).* = id.index;
 }
-fn updateEntry(self: *Module, id: NodeID, pool_index: PoolIndex) void {
+fn updateEntry(self: *Self, id: NodeID, pool_index: PoolIndex) void {
     self.entries.items[id.index].pool_index = pool_index;
 }
-fn getEntry(self: *Module, id: NodeID) !*NodeEntry {
+fn getEntry(self: *Self, id: NodeID) !*NodeEntry {
     if (id.isNull()) {
         return error.nullId;
     }
@@ -545,10 +502,10 @@ fn getEntry(self: *Module, id: NodeID) !*NodeEntry {
     return node;
 }
 
-pub fn getRoot(self: *Module) NodeID {
+pub fn getRoot(self: *Self) NodeID {
     return self.root;
 }
-pub fn registerNodeModule(self: *Module, module: anytype) !void {
+pub fn registerNodeModule(self: *Self, module: anytype) !void {
     const field_name = "nodes";
     const T = @typeInfo(@TypeOf(module)).pointer.child;
     if (@hasField(T, field_name)) {
@@ -559,33 +516,52 @@ pub fn registerNodeModule(self: *Module, module: anytype) !void {
 
         // Create vtable
         const gen = struct {
-            fn new(pointer: *anyopaque, parent: NodeID) !NodeID {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                return (try @field(mod, field_name).new(parent)).id;
-            }
-            fn delete(pointer: *anyopaque, id: NodeID) !void {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, field_name).delete(id);
-            }
             fn deinit(pointer: *anyopaque) void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
                 @field(mod, field_name).deinit();
             }
+            fn new(pointer: *anyopaque, parent: NodeID) !NodeID {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                if (@hasDecl(T, "new")) {
+                    return try mod.new(parent);
+                } else {
+                    return try @field(mod, field_name).new(parent, .{});
+                }
+            }
+            fn delete(pointer: *anyopaque, id: NodeID) !void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                if (@hasDecl(T, "delete") and T != Self) {
+                    return try mod.delete(id);
+                } else {
+                    return @field(mod, field_name).delete(id);
+                }
+            }
             fn save(pointer: *anyopaque, writer: *Writer, id: NodeID) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, field_name).save(writer, id);
+                if (@hasDecl(T, "save")) {
+                    return try mod.save(id, writer);
+                }
             }
             fn load(pointer: *anyopaque, reader: *Reader, id: NodeID) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, field_name).load(reader, id);
+                if (@hasDecl(T, "load")) {
+                    try mod.load(id, reader);
+                }
             }
             fn setProperty(pointer: *anyopaque, id: NodeID, name: []const u8, value: PropertyValue) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, field_name).setProperty(id, name, value);
+                if (@hasDecl(T, "setProperty")) {
+                    const enu = std.meta.stringToEnum(T.Property, name) orelse return error.invalidPropertyName;
+                    try mod.setProperty(id, enu, value);
+                }
             }
             fn getProperty(pointer: *anyopaque, id: NodeID, name: []const u8) !?PropertyValue {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, field_name).getProperty(id, name);
+                if (@hasDecl(T, "getProperty")) {
+                    const enu = std.meta.stringToEnum(T.Property, name) orelse return null;
+                    return try mod.getProperty(id, enu);
+                }
+                return null;
             }
         };
 
@@ -595,9 +571,9 @@ pub fn registerNodeModule(self: *Module, module: anytype) !void {
         (try self.types.addOne(self.allocator)).* = .{
             .name = name,
             .v_ptr = module,
+            .v_deinit = gen.deinit,
             .v_new = gen.new,
             .v_delete = gen.delete,
-            .v_deinit = gen.deinit,
             .v_save = gen.save,
             .v_load = gen.load,
             .v_get_property = gen.getProperty,
@@ -606,14 +582,14 @@ pub fn registerNodeModule(self: *Module, module: anytype) !void {
     }
 }
 
-pub fn newFromType(self: *Module, parent: NodeID, typename: []const u8) !NodeID {
+pub fn newFromType(self: *Self, parent: NodeID, typename: []const u8) !NodeID {
     const typ = try self.findType(typename);
     return typ.v_new(typ.v_ptr, parent);
 }
-pub fn new(self: *Module, parent: NodeID) !NodeID {
-    return (try self.nodes.new(parent)).id;
+pub fn new(self: *Self, parent: NodeID) !NodeID {
+    return (try self.nodes.new(parent, .{}));
 }
-pub fn newPath(self: *Module, base: NodeID, path: []const u8) !NodeID {
+pub fn newPath(self: *Self, base: NodeID, path: []const u8) !NodeID {
     var it = std.mem.splitScalar(u8, path, '/');
     var node = base;
     while (it.next()) |part| {
@@ -626,15 +602,15 @@ pub fn newPath(self: *Module, base: NodeID, path: []const u8) !NodeID {
     }
     return node;
 }
-pub fn delete(self: *Module, id: NodeID) !void {
+pub fn delete(self: *Self, id: NodeID) !void {
     const typ = try self.getType(id);
     return typ.v_delete(typ.v_ptr, id);
 }
-pub fn valid(self: *Module, id: NodeID) bool {
+pub fn valid(self: *Self, id: NodeID) bool {
     _ = self.getEntry(id) catch return false;
     return true;
 }
-pub fn getParent(self: *Module, id: NodeID) !NodeID {
+pub fn getParent(self: *Self, id: NodeID) !NodeID {
     const node = try self.getEntry(id);
     if (node.parent != 0) {
         return .{
@@ -644,11 +620,11 @@ pub fn getParent(self: *Module, id: NodeID) !NodeID {
     }
     return error.noParent;
 }
-pub fn getType(self: *Module, id: NodeID) !*NodeType {
+pub fn getType(self: *Self, id: NodeID) !*NodeType {
     const node = try self.getEntry(id);
     return &self.types.items[node.type_index];
 }
-pub fn findType(self: *Module, name: []const u8) !*NodeType {
+pub fn findType(self: *Self, name: []const u8) !*NodeType {
     for (self.types.items) |*typ| {
         if (std.mem.eql(u8, name, typ.name)) {
             return typ;
@@ -656,7 +632,7 @@ pub fn findType(self: *Module, name: []const u8) !*NodeType {
     }
     return error.unknownType;
 }
-pub fn find(self: *Module, relativeTo: NodeID, path: []const u8) !NodeID {
+pub fn find(self: *Self, relativeTo: NodeID, path: []const u8) !NodeID {
     const entry = try self.getEntry(relativeTo);
     _ = entry;
     var it = std.mem.splitScalar(u8, path, '/');
@@ -672,10 +648,10 @@ pub fn find(self: *Module, relativeTo: NodeID, path: []const u8) !NodeID {
     }
     return ret;
 }
-pub fn findGlobal(self: *Module, path: []const u8) !NodeID {
+pub fn findGlobal(self: *Self, path: []const u8) !NodeID {
     return self.find(self.getRoot(), path);
 }
-pub fn findFirstChildType(self: *Module, id: NodeID, typename: []const u8) !NodeID {
+pub fn findFirstChildType(self: *Self, id: NodeID, typename: []const u8) !NodeID {
     var it = try self.iterChildren(id);
     while (it.next()) |child| {
         const typ = try self.getType(child);
@@ -685,7 +661,7 @@ pub fn findFirstChildType(self: *Module, id: NodeID, typename: []const u8) !Node
     }
     return error.childNotFound;
 }
-pub fn findChild(self: *Module, id: NodeID, name: []const u8) !NodeID {
+pub fn findChild(self: *Self, id: NodeID, name: []const u8) !NodeID {
     var it = try self.iterChildren(id);
     while (it.next()) |child| {
         if (std.mem.eql(u8, try self.getName(child), name)) {
@@ -694,7 +670,7 @@ pub fn findChild(self: *Module, id: NodeID, name: []const u8) !NodeID {
     }
     return error.childNotFound;
 }
-pub fn setName(self: *Module, id: NodeID, name: []const u8) !void {
+pub fn setName(self: *Self, id: NodeID, name: []const u8) !void {
     const entry = try self.getEntry(id);
     if (self.getParent(id)) |parent| {
         // TODO implement bloom filter to optimize O(1)
@@ -709,11 +685,11 @@ pub fn setName(self: *Module, id: NodeID, name: []const u8) !void {
     } else |_| {}
     entry.setName(name);
 }
-pub fn getName(self: *Module, id: NodeID) ![]const u8 {
+pub fn getName(self: *Self, id: NodeID) ![]const u8 {
     const entry = try self.getEntry(id);
     return entry.getName();
 }
-fn writeEntryPath(self: *Module, entry: *NodeEntry, writer: *std.Io.Writer) !void {
+fn writeEntryPath(self: *Self, entry: *NodeEntry, writer: *std.Io.Writer) !void {
     if (entry.parent == 0) { // root node
         return;
     }
@@ -721,7 +697,7 @@ fn writeEntryPath(self: *Module, entry: *NodeEntry, writer: *std.Io.Writer) !voi
     _ = try writer.write("/");
     _ = try writer.write(entry.getName());
 }
-fn writePath(self: *Module, id: NodeID, writer: *std.Io.Writer) !void {
+fn writePath(self: *Self, id: NodeID, writer: *std.Io.Writer) !void {
     const entry = try self.getEntry(id);
     if (self.root == id) {
         _ = try writer.write("/");
@@ -731,7 +707,7 @@ fn writePath(self: *Module, id: NodeID, writer: *std.Io.Writer) !void {
 }
 
 const Dumper = struct {
-    node: *Module,
+    node: *Self,
     depth: u32 = 0,
     header: [256]u8 = undefined,
     // header_len: usize = 0,
@@ -770,12 +746,12 @@ const Dumper = struct {
         self.depth -= 1;
     }
 };
-pub fn dump(self: *Module, id: NodeID) void {
+pub fn dump(self: *Self, id: NodeID) void {
     var dumper = Dumper{ .node = self };
     self.visit(id, &dumper) catch {};
 }
 
-pub fn exportNode(self: *Module, id: NodeID, path: []const u8) !void {
+pub fn exportNode(self: *Self, id: NodeID, path: []const u8) !void {
     var buf: [512]u8 = undefined;
     var file_writer: nux.Disk.FileWriter = try .open(self.disk, path, &buf);
     defer file_writer.close();
@@ -841,7 +817,7 @@ pub fn exportNode(self: *Module, id: NodeID, path: []const u8) !void {
         try typ.v_save(typ.v_ptr, &writer, node);
     }
 }
-pub fn importNode(self: *Module, parent: NodeID, path: []const u8) !NodeID {
+pub fn importNode(self: *Self, parent: NodeID, path: []const u8) !NodeID {
     // Read entry
     const data = try self.disk.readEntry(path, self.allocator);
     defer self.allocator.free(data);

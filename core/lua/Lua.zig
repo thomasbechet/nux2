@@ -451,7 +451,7 @@ pub fn doString(self: *Self, source: []const u8, name: []const u8) !void {
 pub fn callEntryPoint(self: *Self) !void {
     try self.doString(hello_file, "hello_file");
 }
-pub fn loadModule(self: *Self, module: *LuaModule, id: nux.NodeID, name: []const u8, source: []const u8) !void {
+pub fn loadModule(self: *Self, module: *LuaModule, id: nux.ID, name: []const u8, source: []const u8) !void {
     const module_table = "M";
     const module_id = "id";
 

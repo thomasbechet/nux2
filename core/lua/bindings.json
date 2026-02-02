@@ -5,7 +5,7 @@
             "path": "base/Node.zig",
             "ignore": [
                 "NodePool",
-                "NodeID",
+                "ID",
                 "NodeEntry",
                 "NodeType",
                 "registerNodeModule",

@@ -21,16 +21,16 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
 
-pub fn new(self: *Self, parent: nux.NodeID) !nux.NodeID {
+pub fn new(self: *Self, parent: nux.ID) !nux.ID {
     return try self.nodes.new(parent, .{
         .entries = .init(self.allocator),
         .sensivity = 1,
     });
 }
-pub fn delete(self: *Self, id: nux.NodeID) !void {
+pub fn delete(self: *Self, id: nux.ID) !void {
     (try self.nodes.get(id)).entries.deinit();
 }
-pub fn bindKey(self: *Self, id: nux.NodeID, name: []const u8, key: Input.Key) !void {
+pub fn bindKey(self: *Self, id: nux.ID, name: []const u8, key: Input.Key) !void {
     // const map = try self.objects.get(id);
     // const entry = try map.entries.getOrPut(name);
     // entry.value_ptr.mapping.key = key;

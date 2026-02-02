@@ -16,7 +16,7 @@ staticmesh: *nux.StaticMesh,
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
-pub fn loadGltf(self: *Self, path: []const u8) !nux.NodeID {
+pub fn loadGltf(self: *Self, path: []const u8) !nux.ID {
     const buffer = try std.fs.cwd().readFileAllocOptions(self.allocator, path, 2_000_000, null, std.mem.Alignment.@"4", null);
     defer self.allocator.free(buffer);
 

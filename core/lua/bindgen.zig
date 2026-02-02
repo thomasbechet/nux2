@@ -273,7 +273,7 @@ const Modules = struct {
                     .@"enum" => |enu| enu.name,
                 };
                 var ignore = false;
-                for ([_][]const u8{ "init", "deinit", "onEvent" }) |keyword| {
+                for ([_][]const u8{ "init", "deinit", "onEvent", "setProperty", "getProperty" }) |keyword| {
                     if (std.mem.eql(u8, name, keyword)) {
                         ignore = true;
                     }

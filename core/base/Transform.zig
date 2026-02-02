@@ -2,11 +2,17 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 
 const Module = @This();
+pub const Property = enum {
+    position,
+    rotation,
+    scale,
+    parent,
+};
 const Node = struct {
-    parent: nux.NodeID = .null,
     position: nux.Vec3 = .zero(),
     scale: nux.Vec3 = .scalar(1),
     rotation: nux.Quat = .identity(),
+    parent: nux.NodeID = .null,
     pub fn init(_: *Module) !@This() {
         return .{};
     }
@@ -16,6 +22,23 @@ const Node = struct {
     }
     pub fn load(self: *@This(), _: *Module, reader: *nux.Reader) !void {
         self.* = try reader.read(@This());
+    }
+    pub fn getProperty(self: *Module, id: nux.NodeID, prop: Property) !nux.PropertyValue {
+        const v = try self.nodes.get(id);
+        switch (prop) {
+            .position => return .{ .vec3 = self.getPosition(id) },
+            .rotation => return .{ .quat = self.getRotation(id) },
+            .scale => return .{ .vec3 = self.getScale(id) },
+            .parent => return .{ .id = v.parent },
+        }
+    }
+    pub fn setProperty(self: *Module, id: nux.NodeID, prop: Property, value: nux.PropertyValue) void {
+        switch (prop) {
+            .position => self.setPosition(id, value.vec3),
+            .rotation => self.setRotation(id, value.quat),
+            .scale => self.setScale(id, value.vec3),
+            .parent => self.setParent(id, value.id),
+        }
     }
 };
 

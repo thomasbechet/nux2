@@ -8,6 +8,14 @@ pub const EntryIndex = u24;
 pub const PoolIndex = u32;
 pub const TypeIndex = u32;
 
+const PropertyValue = union(enum) {
+    id: nux.NodeID,
+    vec2: nux.Vec2,
+    vec3: nux.Vec3,
+    vec4: nux.Vec4,
+    quat: nux.Quat,
+};
+
 const EmptyNode = struct {
     dummy: u32,
 };
@@ -257,6 +265,8 @@ pub const NodeType = struct {
     v_deinit: *const fn (*anyopaque) void,
     v_save: *const fn (*anyopaque, writer: *Writer, id: NodeID) anyerror!void,
     v_load: *const fn (*anyopaque, reader: *Reader, id: NodeID) anyerror!void,
+    v_get_property: *const fn (*anyopaque, id: NodeID, name: []const u8) anyerror!PropertyValue,
+    v_set_property: *const fn (*anyopaque, id: NodeID, name: []const u8, value: PropertyValue) anyerror!void,
 };
 
 pub fn NodePool(comptime T: type) type {

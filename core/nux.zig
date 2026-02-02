@@ -17,6 +17,7 @@ pub const StaticMesh = @import("graphics/StaticMesh.zig");
 pub const Camera = @import("graphics/Camera.zig");
 
 pub const NodeID = Node.NodeID;
+pub const PropertyValue = Node.PropertyValue;
 pub const NodePool = Node.NodePool;
 pub const Writer = Node.Writer;
 pub const Reader = Node.Reader;

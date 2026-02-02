@@ -140,6 +140,7 @@ fn configCore(b: *std.Build, config: Config) void {
     });
     core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
     core.addIncludePath(b.path("externals/lua-5.5.0/"));
+    core.addIncludePath(b.path("externals/clay/"));
 
     // tests
     const tests = b.addTest(.{ .root_module = core });

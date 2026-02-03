@@ -105,8 +105,22 @@ fn configCore(b: *std.Build, config: Config) void {
     lua.addCSourceFiles(.{ .root = b.path("externals/lua-5.5.0/"), .files = lua_sources.items, .flags = lua_flags.items, .language = .c });
     lua.linkLibC();
 
+    // clay
+    const clay_mod = b.createModule(.{
+        .target = config.target,
+        .optimize = config.optimize,
+    });
+    const clay = b.addLibrary(.{
+        .name = "clay",
+        .linkage = .static,
+        .root_module = clay_mod,
+    });
+    clay.addIncludePath(b.path("externals/clay/"));
+    clay.addCSourceFiles(.{ .root = b.path("externals/clay/"), .files = &.{"clay_impl.c"}, .flags = &.{}, .language = .c });
+
     // zgltf
     const zgltf_pkg = b.dependency("zgltf", .{ .target = config.target, .optimize = config.optimize });
+
     // zigimg
     const zigimg_pkg = b.dependency("zigimg", .{ .target = config.target, .optimize = config.optimize });
 
@@ -136,6 +150,7 @@ fn configCore(b: *std.Build, config: Config) void {
             .{ .name = "zigimg", .module = zigimg_pkg.module("zigimg") },
             .{ .name = "lua", .module = lua_mod },
             .{ .name = "wren", .module = wren_mod },
+            .{ .name = "clay", .module = clay_mod },
         },
     });
     core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
@@ -213,7 +228,7 @@ fn configWeb(b: *std.Build, config: Config) void {
             .target = config.target,
             .optimize = config.optimize,
             .imports = &.{
-                .{ .name = "core", .module = b.modules.get("core").? },
+                .{ .name = "nux", .module = b.modules.get("nux").? },
             },
         }),
     });

@@ -1,5 +1,5 @@
 const std = @import("std");
-const core = @import("core");
+const nux = @import("nux");
 
 extern fn runtime_log(level: u32, msg: [*c]const u8, len: u32) void;
 
@@ -8,11 +8,9 @@ fn log(_: *anyopaque, level: std.log.Level, msg: [:0]const u8) void {
 }
 
 export fn runtime_init() void {
-    var c = core.Core.init(.{ 
-        .allocator = std.heap.wasm_allocator,
-        .logger = .{ .ptr = undefined, .vtable = &.{
+    var c = nux.Core.init(.{ .allocator = std.heap.wasm_allocator, .logger = .{ .ptr = undefined, .vtable = &.{
         .log = log,
-    } } }, .{}) catch unreachable;
+    } } }, .{}, .{}) catch unreachable;
     defer c.deinit();
     c.update() catch unreachable;
 }

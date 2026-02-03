@@ -15,6 +15,7 @@ pub const Mesh = @import("graphics/Mesh.zig");
 pub const Material = @import("graphics/Material.zig");
 pub const StaticMesh = @import("graphics/StaticMesh.zig");
 pub const Camera = @import("graphics/Camera.zig");
+pub const GUI = @import("gui/GUI.zig");
 
 pub const ID = Node.ID;
 pub const PropertyValue = Node.PropertyValue;
@@ -173,6 +174,7 @@ pub const Core = struct {
             Graphics,
             Texture,
             Lua,
+            GUI,
         });
 
         // Register user modules

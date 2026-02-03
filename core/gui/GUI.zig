@@ -1,37 +1,66 @@
 const nux = @import("../nux.zig");
 const std = @import("std");
-const c = @cImport({
-    @cInclude("clay.h");
-});
+const clay = @import("zclay");
 
 const Self = @This();
 
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
 
-fn errorHandlerFunction(errorData: c.Clay_ErrorData) callconv(.c) void {
-    // See the Clay_ErrorData struct for more information
-    std.log.err("{s}", .{errorData.errorText.chars});
+pub fn measureText(clay_text: []const u8, config: *clay.TextElementConfig, user_data: void) clay.Dimensions {
+    // clay.TextElementConfig contains members such as fontId, fontSize, letterSpacing etc
+    // Note: clay.String.chars is not guaranteed to be null terminated
+
+    _ = config;
+    _ = user_data;
+    return .{
+        .w = @floatFromInt(clay_text.len * 8),
+        .h = 8,
+    };
+}
+
+fn sidebarItemComponent(index: u32) void {
+    const sidebar_item_layout: clay.LayoutConfig = .{ .sizing = .{ .w = .grow, .h = .fixed(50) } };
+    const orange: clay.Color = .{ 225, 138, 50, 255 };
+    clay.UI()(.{
+        .id = .IDI("SidebarBlob", index),
+        .layout = sidebar_item_layout,
+        .background_color = orange,
+    })({});
 }
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 
     // Initialize clay
-    const memory_size = c.Clay_MinMemorySize();
-    const memory = try self.allocator.alloc(u8, memory_size);
+    const min_memory_size: u32 = clay.minMemorySize();
+    const memory = try self.allocator.alloc(u8, min_memory_size);
     defer self.allocator.free(memory);
-    const arena = c.Clay_CreateArenaWithCapacityAndMemory(memory_size, memory.ptr);
+    const arena: clay.Arena = clay.createArenaWithCapacityAndMemory(memory);
+    _ = clay.initialize(arena, .{ .h = 1000, .w = 1000 }, .{});
+    clay.setMeasureTextFunction(void, {}, measureText);
 
-    const width = 1000;
-    const height = 1000;
-    _ = c.Clay_Initialize(arena, .{ .width = width, .height = height }, .{ .errorHandlerFunction = errorHandlerFunction });
+    clay.setLayoutDimensions(.{ .h = 1000, .w = 1000 });
+    clay.setPointerState(.{ .x = 0, .y = 0 }, false);
+    clay.updateScrollContainers(false, .{ .x = 0, .y = 0 }, 0);
 
-    c.Clay_SetLayoutDimensions(.{ .height = height, .width = width });
-    c.Clay_SetPointerState(.{ .x = 0, .y = 0 }, false);
-    c.Clay_UpdateScrollContainers(false, .{ .x = 0, .y = 0 }, 0);
+    const light_grey: clay.Color = .{ 224, 215, 210, 255 };
 
-    c.Clay_BeginLayout();
-    const commands = c.Clay_EndLayout();
-    self.logger.info("CLAY COMMANDS {d}", .{commands.length});
+    clay.beginLayout();
+    clay.UI()(.{ // function call for creating a scope
+        .id = .ID("SideBar"),
+        .layout = .{
+            .direction = .top_to_bottom,
+            .sizing = .{ .w = .fixed(300), .h = .grow },
+            .padding = .all(16),
+            .child_alignment = .{ .x = .center, .y = .top },
+            .child_gap = 16,
+        },
+        .background_color = light_grey,
+    })({
+        sidebarItemComponent(0);
+    });
+
+    const commands = clay.endLayout();
+    self.logger.info("CLAY COMMANDS {d}", .{commands.len});
 }

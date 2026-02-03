@@ -8,6 +8,7 @@
         .zgltf = .{ .path = "externals/zgltf" },
         .zigimg = .{ .path = "externals/zigimg" },
         .zigglgen = .{ .path = "externals/zigglgen" },
+        .zclay = .{ .path = "externals/clay-zig-bindings" },
     },
     .paths = .{
         "build.zig",

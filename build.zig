@@ -106,17 +106,7 @@ fn configCore(b: *std.Build, config: Config) void {
     lua.linkLibC();
 
     // clay
-    const clay_mod = b.createModule(.{
-        .target = config.target,
-        .optimize = config.optimize,
-    });
-    const clay = b.addLibrary(.{
-        .name = "clay",
-        .linkage = .static,
-        .root_module = clay_mod,
-    });
-    clay.addIncludePath(b.path("externals/clay/"));
-    clay.addCSourceFiles(.{ .root = b.path("externals/clay/"), .files = &.{"clay_impl.c"}, .flags = &.{}, .language = .c });
+    const zclay_pkg = b.dependency("zclay", .{ .target = config.target, .optimize = config.optimize });
 
     // zgltf
     const zgltf_pkg = b.dependency("zgltf", .{ .target = config.target, .optimize = config.optimize });
@@ -150,12 +140,11 @@ fn configCore(b: *std.Build, config: Config) void {
             .{ .name = "zigimg", .module = zigimg_pkg.module("zigimg") },
             .{ .name = "lua", .module = lua_mod },
             .{ .name = "wren", .module = wren_mod },
-            .{ .name = "clay", .module = clay_mod },
+            .{ .name = "zclay", .module = zclay_pkg.module("zclay") },
         },
     });
     core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
     core.addIncludePath(b.path("externals/lua-5.5.0/"));
-    core.addIncludePath(b.path("externals/clay/"));
 
     // tests
     const tests = b.addTest(.{ .root_module = core });

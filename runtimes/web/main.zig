@@ -10,7 +10,7 @@ fn log(_: *anyopaque, level: std.log.Level, msg: [:0]const u8) void {
 export fn runtime_init() void {
     var c = nux.Core.init(.{ .allocator = std.heap.wasm_allocator, .logger = .{ .ptr = undefined, .vtable = &.{
         .log = log,
-    } } }, .{}, .{}) catch unreachable;
+    } } }) catch unreachable;
     defer c.deinit();
     c.update() catch unreachable;
 }

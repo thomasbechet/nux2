@@ -41,12 +41,18 @@ pub const Platform = struct {
         input: Platform.Input.Event,
         window: Platform.Window.Event,
     };
+    pub const Config = struct {
+        logModuleInjection: bool = false,
+        entryPoint: []const u8 = ".",
+    };
     allocator: Platform.Allocator = std.heap.page_allocator,
-    logger: Platform.Logger = .default,
-    file: Platform.File = .default,
-    dir: Platform.Dir = .default,
-    window: Platform.Window = .default,
-    gpu: Platform.GPU = .default,
+    logger: Platform.Logger = .{},
+    file: Platform.File = .{},
+    dir: Platform.Dir = .{},
+    window: Platform.Window = .{},
+    gpu: Platform.GPU = .{},
+
+    config: Platform.Config = .{},
 };
 
 pub const Module = struct {
@@ -69,7 +75,7 @@ pub const Module = struct {
                     switch (@typeInfo(field.type)) {
                         .pointer => |info| {
                             if (core.findModule(info.child)) |dependency| {
-                                if (core.config.logModuleInjection) {
+                                if (core.platform.config.logModuleInjection) {
                                     core.log("inject {s} to {s}", .{ @typeName(info.child), @typeName(T) });
                                 }
                                 @field(self, field.name) = dependency;
@@ -141,14 +147,9 @@ pub const Module = struct {
     }
 };
 
-pub const Config = struct {
-    logModuleInjection: bool = false,
-};
-
 pub const Core = struct {
-    modules: std.ArrayList(Module),
     platform: Platform,
-    config: Config,
+    modules: std.ArrayList(Module),
 
     fn log(
         self: *Core,
@@ -160,11 +161,10 @@ pub const Core = struct {
         }
     }
 
-    pub fn init(platform: Platform, config: Config, comptime mods: anytype) !*Core {
+    pub fn init(platform: Platform) !*Core {
         var core = try platform.allocator.create(@This());
         core.platform = platform;
         core.modules = try .initCapacity(platform.allocator, 32);
-        core.config = config;
 
         // Register core modules
         try core.registerModules(.{Logger});
@@ -182,13 +182,10 @@ pub const Core = struct {
             GUI,
         });
 
-        // Register user modules
-        try core.registerModules(mods);
-
         // Call entry point
         errdefer core.deinit();
         var lua = core.findModule(Lua) orelse unreachable;
-        try lua.callEntryPoint();
+        try lua.callEntryPoint(core.platform.config.entryPoint);
 
         return core;
     }
@@ -201,7 +198,7 @@ pub const Core = struct {
         var i = self.modules.items.len;
         while (i > 0) : (i -= 1) {
             const module = &self.modules.items[i - 1];
-            if (self.config.logModuleInjection) {
+            if (self.platform.config.logModuleInjection) {
                 self.log("deinit module {s}...", .{module.name});
             }
             module.call_deinit();
@@ -236,7 +233,7 @@ pub const Core = struct {
             module.* = try .init(mod, self.platform.allocator);
         }
         for (self.modules.items[first..]) |*module| {
-            if (self.config.logModuleInjection) {
+            if (self.platform.config.logModuleInjection) {
                 self.log("init module {s}...", .{module.name});
             }
             try module.call_init(self);

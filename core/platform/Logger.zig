@@ -1,11 +1,11 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
-ptr: *anyopaque,
-vtable: *const VTable,
+ptr: *anyopaque = undefined,
+vtable: *const VTable = &.{},
 
 pub const VTable = struct {
-    log: *const fn (*anyopaque, level: std.log.Level, msg: [:0]const u8) void,
+    log: *const fn (*anyopaque, level: std.log.Level, msg: [:0]const u8) void = Default.log,
 };
 
 const Default = struct {
@@ -18,7 +18,3 @@ const Default = struct {
         }
     }
 };
-
-pub const default: @This() = .{ .ptr = undefined, .vtable = &.{
-    .log = Default.log,
-} };

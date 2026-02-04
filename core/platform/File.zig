@@ -1,8 +1,8 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
-ptr: *anyopaque,
-vtable: *const VTable,
+ptr: *anyopaque = undefined,
+vtable: *const VTable = &.{},
 
 pub const Mode = enum {
     read,
@@ -17,12 +17,12 @@ pub const Stat = struct {
 pub const Handle = *anyopaque;
 
 pub const VTable = struct {
-    open: *const fn (*anyopaque, path: []const u8, mode: Mode) anyerror!Handle,
-    close: *const fn (*anyopaque, handle: Handle) void,
-    stat: *const fn (*anyopaque, handle: Handle) anyerror!Stat,
-    seek: *const fn (*anyopaque, handle: Handle, cursor: u32) anyerror!void,
-    read: *const fn (*anyopaque, handle: Handle, data: []u8) anyerror!void,
-    write: *const fn (*anyopaque, handle: Handle, data: []const u8) anyerror!void,
+    open: *const fn (*anyopaque, path: []const u8, mode: Mode) anyerror!Handle = Default.open,
+    close: *const fn (*anyopaque, handle: Handle) void = Default.close,
+    stat: *const fn (*anyopaque, handle: Handle) anyerror!Stat = Default.stat,
+    seek: *const fn (*anyopaque, handle: Handle, cursor: u32) anyerror!void = Default.seek,
+    read: *const fn (*anyopaque, handle: Handle, data: []u8) anyerror!void = Default.read,
+    write: *const fn (*anyopaque, handle: Handle, data: []const u8) anyerror!void = Default.write,
 };
 
 const Default = struct {
@@ -68,12 +68,3 @@ const Default = struct {
         _ = try file.file.write(data);
     }
 };
-
-pub const default: @This() = .{ .ptr = undefined, .vtable = &.{
-    .open = Default.open,
-    .close = Default.close,
-    .stat = Default.stat,
-    .seek = Default.seek,
-    .read = Default.read,
-    .write = Default.write,
-} };

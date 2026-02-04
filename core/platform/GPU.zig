@@ -1,17 +1,17 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
-ptr: *anyopaque,
-vtable: *const VTable,
+ptr: *anyopaque = undefined,
+vtable: *const VTable = &.{},
 
 pub const Handle = *anyopaque;
 
 pub const TextureInfo = struct {};
 
 pub const VTable = struct {
-    create_texture: *const fn (*anyopaque, info: TextureInfo) anyerror!Handle,
-    delete_texture: *const fn (*anyopaque, handle: Handle) anyerror!void,
-    update_texture: *const fn (*anyopaque, x: u32, y: u32, w: u32, h: u32, data: []const u8) anyerror!void,
+    create_texture: *const fn (*anyopaque, info: TextureInfo) anyerror!Handle = Default.createTexture,
+    delete_texture: *const fn (*anyopaque, handle: Handle) anyerror!void = Default.deleteTexture,
+    update_texture: *const fn (*anyopaque, x: u32, y: u32, w: u32, h: u32, data: []const u8) anyerror!void = Default.updateTexture,
 };
 
 const Default = struct {
@@ -29,9 +29,3 @@ const Default = struct {
         _ = data;
     }
 };
-
-pub const default: @This() = .{ .ptr = undefined, .vtable = &.{
-    .create_texture = Default.createTexture,
-    .delete_texture = Default.deleteTexture,
-    .update_texture = Default.updateTexture,
-} };

@@ -448,7 +448,8 @@ pub fn doString(self: *Self, source: []const u8, name: []const u8) !void {
     try loadString(self, source, name);
     try protectedCall(self);
 }
-pub fn callEntryPoint(self: *Self) !void {
+pub fn callEntryPoint(self: *Self, entryPoint: []const u8) !void {
+    self.logger.info("ENTRY :{s}", .{entryPoint});
     try self.doString(hello_file, "hello_file");
 }
 pub fn loadModule(self: *Self, module: *LuaModule, id: nux.ID, name: []const u8, source: []const u8) !void {

@@ -1,8 +1,8 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
-ptr: *anyopaque,
-vtable: *const VTable,
+ptr: *anyopaque = undefined,
+vtable: *const VTable = &.{},
 
 pub const Entry = struct { name: []const u8, kind: enum {
     file,
@@ -12,9 +12,9 @@ pub const Entry = struct { name: []const u8, kind: enum {
 pub const Handle = *anyopaque;
 
 pub const VTable = struct {
-    open: *const fn (*anyopaque, path: []const u8) anyerror!Handle,
-    close: *const fn (*anyopaque, handle: Handle) void,
-    next: *const fn (*anyopaque, handle: Handle) anyerror!?Entry,
+    open: *const fn (*anyopaque, path: []const u8) anyerror!Handle = Default.open,
+    close: *const fn (*anyopaque, handle: Handle) void = Default.close,
+    next: *const fn (*anyopaque, handle: Handle) anyerror!?Entry = Default.next,
 };
 
 const Default = struct {
@@ -58,9 +58,3 @@ const Default = struct {
         return null;
     }
 };
-
-pub const default: @This() = .{ .ptr = undefined, .vtable = &.{
-    .open = Default.open,
-    .close = Default.close,
-    .next = Default.next,
-} };

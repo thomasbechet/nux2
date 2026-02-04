@@ -1,16 +1,16 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 
-ptr: *anyopaque,
-vtable: *const VTable,
+ptr: *anyopaque = undefined,
+vtable: *const VTable = &.{},
 
 pub const Handle = *anyopaque;
 
 pub const Event = struct { width: u32, height: u32 };
 
 pub const VTable = struct {
-    open: *const fn (*anyopaque, w: u32, h: u32) anyerror!Handle,
-    close: *const fn (*anyopaque, handle: Handle) void,
+    open: *const fn (*anyopaque, w: u32, h: u32) anyerror!Handle = Default.open,
+    close: *const fn (*anyopaque, handle: Handle) void = Default.close,
 };
 
 const Default = struct {
@@ -25,7 +25,3 @@ const Default = struct {
         _ = handle;
     }
 };
-pub const default: @This() = .{ .ptr = undefined, .vtable = &.{
-    .open = Default.open,
-    .close = Default.close,
-} };

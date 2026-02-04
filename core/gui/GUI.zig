@@ -8,9 +8,6 @@ allocator: std.mem.Allocator,
 logger: *nux.Logger,
 
 pub fn measureText(clay_text: []const u8, config: *clay.TextElementConfig, user_data: void) clay.Dimensions {
-    // clay.TextElementConfig contains members such as fontId, fontSize, letterSpacing etc
-    // Note: clay.String.chars is not guaranteed to be null terminated
-
     _ = config;
     _ = user_data;
     return .{
@@ -47,7 +44,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     const light_grey: clay.Color = .{ 224, 215, 210, 255 };
 
     clay.beginLayout();
-    clay.UI()(.{ // function call for creating a scope
+    clay.UI()(.{
         .id = .ID("SideBar"),
         .layout = .{
             .direction = .top_to_bottom,
@@ -63,4 +60,10 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 
     const commands = clay.endLayout();
     self.logger.info("CLAY COMMANDS {d}", .{commands.len});
+
+    for (commands) |command| {
+        switch (command.command_type) {
+            else => {}
+        }
+    }
 }

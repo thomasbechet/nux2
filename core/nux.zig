@@ -33,15 +33,20 @@ pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;
     pub const Logger = @import("platform/Logger.zig");
     pub const Input = @import("platform/Input.zig");
+    pub const Window = @import("platform/Window.zig");
     pub const File = @import("platform/File.zig");
     pub const Dir = @import("platform/Dir.zig");
+    pub const GPU = @import("platform/GPU.zig");
     pub const Event = union(enum) {
         input: Platform.Input.Event,
+        window: Platform.Window.Event,
     };
     allocator: Platform.Allocator = std.heap.page_allocator,
     logger: Platform.Logger = .default,
     file: Platform.File = .default,
     dir: Platform.Dir = .default,
+    window: Platform.Window = .default,
+    gpu: Platform.GPU = .default,
 };
 
 pub const Module = struct {
@@ -219,6 +224,7 @@ pub const Core = struct {
         const input = self.findModule(Input) orelse return;
         switch (event) {
             .input => |e| input.onEvent(e),
+            .window => |_| {},
         }
     }
 

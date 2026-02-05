@@ -19,7 +19,6 @@ pub fn main() !void {
     };
     if (args.len > 1) {
         platform.config.entryPoint = args[1];
-        std.log.info("TEST", .{});
     }
 
     // Run core

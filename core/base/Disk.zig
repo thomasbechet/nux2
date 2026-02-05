@@ -285,6 +285,9 @@ pub fn listFiles(self: *Self) !void {
             .dir => {
                 self.logger.info("DIR {s}", .{entry.name});
             },
+            else => {},
         }
     }
 }
+pub fn isFile(self: *Self, path: []const u8) bool {}
+pub fn isDir(self: *Self, path: []const u8) bool {}

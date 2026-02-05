@@ -9,7 +9,6 @@ pub const c = @cImport({
 });
 
 const Self = @This();
-const hello_file = @embedFile("hello.lua");
 
 pub const LuaModule = struct {
     ref: c_int = 0,
@@ -33,7 +32,7 @@ const Error = error{
 
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
-node: *nux.Node,
+disk: *nux.Disk,
 L: *c.lua_State,
 bindings: Bindings(c, nux, @This()),
 
@@ -449,8 +448,10 @@ pub fn doString(self: *Self, source: []const u8, name: []const u8) !void {
     try protectedCall(self);
 }
 pub fn callEntryPoint(self: *Self, entryPoint: []const u8) !void {
-    self.logger.info("ENTRY :{s}", .{entryPoint});
-    try self.doString(hello_file, "hello_file");
+    const basename = std.fs.path.basename(entryPoint);
+    // const init_script = try self.disk.readEntry(entryPoint, self.allocator);
+    // defer self.allocator.free(init_script);
+    // try self.doString(init_script, basename);
 }
 pub fn loadModule(self: *Self, module: *LuaModule, id: nux.ID, name: []const u8, source: []const u8) !void {
     const module_table = "M";

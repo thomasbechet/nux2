@@ -4,10 +4,7 @@ const nux = @import("../nux.zig");
 ptr: *anyopaque = undefined,
 vtable: *const VTable = &.{},
 
-pub const Entry = struct { name: []const u8, kind: enum {
-    file,
-    dir,
-} };
+pub const Entry = struct { name: []const u8, kind: nux.Platform.File.Kind };
 
 pub const Handle = *anyopaque;
 

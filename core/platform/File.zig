@@ -10,8 +10,15 @@ pub const Mode = enum {
     write_append,
 };
 
+pub const Kind = enum {
+    file,
+    dir,
+    unknown,
+};
+
 pub const Stat = struct {
     size: u32,
+    kind: Kind,
 };
 
 pub const Handle = *anyopaque;
@@ -53,7 +60,13 @@ const Default = struct {
     fn stat(_: *anyopaque, handle: Handle) anyerror!Stat {
         const file: *FileHandle = @ptrCast(@alignCast(handle));
         const fstat = try file.file.stat();
-        return .{ .size = @intCast(fstat.size) };
+        var kind: Kind = .unknown;
+        switch (fstat.kind) {
+            .directory => kind = .dir,
+            .file => kind = .file,
+            else => {},
+        }
+        return .{ .size = @intCast(fstat.size), .kind = kind };
     }
     fn seek(_: *anyopaque, handle: Handle, offset: u32) anyerror!void {
         const file: *FileHandle = @ptrCast(@alignCast(handle));

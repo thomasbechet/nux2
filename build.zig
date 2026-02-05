@@ -188,6 +188,9 @@ fn configNative(b: *std.Build, config: Config) void {
 
     // run
     const run = b.addRunArtifact(artifact);
+    if (b.args) |args| {
+        run.addArgs(args);
+    }
     const run_step = b.step("run", "Run the console");
     run_step.dependOn(&install.step);
     run_step.dependOn(&run.step);

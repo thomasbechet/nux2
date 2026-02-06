@@ -101,6 +101,7 @@ const Cart = struct {
         }
         return error.entryNotFound;
     }
+    fn list(self: *@This(), mod: *Self, path: []const u8, allocator: std.mem.Allocator) !nux.Platforn.File.DirList {}
 };
 
 const FileSystem = struct {

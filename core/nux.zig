@@ -35,7 +35,6 @@ pub const Platform = struct {
     pub const Input = @import("platform/Input.zig");
     pub const Window = @import("platform/Window.zig");
     pub const File = @import("platform/File.zig");
-    pub const Dir = @import("platform/Dir.zig");
     pub const GPU = @import("platform/GPU.zig");
     pub const Event = union(enum) {
         input: Platform.Input.Event,
@@ -48,7 +47,6 @@ pub const Platform = struct {
     allocator: Platform.Allocator = std.heap.page_allocator,
     logger: Platform.Logger = .{},
     file: Platform.File = .{},
-    dir: Platform.Dir = .{},
     window: Platform.Window = .{},
     gpu: Platform.GPU = .{},
 

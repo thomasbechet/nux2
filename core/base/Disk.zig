@@ -16,6 +16,7 @@ const Cart = struct {
         data_len: u32,
     };
     const Entry = struct {
+        kind: nux.Platform.File.Kind,
         offset: u32,
         length: u32,
     };
@@ -29,8 +30,8 @@ const Cart = struct {
         const handle = try mod.platform.vtable.open(mod.platform.ptr, path, .read);
         errdefer mod.platform.vtable.close(mod.platform.ptr, handle);
         // Get file stat
-        const stat = try mod.platform.vtable.stat(mod.platform.ptr, path);
-        if (stat.size < @sizeOf(HeaderData)) {
+        const fstat = try mod.platform.vtable.stat(mod.platform.ptr, path);
+        if (fstat.size < @sizeOf(HeaderData)) {
             return error.invalidCartSize;
         }
         // Read header
@@ -51,7 +52,7 @@ const Cart = struct {
         // Read entries
         var entry_buf: [@sizeOf(EntryData)]u8 = undefined;
         var it: u32 = @sizeOf(HeaderData); // start after header
-        while (it < stat.size) {
+        while (it < fstat.size) {
             // Seek to entry
             try mod.platform.vtable.seek(mod.platform.ptr, handle, it);
             try mod.platform.vtable.read(mod.platform.ptr, handle, &entry_buf);
@@ -101,6 +102,25 @@ const Cart = struct {
         }
         return error.entryNotFound;
     }
+    fn stat(self: *@This(), path: []const u8) !nux.Platform.File.Stat {
+        var it = self.entries.iterator();
+        while (it.next()) |entry| {
+            if (std.mem.startsWith(u8, entry.key_ptr.*, path)) {
+                if (entry.key_ptr.len == path.len) {
+                    return .{
+                        .kind = .file,
+                        .size = entry.value_ptr.length,
+                    };
+                } else {
+                    return .{
+                        .kind = .dir,
+                        .size = 0,
+                    };
+                }
+            }
+        }
+        return error.entryNotFound;
+    }
 };
 
 const FileSystem = struct {
@@ -119,10 +139,17 @@ const FileSystem = struct {
         defer mod.allocator.free(final_path);
         const handle = try mod.platform.vtable.open(mod.platform.ptr, final_path, .read);
         defer mod.platform.vtable.close(mod.platform.ptr, handle);
-        const stat = try mod.platform.vtable.stat(mod.platform.ptr, path);
-        const buffer = try allocator.alloc(u8, stat.size);
+        const fstat = try mod.platform.vtable.stat(mod.platform.ptr, path);
+        const buffer = try allocator.alloc(u8, fstat.size);
         try mod.platform.vtable.read(mod.platform.ptr, handle, buffer);
         return buffer;
+    }
+    fn stat(self: *@This(), mod: *Self, path: []const u8) !nux.Platform.File.Stat {
+        const final_path = try std.mem.concat(mod.allocator, u8, &.{ self.path, "/", path });
+        defer mod.allocator.free(final_path);
+        const handle = try mod.platform.vtable.open(mod.platform.ptr, final_path, .read);
+        defer mod.platform.vtable.close(mod.platform.ptr, handle);
+        return try mod.platform.vtable.stat(mod.platform.ptr, path);
     }
 };
 
@@ -145,14 +172,14 @@ const DirList = struct {
     fn init(allocator: std.mem.Allocator) !@This() {
         return .{
             .allocator = allocator,
-            .names = .initCapacity(allocator, 8),
+            .names = try .initCapacity(allocator, 8),
         };
     }
-    pub fn deinit(self: @This()) void {
+    fn deinit(self: *@This()) void {
         for (self.names.items) |name| {
             self.allocator.free(name);
         }
-        self.allocator.free(self.names);
+        self.names.deinit(self.allocator);
     }
 
     fn add(self: *@This(), name: []const u8) !void {
@@ -230,6 +257,8 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     // Add platform filesystem by default
     const fs: FileSystem = try .init(self, ".");
     try self.layers.append(self.allocator, .{ .fs = fs });
+
+    try self.logAll();
 }
 pub fn deinit(self: *Self) void {
     for (self.layers.items) |*disk| {
@@ -256,16 +285,34 @@ pub fn logEntries(self: *Self) void {
         }
     }
 }
-fn logRecursive(self: *Self, )
+fn logRecursive(self: *Self, path: []const u8, depth: u32) !void {
+    self.logger.info("PATH: {s}", .{path});
+    const fstat = try self.stat(path);
+    switch (fstat.kind) {
+        .dir => {
+            var dirList = try self.list(path, self.allocator);
+            defer dirList.deinit();
+            for (dirList.names.items) |name| {
+                var buf: [256]u8 = undefined;
+                var writer = std.Io.Writer.fixed(&buf);
+                try writer.print("{s}/{s}", .{ path, name });
+                const subpath = buf[0..writer.end];
+                self.logger.info("PATH : {s}", .{subpath});
+                try self.logRecursive(subpath, depth + 1);
+            }
+        },
+        else => {},
+    }
+}
 pub fn logAll(self: *Self) !void {
-
+    try self.logRecursive("/", 0);
 }
 pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
     // Find first match
     var i = self.layers.items.len;
     while (i > 0) {
         i -= 1;
-        switch (self.layers.items[i].*) {
+        switch (self.layers.items[i]) {
             .cart => |*cart| return cart.read(self, path, allocator) catch {
                 continue;
             },
@@ -276,8 +323,24 @@ pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
     }
     return error.entryNotFound;
 }
+fn stat(self: *Self, path: []const u8) !nux.Platform.File.Stat {
+    // Find first match
+    var i = self.layers.items.len;
+    while (i > 0) {
+        i -= 1;
+        switch (self.layers.items[i]) {
+            .cart => |*cart| return cart.stat(path) catch {
+                continue;
+            },
+            .fs => |*fs| return fs.stat(self, path) catch {
+                continue;
+            },
+        }
+    }
+    return error.entryNotFound;
+}
 
-pub fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirList {
+fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirList {
     var dirList = try DirList.init(allocator);
     errdefer dirList.deinit();
 
@@ -287,8 +350,8 @@ pub fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirLis
             .cart => |*cart| {
                 var it = cart.entries.keyIterator();
                 while (it.next()) |entry_path| {
-                    if (std.mem.startsWith(u8, entry_path, path)) {
-                        try dirList.add(std.fs.path.basename(entry_path));
+                    if (std.mem.startsWith(u8, entry_path.*, path)) {
+                        try dirList.add(std.fs.path.basename(entry_path.*));
                     }
                 }
             },
@@ -296,7 +359,7 @@ pub fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirLis
                 const handle = try self.platform.vtable.openDir(self.platform.ptr, path);
                 defer self.platform.vtable.closeDir(self.platform.ptr, handle);
                 var buf: [256]u8 = undefined;
-                while (try self.platform.vtable.next(*self.platform.ptr, handle, &buf)) |size| {
+                while (try self.platform.vtable.next(self.platform.ptr, handle, &buf)) |size| {
                     const name = buf[0..size];
                     try dirList.add(name);
                 }

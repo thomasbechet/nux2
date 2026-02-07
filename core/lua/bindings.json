@@ -21,7 +21,7 @@
         {
             "path": "base/Disk.zig",
             "ignore": [
-                "readEntry",
+                "read",
                 "writeFile",
                 "FileWriter"
             ]

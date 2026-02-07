@@ -88,9 +88,10 @@ const Default = struct {
         };
     }
     fn openDir(_: *anyopaque, path: []const u8) anyerror!Handle {
-        const dir = std.fs.cwd();
-        const s = try dir.openDir(path, .{ .iterate = true });
-        const it = s.iterate();
+        const cwd = std.fs.cwd();
+        var dir = try cwd.openDir(path, .{ .iterate = true });
+        errdefer dir.close();
+        const it = dir.iterate();
         const handle = try std.heap.page_allocator.create(DirHandle);
         handle.dir = dir;
         handle.it = it;

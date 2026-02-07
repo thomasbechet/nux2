@@ -48,7 +48,7 @@ pub fn newFromPath(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
 }
 pub fn loadFromPath(self: *Self, id: nux.ID, path: []const u8) !void {
     const node = try self.nodes.get(id);
-    const data = try self.disk.readEntry(path, self.allocator);
+    const data = try self.disk.read(path, self.allocator);
     errdefer self.allocator.free(data);
     var image = try zigimg.Image.fromMemory(self.allocator, data);
     defer image.deinit(self.allocator);

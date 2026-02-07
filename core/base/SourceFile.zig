@@ -26,7 +26,7 @@ pub fn delete(self: *Self, id: nux.ID) !void {
     }
 }
 pub fn newFromPath(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
-    const source = try self.disk.readEntry(path, self.allocator);
+    const source = try self.disk.read(path, self.allocator);
     errdefer self.allocator.free(source);
     const path_copy = try self.allocator.dupe(u8, path);
     errdefer self.allocator.free(path_copy);

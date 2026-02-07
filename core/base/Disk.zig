@@ -26,16 +26,16 @@ const Cart = struct {
 
     fn init(mod: *Self, path: []const u8) !@This() {
         // Open file
-        const handle = try mod.platform_file.vtable.open(mod.platform_file.ptr, path, .read);
-        errdefer mod.platform_file.vtable.close(mod.platform_file.ptr, handle);
+        const handle = try mod.platform.vtable.open(mod.platform.ptr, path, .read);
+        errdefer mod.platform.vtable.close(mod.platform.ptr, handle);
         // Get file stat
-        const stat = try mod.platform_file.vtable.stat(mod.platform_file.ptr, handle);
+        const stat = try mod.platform.vtable.stat(mod.platform.ptr, path);
         if (stat.size < @sizeOf(HeaderData)) {
             return error.invalidCartSize;
         }
         // Read header
         var buf: [@sizeOf(HeaderData)]u8 = undefined;
-        try mod.platform_file.vtable.read(mod.platform_file.ptr, handle, &buf);
+        try mod.platform.vtable.read(mod.platform.ptr, handle, &buf);
         var reader = std.Io.Reader.fixed(&buf);
         const header = try reader.takeStruct(HeaderData, .little);
         if (!std.mem.eql(u8, &header.magic, &magic)) {
@@ -53,14 +53,14 @@ const Cart = struct {
         var it: u32 = @sizeOf(HeaderData); // start after header
         while (it < stat.size) {
             // Seek to entry
-            try mod.platform_file.vtable.seek(mod.platform_file.ptr, handle, it);
-            try mod.platform_file.vtable.read(mod.platform_file.ptr, handle, &entry_buf);
+            try mod.platform.vtable.seek(mod.platform.ptr, handle, it);
+            try mod.platform.vtable.read(mod.platform.ptr, handle, &entry_buf);
             // Read entry
             reader = std.Io.Reader.fixed(&entry_buf);
             const entry = try reader.takeStruct(EntryData, .little);
             // Read path
             const path_data = try mod.allocator.alloc(u8, entry.path_len);
-            try mod.platform_file.vtable.read(mod.platform_file.ptr, handle, path_data);
+            try mod.platform.vtable.read(mod.platform.ptr, handle, path_data);
             // Insert entry
             const new_entry = try entries.getOrPut(path_data);
             if (new_entry.found_existing) {
@@ -83,7 +83,7 @@ const Cart = struct {
     }
     fn deinit(self: *@This(), mod: *Self) void {
         // Free carts
-        mod.platform_file.vtable.close(mod.platform_file.ptr, self.handle);
+        mod.platform.vtable.close(mod.platform.ptr, self.handle);
         mod.allocator.free(self.path);
         // Free entries
         var it = self.entries.iterator();
@@ -95,13 +95,12 @@ const Cart = struct {
     fn read(self: *@This(), mod: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
         if (self.entries.get(path)) |entry| {
             const buffer = try allocator.alloc(u8, entry.length);
-            try mod.platform_file.vtable.seek(mod.platform_file.ptr, self.handle, entry.offset);
-            try mod.platform_file.vtable.read(mod.platform_file.ptr, self.handle, buffer);
+            try mod.platform.vtable.seek(mod.platform.ptr, self.handle, entry.offset);
+            try mod.platform.vtable.read(mod.platform.ptr, self.handle, buffer);
             return buffer;
         }
         return error.entryNotFound;
     }
-    fn list(self: *@This(), mod: *Self, path: []const u8, allocator: std.mem.Allocator) !nux.Platforn.File.DirList {}
 };
 
 const FileSystem = struct {
@@ -118,16 +117,16 @@ const FileSystem = struct {
     fn read(self: *@This(), mod: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
         const final_path = try std.mem.concat(mod.allocator, u8, &.{ self.path, "/", path });
         defer mod.allocator.free(final_path);
-        const handle = try mod.platform_file.vtable.open(mod.platform_file.ptr, final_path, .read);
-        defer mod.platform_file.vtable.close(mod.platform_file.ptr, handle);
-        const stat = try mod.platform_file.vtable.stat(mod.platform_file.ptr, handle);
+        const handle = try mod.platform.vtable.open(mod.platform.ptr, final_path, .read);
+        defer mod.platform.vtable.close(mod.platform.ptr, handle);
+        const stat = try mod.platform.vtable.stat(mod.platform.ptr, path);
         const buffer = try allocator.alloc(u8, stat.size);
-        try mod.platform_file.vtable.read(mod.platform_file.ptr, handle, buffer);
+        try mod.platform.vtable.read(mod.platform.ptr, handle, buffer);
         return buffer;
     }
 };
 
-const Disk = union(enum) {
+const FileSystemLayer = union(enum) {
     cart: Cart,
     fs: FileSystem,
 
@@ -139,6 +138,33 @@ const Disk = union(enum) {
     }
 };
 
+const DirList = struct {
+    names: std.ArrayList([]const u8),
+    allocator: std.mem.Allocator,
+
+    fn init(allocator: std.mem.Allocator) !@This() {
+        return .{
+            .allocator = allocator,
+            .names = .initCapacity(allocator, 8),
+        };
+    }
+    pub fn deinit(self: @This()) void {
+        for (self.names.items) |name| {
+            self.allocator.free(name);
+        }
+        self.allocator.free(self.names);
+    }
+
+    fn add(self: *@This(), name: []const u8) !void {
+        for (self.names.items) |existing_name| {
+            if (std.mem.eql(u8, name, existing_name)) {
+                return;
+            }
+        }
+        try self.names.append(self.allocator, try self.allocator.dupe(u8, name));
+    }
+};
+
 pub const FileWriter = struct {
     disk: *Self,
     handle: nux.Platform.File.Handle,
@@ -147,7 +173,7 @@ pub const FileWriter = struct {
     pub fn open(mod: *Self, path: []const u8, buffer: []u8) !@This() {
         return .{
             .disk = mod,
-            .handle = try mod.platform_file.vtable.open(mod.platform_file.ptr, path, .write_truncate),
+            .handle = try mod.platform.vtable.open(mod.platform.ptr, path, .write_truncate),
             .interface = .{
                 .vtable = &.{
                     .drain = drain,
@@ -158,7 +184,7 @@ pub const FileWriter = struct {
     }
     pub fn close(self: *@This()) void {
         self.interface.flush() catch {};
-        self.disk.platform_file.vtable.close(self.disk.platform_file.ptr, self.handle);
+        self.disk.platform.vtable.close(self.disk.platform.ptr, self.handle);
     }
 
     fn drain(io_w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
@@ -167,7 +193,7 @@ pub const FileWriter = struct {
         const buffered = io_w.buffered();
         // Process buffered
         if (buffered.len != 0) {
-            disk.platform_file.vtable.write(disk.platform_file.ptr, w.handle, buffered) catch {
+            disk.platform.vtable.write(disk.platform.ptr, w.handle, buffered) catch {
                 return error.WriteFailed;
             };
             io_w.end = 0;
@@ -175,14 +201,14 @@ pub const FileWriter = struct {
         // Process in data
         for (data[0 .. data.len - 1]) |buf| {
             if (buf.len == 0) continue;
-            disk.platform_file.vtable.write(disk.platform_file.ptr, w.handle, buf) catch {
+            disk.platform.vtable.write(disk.platform.ptr, w.handle, buf) catch {
                 return error.WriteFailed;
             };
         }
         // Process splat
         const pattern = data[data.len - 1];
         if (pattern.len == 0 or splat == 0) return 0;
-        disk.platform_file.vtable.write(disk.platform_file.ptr, w.handle, pattern) catch {
+        disk.platform.vtable.write(disk.platform.ptr, w.handle, pattern) catch {
             return error.WriteFailed;
         };
         // On success, we always process everything in `data`
@@ -191,35 +217,33 @@ pub const FileWriter = struct {
 };
 
 allocator: std.mem.Allocator,
-platform_file: nux.Platform.File,
-platform_dir: nux.Platform.Dir,
+platform: nux.Platform.File,
 cart_writer: ?FileWriter,
-disks: std.ArrayList(Disk),
+layers: std.ArrayList(FileSystemLayer),
 logger: *nux.Logger,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.platform_file = core.platform.file;
-    self.platform_dir = core.platform.dir;
-    self.disks = try .initCapacity(core.platform.allocator, 8);
+    self.platform = core.platform.file;
+    self.layers = try .initCapacity(core.platform.allocator, 8);
 
     // Add platform filesystem by default
     const fs: FileSystem = try .init(self, ".");
-    try self.disks.append(self.allocator, .{ .fs = fs });
+    try self.layers.append(self.allocator, .{ .fs = fs });
 }
 pub fn deinit(self: *Self) void {
-    for (self.disks.items) |*disk| {
+    for (self.layers.items) |*disk| {
         disk.deinit(self);
     }
-    self.disks.deinit(self.allocator);
+    self.layers.deinit(self.allocator);
 }
 
 pub fn mount(self: *Self, path: []const u8) !void {
     const cart: Cart = try .init(self, path);
-    try self.disks.append(self.allocator, .{ .cart = cart });
+    try self.layers.append(self.allocator, .{ .cart = cart });
 }
 pub fn logEntries(self: *Self) void {
-    for (self.disks.items) |disk| {
+    for (self.layers.items) |disk| {
         switch (disk) {
             .cart => |cart| {
                 var it = cart.entries.iterator();
@@ -232,9 +256,16 @@ pub fn logEntries(self: *Self) void {
         }
     }
 }
-pub fn readEntry(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
-    for (self.disks.items) |*disk| {
-        switch (disk.*) {
+fn logRecursive(self: *Self, )
+pub fn logAll(self: *Self) !void {
+
+}
+pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+    // Find first match
+    var i = self.layers.items.len;
+    while (i > 0) {
+        i -= 1;
+        switch (self.layers.items[i].*) {
             .cart => |*cart| return cart.read(self, path, allocator) catch {
                 continue;
             },
@@ -245,6 +276,37 @@ pub fn readEntry(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![
     }
     return error.entryNotFound;
 }
+
+pub fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirList {
+    var dirList = try DirList.init(allocator);
+    errdefer dirList.deinit();
+
+    // Collect names for each layer
+    for (self.layers.items) |layer| {
+        switch (layer) {
+            .cart => |*cart| {
+                var it = cart.entries.keyIterator();
+                while (it.next()) |entry_path| {
+                    if (std.mem.startsWith(u8, entry_path, path)) {
+                        try dirList.add(std.fs.path.basename(entry_path));
+                    }
+                }
+            },
+            .fs => {
+                const handle = try self.platform.vtable.openDir(self.platform.ptr, path);
+                defer self.platform.vtable.closeDir(self.platform.ptr, handle);
+                var buf: [256]u8 = undefined;
+                while (try self.platform.vtable.next(*self.platform.ptr, handle, &buf)) |size| {
+                    const name = buf[0..size];
+                    try dirList.add(name);
+                }
+            },
+        }
+    }
+
+    return dirList;
+}
+
 fn closeCartWriter(self: *Self) void {
     if (self.cart_writer) |*w| {
         w.close();
@@ -275,20 +337,3 @@ pub fn writeEntry(self: *Self, path: []const u8, data: []const u8) !void {
         try w.interface.flush();
     }
 }
-pub fn listFiles(self: *Self) !void {
-    const handle = try self.platform_dir.vtable.open(self.platform_dir.ptr, ".");
-    defer self.platform_dir.vtable.close(self.platform_dir.ptr, handle);
-    while (try self.platform_dir.vtable.next(self.platform_dir.ptr, handle)) |entry| {
-        switch (entry.kind) {
-            .file => {
-                self.logger.info("FILE {s}", .{entry.name});
-            },
-            .dir => {
-                self.logger.info("DIR {s}", .{entry.name});
-            },
-            else => {},
-        }
-    }
-}
-pub fn isFile(self: *Self, path: []const u8) bool {}
-pub fn isDir(self: *Self, path: []const u8) bool {}

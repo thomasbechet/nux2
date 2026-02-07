@@ -819,7 +819,7 @@ pub fn exportNode(self: *Self, id: ID, path: []const u8) !void {
 }
 pub fn importNode(self: *Self, parent: ID, path: []const u8) !ID {
     // Read entry
-    const data = try self.disk.readEntry(path, self.allocator);
+    const data = try self.disk.read(path, self.allocator);
     defer self.allocator.free(data);
     var data_reader = std.Io.Reader.fixed(data);
     var reader: Reader = .{

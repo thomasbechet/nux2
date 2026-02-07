@@ -448,7 +448,9 @@ pub fn doString(self: *Self, source: []const u8, name: []const u8) !void {
     try protectedCall(self);
 }
 pub fn callEntryPoint(self: *Self, entryPoint: []const u8) !void {
-    const basename = std.fs.path.basename(entryPoint);
+    _ = self;
+    _ = entryPoint;
+    // const basename = std.fs.path.basename(entryPoint);
     // const init_script = try self.disk.readEntry(entryPoint, self.allocator);
     // defer self.allocator.free(init_script);
     // try self.doString(init_script, basename);

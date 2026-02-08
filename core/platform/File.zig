@@ -26,7 +26,7 @@ pub const Handle = *anyopaque;
 pub const VTable = struct {
     open: *const fn (*anyopaque, path: []const u8, mode: Mode) anyerror!Handle = Default.open,
     close: *const fn (*anyopaque, handle: Handle) void = Default.close,
-    seek: *const fn (*anyopaque, handle: Handle, cursor: u32) anyerror!void = Default.seek,
+    seek: *const fn (*anyopaque, handle: Handle, cursor: u64) anyerror!void = Default.seek,
     read: *const fn (*anyopaque, handle: Handle, data: []u8) anyerror!void = Default.read,
     write: *const fn (*anyopaque, handle: Handle, data: []const u8) anyerror!void = Default.write,
     stat: *const fn (*anyopaque, path: []const u8) anyerror!Stat = Default.stat,
@@ -62,7 +62,7 @@ const Default = struct {
         file.file.close();
         std.heap.page_allocator.destroy(file);
     }
-    fn seek(_: *anyopaque, handle: Handle, offset: u32) anyerror!void {
+    fn seek(_: *anyopaque, handle: Handle, offset: u64) anyerror!void {
         const file: *FileHandle = @ptrCast(@alignCast(handle));
         try file.file.seekTo(@intCast(offset));
     }

@@ -380,7 +380,7 @@ entries: std.ArrayList(NodeEntry),
 free: std.ArrayList(EntryIndex),
 nodes: NodePool(EmptyNode),
 root: ID,
-disk: *nux.Disk,
+file: *nux.File,
 logger: *nux.Logger,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -753,7 +753,7 @@ pub fn dump(self: *Self, id: ID) void {
 
 pub fn exportNode(self: *Self, id: ID, path: []const u8) !void {
     var buf: [512]u8 = undefined;
-    var file_writer: nux.Disk.FileWriter = try .open(self.disk, path, &buf);
+    var file_writer: nux.File.NativeWriter = try .open(self.file, path, &buf);
     defer file_writer.close();
     // Collect nodes
     var nodes = try self.collect(self.allocator, id);
@@ -819,7 +819,7 @@ pub fn exportNode(self: *Self, id: ID, path: []const u8) !void {
 }
 pub fn importNode(self: *Self, parent: ID, path: []const u8) !ID {
     // Read entry
-    const data = try self.disk.read(path, self.allocator);
+    const data = try self.file.read(path, self.allocator);
     defer self.allocator.free(data);
     var data_reader = std.Io.Reader.fixed(data);
     var reader: Reader = .{

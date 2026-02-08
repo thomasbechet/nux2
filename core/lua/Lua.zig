@@ -32,7 +32,6 @@ const Error = error{
 
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
-disk: *nux.Disk,
 L: *c.lua_State,
 bindings: Bindings(c, nux, @This()),
 
@@ -451,7 +450,7 @@ pub fn callEntryPoint(self: *Self, entryPoint: []const u8) !void {
     _ = self;
     _ = entryPoint;
     // const basename = std.fs.path.basename(entryPoint);
-    // const init_script = try self.disk.readEntry(entryPoint, self.allocator);
+    // const init_script = try self.file.readEntry(entryPoint, self.allocator);
     // defer self.allocator.free(init_script);
     // try self.doString(init_script, basename);
 }

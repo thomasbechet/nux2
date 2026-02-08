@@ -6,7 +6,6 @@ const Self = @This();
 
 node: *nux.Node,
 logger: *nux.Logger,
-disk: *nux.Disk,
 allocator: std.mem.Allocator,
 mesh: *nux.Mesh,
 texture: *nux.Texture,

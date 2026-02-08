@@ -11,7 +11,7 @@ const Node = struct {
 nodes: nux.NodePool(Node),
 node: *nux.Node,
 logger: *nux.Logger,
-disk: *nux.Disk,
+file: *nux.File,
 allocator: std.mem.Allocator,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {

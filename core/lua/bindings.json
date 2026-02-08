@@ -19,7 +19,7 @@
             ]
         },
         {
-            "path": "base/Disk.zig",
+            "path": "base/File.zig",
             "ignore": [
                 "read",
                 "writeFile",

@@ -2,7 +2,8 @@ const std = @import("std");
 
 pub const Logger = @import("base/Logger.zig");
 pub const Node = @import("base/Node.zig");
-pub const Disk = @import("base/Disk.zig");
+pub const File = @import("base/File.zig");
+pub const Cart = @import("base/Cart.zig");
 pub const Transform = @import("base/Transform.zig");
 pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
@@ -169,7 +170,8 @@ pub const Core = struct {
         try core.registerModules(.{
             Node,
             Input,
-            Disk,
+            File,
+            Cart,
             Transform,
             InputMap,
             SourceFile,

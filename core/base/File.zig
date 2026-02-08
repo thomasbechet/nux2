@@ -4,24 +4,17 @@ const nux = @import("../nux.zig");
 const Self = @This();
 
 const NativeFileSystem = struct {
-    path: []const u8,
     allocator: std.mem.Allocator,
     platform: nux.Platform.File,
 
-    fn init(allocator: std.mem.Allocator, path: []const u8, platform: nux.Platform.File) !@This() {
+    fn init(allocator: std.mem.Allocator, platform: nux.Platform.File) !@This() {
         return .{
-            .path = try allocator.dupe(u8, path),
             .allocator = allocator,
             .platform = platform,
         };
     }
-    fn deinit(self: *@This()) void {
-        self.allocator.free(self.path);
-    }
     fn read(self: *@This(), path: []const u8, allocator: std.mem.Allocator) ![]u8 {
-        const final_path = try std.mem.concat(self.allocator, u8, &.{ self.path, "/", path });
-        defer self.allocator.free(final_path);
-        const handle = try self.platform.vtable.open(self.platform.ptr, final_path, .read);
+        const handle = try self.platform.vtable.open(self.platform.ptr, path, .read);
         defer self.platform.vtable.close(self.platform.ptr, handle);
         const fstat = try self.platform.vtable.stat(self.platform.ptr, path);
         const buffer = try allocator.alloc(u8, fstat.size);
@@ -29,9 +22,7 @@ const NativeFileSystem = struct {
         return buffer;
     }
     fn stat(self: *@This(), path: []const u8) !nux.Platform.File.Stat {
-        const final_path = try std.mem.concat(self.allocator, u8, &.{ self.path, "/", path });
-        defer self.allocator.free(final_path);
-        return try self.platform.vtable.stat(self.platform.ptr, final_path);
+        return try self.platform.vtable.stat(self.platform.ptr, path);
     }
 };
 
@@ -42,7 +33,7 @@ const Layer = union(enum) {
     fn deinit(self: *@This()) void {
         switch (self.*) {
             .cart => |*cart| cart.deinit(),
-            .native => |*fs| fs.deinit(),
+            .native => {},
         }
     }
 };
@@ -139,19 +130,11 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     // Add platform filesystem by default
     const fs: NativeFileSystem = try .init(
         self.allocator,
-        ".",
         self.platform,
     );
     try self.layers.append(self.allocator, .{ .native = fs });
 
     try self.logAll();
-
-    // var dirList = try self.list(".", self.allocator);
-    // defer dirList.deinit();
-    // for (dirList.names.items) |name| {
-    //     std.log.info("{s}", .{name});
-    //     std.log.info("{any}", .{try self.stat(name)});
-    // }
 }
 pub fn deinit(self: *Self) void {
     for (self.layers.items) |*layer| {
@@ -197,7 +180,7 @@ pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
     }
     return error.entryNotFound;
 }
-fn stat(self: *Self, path: []const u8) !nux.Platform.File.Stat {
+pub fn stat(self: *Self, path: []const u8) !nux.Platform.File.Stat {
     // Find first match
     var i = self.layers.items.len;
     while (i > 0) {
@@ -213,8 +196,7 @@ fn stat(self: *Self, path: []const u8) !nux.Platform.File.Stat {
     }
     return error.entryNotFound;
 }
-
-fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirList {
+pub fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirList {
     var dirList = try DirList.init(allocator);
     errdefer dirList.deinit();
 
@@ -224,11 +206,8 @@ fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirList {
             .cart => |*cart| {
                 try cart.list(path, &dirList);
             },
-            .native => |*fs| {
-                const final_path = try std.mem.concat(self.allocator, u8, &.{ fs.path, "/", path });
-                defer self.allocator.free(final_path);
-
-                const handle = try self.platform.vtable.openDir(self.platform.ptr, final_path);
+            .native => {
+                const handle = try self.platform.vtable.openDir(self.platform.ptr, path);
                 defer self.platform.vtable.closeDir(self.platform.ptr, handle);
                 var buf: [256]u8 = undefined;
                 while (try self.platform.vtable.next(self.platform.ptr, handle, &buf)) |size| {

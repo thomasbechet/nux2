@@ -159,7 +159,7 @@ pub const FileSystem = struct {
     platform: nux.Platform.File,
     allocator: std.mem.Allocator,
 
-    fn load(path: []const u8, allocator: std.mem.Allocator, platform: *nux.Platform.File) !@This() {
+    fn load(path: []const u8, allocator: std.mem.Allocator, platform: nux.Platform.File) !@This() {
         // Open file
         const handle = try platform.vtable.open(platform.ptr, path, .read);
         errdefer platform.vtable.close(platform.ptr, handle);
@@ -218,6 +218,8 @@ pub const FileSystem = struct {
         return .{
             .handle = handle,
             .path = path_copy,
+            .platform = platform,
+            .allocator = allocator,
             .vfs = vfs,
         };
     }
@@ -285,8 +287,8 @@ logger: *nux.Logger,
 file: *nux.File,
 
 pub fn mount(self: *Self, path: []const u8) !void {
-    const fs: FileSystem = try .load(self, path);
-    try self.layers.append(self.allocator, .{ .cart = fs });
+    const fs: FileSystem = try .load(path, self.allocator, self.platform);
+    try self.file.layers.append(self.allocator, .{ .cart = fs });
 }
 
 fn closeCartWriter(self: *Self) void {

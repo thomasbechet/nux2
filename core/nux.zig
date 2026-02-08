@@ -43,7 +43,7 @@ pub const Platform = struct {
     };
     pub const Config = struct {
         logModuleInjection: bool = false,
-        entryPoint: []const u8 = ".",
+        cartridge: ?[]const u8 = null,
     };
     allocator: Platform.Allocator = std.heap.page_allocator,
     logger: Platform.Logger = .{},
@@ -181,11 +181,16 @@ pub const Core = struct {
             Lua,
             GUI,
         });
-
-        // Call entry point
         errdefer core.deinit();
+
+        // Mount cartridge
+        if (core.platform.config.cartridge) |cartridge| {
+            var cart = core.findModule(Cart) orelse unreachable;
+            try cart.mount(cartridge);
+        }
+        // Call entry point
         var lua = core.findModule(Lua) orelse unreachable;
-        try lua.callEntryPoint(core.platform.config.entryPoint);
+        try lua.callEntryPoint("init.lua");
 
         return core;
     }

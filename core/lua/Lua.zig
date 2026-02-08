@@ -32,6 +32,7 @@ const Error = error{
 
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
+file: *nux.File,
 L: *c.lua_State,
 bindings: Bindings(c, nux, @This()),
 
@@ -447,12 +448,9 @@ pub fn doString(self: *Self, source: []const u8, name: []const u8) !void {
     try protectedCall(self);
 }
 pub fn callEntryPoint(self: *Self, entryPoint: []const u8) !void {
-    _ = self;
-    _ = entryPoint;
-    // const basename = std.fs.path.basename(entryPoint);
-    // const init_script = try self.file.readEntry(entryPoint, self.allocator);
-    // defer self.allocator.free(init_script);
-    // try self.doString(init_script, basename);
+    const init_script = try self.file.read(entryPoint, self.allocator);
+    defer self.allocator.free(init_script);
+    try self.doString(init_script, entryPoint);
 }
 pub fn loadModule(self: *Self, module: *LuaModule, id: nux.ID, name: []const u8, source: []const u8) !void {
     const module_table = "M";

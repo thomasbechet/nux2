@@ -59,11 +59,11 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     });
 
     const commands = clay.endLayout();
-    self.logger.info("CLAY COMMANDS {d}", .{commands.len});
+    // self.logger.info("CLAY COMMANDS {d}", .{commands.len});
 
     for (commands) |command| {
         switch (command.command_type) {
-            else => {}
+            else => {},
         }
     }
 }

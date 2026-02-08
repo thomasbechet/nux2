@@ -22,6 +22,8 @@
             "path": "base/File.zig",
             "ignore": [
                 "read",
+                "stat",
+                "list",
                 "writeFile",
                 "NativeWriter",
                 "DirList"

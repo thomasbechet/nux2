@@ -14,11 +14,25 @@ pub fn main() !void {
     defer std.process.argsFree(allocator, args);
 
     // Configure platform
-    var platform = nux.Platform{
+    const platform = nux.Platform{
         .allocator = allocator,
     };
     if (args.len > 1) {
-        platform.config.entryPoint = args[1];
+        // Is file or not
+        const dir = std.fs.cwd().openDir(args[1], .{}) catch |err| {
+            if (err == error.NotDir) {
+                // Change to parent directory
+                var parent = try std.fs.cwd().openDir(std.fs.path.dirname(args[1]), .{});
+                defer parent.close();
+                parent.setAsCwd();
+                platform.config.cartridge = std.fs.path.basename(args[1]);
+            } else {
+                return err;
+            }
+        };
+        // Set
+        defer dir.close();
+        try dir.setAsCwd();
     }
 
     // Run core

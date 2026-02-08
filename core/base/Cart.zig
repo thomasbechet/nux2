@@ -156,20 +156,21 @@ pub const FileSystem = struct {
     vfs: VFS,
     handle: nux.Platform.File.Handle,
     path: []const u8,
-    mod: *Self,
+    platform: nux.Platform.File,
+    allocator: std.mem.Allocator,
 
-    fn init(mod: *Self, path: []const u8) !@This() {
+    fn load(path: []const u8, allocator: std.mem.Allocator, platform: *nux.Platform.File) !@This() {
         // Open file
-        const handle = try mod.platform.vtable.open(mod.platform.ptr, path, .read);
-        errdefer mod.platform.vtable.close(mod.platform.ptr, handle);
+        const handle = try platform.vtable.open(platform.ptr, path, .read);
+        errdefer platform.vtable.close(platform.ptr, handle);
         // Get file stat
-        const fstat = try mod.platform.vtable.stat(mod.platform.ptr, path);
+        const fstat = try platform.vtable.stat(platform.ptr, path);
         if (fstat.size < @sizeOf(HeaderData)) {
             return error.invalidCartSize;
         }
         // Read header
         var buf: [@sizeOf(HeaderData)]u8 = undefined;
-        try mod.platform.vtable.read(mod.platform.ptr, handle, &buf);
+        try platform.vtable.read(platform.ptr, handle, &buf);
         var reader = std.Io.Reader.fixed(&buf);
         const header = try reader.takeStruct(HeaderData, .little);
         if (!std.mem.eql(u8, &header.magic, &magic)) {
@@ -179,23 +180,23 @@ pub const FileSystem = struct {
             return error.invalidCartVersion;
         }
         // Allocate cart resources
-        const path_copy = try mod.allocator.dupe(u8, path);
-        errdefer mod.allocator.free(path_copy);
-        var vfs = try VFS.init(mod.allocator);
+        const path_copy = try allocator.dupe(u8, path);
+        errdefer allocator.free(path_copy);
+        var vfs = try VFS.init(allocator);
         errdefer vfs.deinit();
         // Read entries
         var entry_buf: [@sizeOf(EntryData)]u8 = undefined;
         var it: u64 = @sizeOf(HeaderData); // start after header
         while (it < fstat.size) {
             // Seek to entry
-            try mod.platform.vtable.seek(mod.platform.ptr, handle, it);
-            try mod.platform.vtable.read(mod.platform.ptr, handle, &entry_buf);
+            try platform.vtable.seek(platform.ptr, handle, it);
+            try platform.vtable.read(platform.ptr, handle, &entry_buf);
             // Read entry
             reader = std.Io.Reader.fixed(&entry_buf);
             const entry = try reader.takeStruct(EntryData, .little);
             // Read name
-            const path_data = try mod.allocator.alloc(u8, entry.path_len);
-            try mod.platform.vtable.read(mod.platform.ptr, handle, path_data);
+            const path_data = try allocator.alloc(u8, entry.path_len);
+            try platform.vtable.read(platform.ptr, handle, path_data);
             // Check parent dir
             if (entry.parent > vfs.nodes.items.len) {
                 return error.invalidParentIndex;
@@ -220,19 +221,19 @@ pub const FileSystem = struct {
             .vfs = vfs,
         };
     }
-    pub fn deinit(self: *@This(), mod: *Self) void {
+    pub fn deinit(self: *@This()) void {
         // Free carts
-        mod.platform.vtable.close(mod.platform.ptr, self.handle);
-        mod.allocator.free(self.path);
+        self.platform.vtable.close(self.platform.ptr, self.handle);
+        self.allocator.free(self.path);
         self.vfs.deinit();
     }
-    pub fn read(self: *@This(), mod: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+    pub fn read(self: *@This(), path: []const u8, allocator: std.mem.Allocator) ![]u8 {
         if (self.vfs.findIndex(path)) |index| {
             const node = self.vfs.nodes.items[index];
             if (node.data == .dir) return error.notAFile;
             const buffer = try allocator.alloc(u8, node.data.file.length);
-            try mod.platform.vtable.seek(mod.platform.ptr, self.handle, node.data.file.offset);
-            try mod.platform.vtable.read(mod.platform.ptr, self.handle, buffer);
+            try self.platform.vtable.seek(self.platform.ptr, self.handle, node.data.file.offset);
+            try self.platform.vtable.read(self.platform.ptr, self.handle, buffer);
             return buffer;
         }
         return error.entryNotFound;
@@ -257,6 +258,19 @@ pub const FileSystem = struct {
         }
         return error.entryNotFound;
     }
+    pub fn list(self: *const @This(), path: []const u8, dirList: *nux.File.DirList) !void {
+        if (self.vfs.findIndex(path)) |index| {
+            const node = self.vfs.nodes.items[index];
+            if (node.data == .dir) {
+                var it = node.data.dir.child;
+                while (it) |child_index| {
+                    const child = self.vfs.nodes.items[child_index];
+                    try dirList.add(child.name);
+                    it = child.next;
+                }
+            }
+        }
+    }
 };
 
 const CartWriter = struct {
@@ -271,8 +285,8 @@ logger: *nux.Logger,
 file: *nux.File,
 
 pub fn mount(self: *Self, path: []const u8) !void {
-    const fs: FileSystem = try .init(self, path);
-    try self.layers.append(self.allocator, .{ .cart = cart });
+    const fs: FileSystem = try .load(self, path);
+    try self.layers.append(self.allocator, .{ .cart = fs });
 }
 
 fn closeCartWriter(self: *Self) void {
@@ -286,13 +300,13 @@ pub fn writeCart(self: *Self, path: []const u8) !void {
     self.closeCartWriter();
 
     // Create file
-    var writer = try FileWriter.open(self, path, &.{});
+    var writer = try nux.File.NativeFileWriter.open(self, path, &.{});
     errdefer writer.close();
     var vfs = try VFS.init(self.allocator);
     errdefer vfs.deinit();
 
     // Write header
-    _ = try writer.interface.writeStruct(Cart.HeaderData{}, .little);
+    _ = try writer.interface.writeStruct(FileSystem.HeaderData{}, .little);
     try writer.interface.flush();
 
     self.cart_writer = .{
@@ -306,7 +320,7 @@ pub fn writeEntry(self: *Self, path: []const u8, data: []const u8) !void {
         const parent = try cart_writer.vfs.makeDir(std.fs.path.dirname(path) orelse "");
         // Write entry
         const w = &cart_writer.writer;
-        try w.interface.writeStruct(Cart.EntryData{
+        try w.interface.writeStruct(FileSystem.EntryData{
             .is_dir = false,
             .parent = parent,
             .data_len = @intCast(data.len),

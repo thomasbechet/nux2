@@ -23,7 +23,8 @@
             "ignore": [
                 "read",
                 "writeFile",
-                "FileWriter"
+                "NativeWriter",
+                "DirList"
             ]
         },
         {

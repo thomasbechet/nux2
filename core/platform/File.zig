@@ -75,7 +75,15 @@ const Default = struct {
         _ = try file.file.write(data);
     }
     fn stat(_: *anyopaque, path: []const u8) anyerror!Stat {
-        const s = try std.fs.cwd().statFile(path);
+        const s = std.fs.cwd().statFile(path) catch |err| switch (err) {
+            error.IsDir => {
+                return .{
+                    .kind = .dir,
+                    .size = 0,
+                };
+            },
+            else => return err,
+        };
         var kind: Kind = .unknown;
         switch (s.kind) {
             .directory => kind = .dir,

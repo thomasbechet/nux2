@@ -188,21 +188,30 @@ fn configNative(b: *std.Build, config: Config) void {
 
     // run
     const run = b.addRunArtifact(artifact);
-    if (b.args) |args| {
-        run.addArgs(args);
-    }
+    // if (b.args) |args| {
+    //     run.addArgs(args);
+    // }
     const run_step = b.step("run", "Run the console");
     run_step.dependOn(&install.step);
     run_step.dependOn(&run.step);
 
-    // debug
-    const debug = b.addSystemCommand(&.{
+    // lldb
+    const lldb = b.addSystemCommand(&.{
         "lldb",
         "--",
     });
-    debug.addArtifactArg(artifact);
-    const debug_step = b.step("debug", "Run the console under lldb");
-    debug_step.dependOn(&debug.step);
+    lldb.addArtifactArg(artifact);
+    const lldb_step = b.step("lldb", "Run the console under lldb");
+    lldb_step.dependOn(&lldb.step);
+
+    // gdb
+    const gdb = b.addSystemCommand(&.{
+        "gdb",
+        "--",
+    });
+    gdb.addArtifactArg(artifact);
+    const gdb_step = b.step("gdb", "Run the console under gdb");
+    gdb_step.dependOn(&gdb.step);
 
     // valgrind
     const valgrind = b.addSystemCommand(&.{"valgrind"});

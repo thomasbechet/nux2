@@ -5,47 +5,50 @@ const Self = @This();
 
 const NativeFileSystem = struct {
     path: []const u8,
+    allocator: std.mem.Allocator,
+    platform: nux.Platform.File,
 
-    fn init(mod: *Self, path: []const u8) !@This() {
+    fn init(allocator: std.mem.Allocator, path: []const u8, platform: nux.Platform.File) !@This() {
         return .{
-            .path = try mod.allocator.dupe(u8, path),
+            .path = try allocator.dupe(u8, path),
+            .allocator = allocator,
+            .platform = platform,
         };
     }
-    fn deinit(self: *@This(), mod: *Self) void {
-        mod.allocator.free(self.path);
+    fn deinit(self: *@This()) void {
+        self.allocator.free(self.path);
     }
-    fn read(self: *@This(), mod: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
-        const final_path = try std.mem.concat(mod.allocator, u8, &.{ self.path, "/", path });
-        defer mod.allocator.free(final_path);
-        const handle = try mod.platform.vtable.open(mod.platform.ptr, final_path, .read);
-        defer mod.platform.vtable.close(mod.platform.ptr, handle);
-        const fstat = try mod.platform.vtable.stat(mod.platform.ptr, path);
+    fn read(self: *@This(), path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+        const final_path = try std.mem.concat(self.allocator, u8, &.{ self.path, "/", path });
+        defer self.allocator.free(final_path);
+        const handle = try self.platform.vtable.open(self.platform.ptr, final_path, .read);
+        defer self.platform.vtable.close(self.platform.ptr, handle);
+        const fstat = try self.platform.vtable.stat(self.platform.ptr, path);
         const buffer = try allocator.alloc(u8, fstat.size);
-        try mod.platform.vtable.read(mod.platform.ptr, handle, buffer);
+        try self.platform.vtable.read(self.platform.ptr, handle, buffer);
         return buffer;
     }
-    fn stat(self: *@This(), mod: *Self, path: []const u8) !nux.Platform.File.Stat {
-        const final_path = try std.mem.concat(mod.allocator, u8, &.{ self.path, "/", path });
-        defer mod.allocator.free(final_path);
-        const handle = try mod.platform.vtable.open(mod.platform.ptr, final_path, .read);
-        defer mod.platform.vtable.close(mod.platform.ptr, handle);
-        return try mod.platform.vtable.stat(mod.platform.ptr, path);
+    fn stat(self: *@This(), path: []const u8) !nux.Platform.File.Stat {
+        const final_path = try std.mem.concat(self.allocator, u8, &.{ self.path, "/", path });
+        defer self.allocator.free(final_path);
+        std.log.info("{s}", .{final_path});
+        return try self.platform.vtable.stat(self.platform.ptr, ".");
     }
 };
 
 const Layer = union(enum) {
     cart: nux.Cart.FileSystem,
-    fs: NativeFileSystem,
+    native: NativeFileSystem,
 
-    fn deinit(self: *@This(), mod: *Self) void {
+    fn deinit(self: *@This()) void {
         switch (self.*) {
-            .cart => |*cart| cart.deinit(mod.cart),
-            .fs => |*fs| fs.deinit(mod),
+            .cart => |*cart| cart.deinit(),
+            .native => |*fs| fs.deinit(),
         }
     }
 };
 
-const DirList = struct {
+pub const DirList = struct {
     names: std.ArrayList([]const u8),
     allocator: std.mem.Allocator,
 
@@ -62,7 +65,7 @@ const DirList = struct {
         self.names.deinit(self.allocator);
     }
 
-    fn add(self: *@This(), name: []const u8) !void {
+    pub fn add(self: *@This(), name: []const u8) !void {
         for (self.names.items) |existing_name| {
             if (std.mem.eql(u8, name, existing_name)) {
                 return;
@@ -127,6 +130,7 @@ allocator: std.mem.Allocator,
 platform: nux.Platform.File,
 layers: std.ArrayList(Layer),
 logger: *nux.Logger,
+cart: *nux.Cart,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -134,14 +138,18 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.layers = try .initCapacity(core.platform.allocator, 8);
 
     // Add platform filesystem by default
-    const fs: NativeFileSystem = try .init(self, ".");
-    try self.layers.append(self.allocator, .{ .fs = fs });
+    const fs: NativeFileSystem = try .init(
+        self.allocator,
+        ".",
+        self.platform,
+    );
+    try self.layers.append(self.allocator, .{ .native = fs });
 
     try self.logAll();
 }
 pub fn deinit(self: *Self) void {
     for (self.layers.items) |*layer| {
-        layer.deinit(self);
+        layer.deinit();
     }
     self.layers.deinit(self.allocator);
 }
@@ -173,10 +181,10 @@ pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
     while (i > 0) {
         i -= 1;
         switch (self.layers.items[i]) {
-            .cart => |*cart| return cart.read(self, path, allocator) catch {
+            .cart => |*cart| return cart.read(path, allocator) catch {
                 continue;
             },
-            .fs => |*fs| return fs.read(self, path, allocator) catch {
+            .native => |*fs| return fs.read(path, allocator) catch {
                 continue;
             },
         }
@@ -192,7 +200,7 @@ fn stat(self: *Self, path: []const u8) !nux.Platform.File.Stat {
             .cart => |*cart| return cart.stat(path) catch {
                 continue;
             },
-            .fs => |*fs| return fs.stat(self, path) catch {
+            .native => |*fs| return fs.stat(path) catch {
                 continue;
             },
         }
@@ -208,19 +216,9 @@ fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirList {
     for (self.layers.items) |layer| {
         switch (layer) {
             .cart => |*cart| {
-                if (cart.vfs.findIndex(path)) |index| {
-                    const node = cart.vfs.nodes.items[index];
-                    if (node.data == .dir) {
-                        var it = node.data.dir.child;
-                        while (it) |child_index| {
-                            const child = cart.vfs.nodes.items[child_index];
-                            try dirList.add(child.name);
-                            it = child.next;
-                        }
-                    }
-                }
+                try cart.list(path, &dirList);
             },
-            .fs => {
+            .native => {
                 const handle = try self.platform.vtable.openDir(self.platform.ptr, path);
                 defer self.platform.vtable.closeDir(self.platform.ptr, handle);
                 var buf: [256]u8 = undefined;

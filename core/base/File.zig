@@ -31,8 +31,7 @@ const NativeFileSystem = struct {
     fn stat(self: *@This(), path: []const u8) !nux.Platform.File.Stat {
         const final_path = try std.mem.concat(self.allocator, u8, &.{ self.path, "/", path });
         defer self.allocator.free(final_path);
-        std.log.info("{s}", .{final_path});
-        return try self.platform.vtable.stat(self.platform.ptr, ".");
+        return try self.platform.vtable.stat(self.platform.ptr, final_path);
     }
 };
 
@@ -146,6 +145,13 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     try self.layers.append(self.allocator, .{ .native = fs });
 
     try self.logAll();
+
+    // var dirList = try self.list(".", self.allocator);
+    // defer dirList.deinit();
+    // for (dirList.names.items) |name| {
+    //     std.log.info("{s}", .{name});
+    //     std.log.info("{any}", .{try self.stat(name)});
+    // }
 }
 pub fn deinit(self: *Self) void {
     for (self.layers.items) |*layer| {
@@ -155,7 +161,7 @@ pub fn deinit(self: *Self) void {
 }
 
 fn logRecursive(self: *Self, path: []const u8, depth: u32) !void {
-    self.logger.info("PATH: {s}", .{path});
+    std.log.info("{s}", .{path});
     const fstat = try self.stat(path);
     switch (fstat.kind) {
         .dir => {
@@ -173,7 +179,7 @@ fn logRecursive(self: *Self, path: []const u8, depth: u32) !void {
     }
 }
 pub fn logAll(self: *Self) !void {
-    try self.logRecursive("/", 0);
+    try self.logRecursive(".", 0);
 }
 pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
     // Find first match
@@ -218,8 +224,11 @@ fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirList {
             .cart => |*cart| {
                 try cart.list(path, &dirList);
             },
-            .native => {
-                const handle = try self.platform.vtable.openDir(self.platform.ptr, path);
+            .native => |*fs| {
+                const final_path = try std.mem.concat(self.allocator, u8, &.{ fs.path, "/", path });
+                defer self.allocator.free(final_path);
+
+                const handle = try self.platform.vtable.openDir(self.platform.ptr, final_path);
                 defer self.platform.vtable.closeDir(self.platform.ptr, handle);
                 var buf: [256]u8 = undefined;
                 while (try self.platform.vtable.next(self.platform.ptr, handle, &buf)) |size| {

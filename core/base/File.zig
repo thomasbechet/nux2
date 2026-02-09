@@ -4,25 +4,49 @@ const nux = @import("../nux.zig");
 const Self = @This();
 
 const NativeFileSystem = struct {
+    path: []const u8,
     allocator: std.mem.Allocator,
     platform: nux.Platform.File,
 
-    fn init(allocator: std.mem.Allocator, platform: nux.Platform.File) !@This() {
+    fn init(path: []const u8, allocator: std.mem.Allocator, platform: nux.Platform.File) !@This() {
         return .{
+            .path = try allocator.dupe(u8, path),
             .allocator = allocator,
             .platform = platform,
         };
     }
+    fn deinit(self: *@This()) void {
+        self.allocator.free(self.path);
+    }
+    fn compuleFinalPath(self: *const @This(), path: []const u8, buf: []u8) ![]const u8 {
+        var w = std.Io.Writer.fixed(buf);
+        try w.print("{s}/{s}", .{ self.path, path });
+        return buf[0..w.end];
+    }
     fn read(self: *@This(), path: []const u8, allocator: std.mem.Allocator) ![]u8 {
-        const handle = try self.platform.vtable.open(self.platform.ptr, path, .read);
+        var buf: [256]u8 = undefined;
+        const final_path = try self.compuleFinalPath(path, &buf);
+        const handle = try self.platform.vtable.open(self.platform.ptr, final_path, .read);
         defer self.platform.vtable.close(self.platform.ptr, handle);
-        const fstat = try self.platform.vtable.stat(self.platform.ptr, path);
+        const fstat = try self.platform.vtable.stat(self.platform.ptr, final_path);
         const buffer = try allocator.alloc(u8, fstat.size);
         try self.platform.vtable.read(self.platform.ptr, handle, buffer);
         return buffer;
     }
     fn stat(self: *@This(), path: []const u8) !nux.Platform.File.Stat {
-        return try self.platform.vtable.stat(self.platform.ptr, path);
+        var buf: [256]u8 = undefined;
+        const final_path = try self.compuleFinalPath(path, &buf);
+        return try self.platform.vtable.stat(self.platform.ptr, final_path);
+    }
+    fn list(self: *const @This(), path: []const u8, dirList: *nux.File.DirList) !void {
+        var buf: [256]u8 = undefined;
+        const final_path = try self.compuleFinalPath(path, &buf);
+        const handle = try self.platform.vtable.openDir(self.platform.ptr, final_path);
+        defer self.platform.vtable.closeDir(self.platform.ptr, handle);
+        while (try self.platform.vtable.next(self.platform.ptr, handle, &buf)) |size| {
+            const name = buf[0..size];
+            try dirList.add(name);
+        }
     }
 };
 
@@ -33,7 +57,7 @@ const Layer = union(enum) {
     fn deinit(self: *@This()) void {
         switch (self.*) {
             .cart => |*cart| cart.deinit(),
-            .native => {},
+            .native => |*native| native.deinit(),
         }
     }
 };
@@ -126,15 +150,6 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.platform = core.platform.file;
     self.layers = try .initCapacity(core.platform.allocator, 8);
-
-    // Add platform filesystem by default
-    const fs: NativeFileSystem = try .init(
-        self.allocator,
-        self.platform,
-    );
-    try self.layers.append(self.allocator, .{ .native = fs });
-
-    try self.logAll();
 }
 pub fn deinit(self: *Self) void {
     for (self.layers.items) |*layer| {
@@ -143,6 +158,15 @@ pub fn deinit(self: *Self) void {
     self.layers.deinit(self.allocator);
 }
 
+pub fn mount(self: *Self, path: []const u8) !void {
+    if (std.mem.endsWith(u8, path, ".bin")) {
+        const fs: nux.Cart.FileSystem = try .load(path, self.allocator, self.platform);
+        try self.layers.append(self.allocator, .{ .cart = fs });
+    } else {
+        const fs: NativeFileSystem = try .init(path, self.allocator, self.platform);
+        try self.layers.append(self.allocator, .{ .native = fs });
+    }
+}
 fn logRecursive(self: *Self, path: []const u8, depth: u32) !void {
     std.log.info("{s}", .{path});
     const fstat = try self.stat(path);
@@ -206,14 +230,8 @@ pub fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirLis
             .cart => |*cart| {
                 try cart.list(path, &dirList);
             },
-            .native => {
-                const handle = try self.platform.vtable.openDir(self.platform.ptr, path);
-                defer self.platform.vtable.closeDir(self.platform.ptr, handle);
-                var buf: [256]u8 = undefined;
-                while (try self.platform.vtable.next(self.platform.ptr, handle, &buf)) |size| {
-                    const name = buf[0..size];
-                    try dirList.add(name);
-                }
+            .native => |*native| {
+                try native.list(path, &dirList);
             },
         }
     }

@@ -159,7 +159,7 @@ pub const FileSystem = struct {
     platform: nux.Platform.File,
     allocator: std.mem.Allocator,
 
-    fn load(path: []const u8, allocator: std.mem.Allocator, platform: nux.Platform.File) !@This() {
+    pub fn load(path: []const u8, allocator: std.mem.Allocator, platform: nux.Platform.File) !@This() {
         // Open file
         const handle = try platform.vtable.open(platform.ptr, path, .read);
         errdefer platform.vtable.close(platform.ptr, handle);
@@ -286,11 +286,6 @@ cart_writer: ?CartWriter,
 logger: *nux.Logger,
 file: *nux.File,
 
-pub fn mount(self: *Self, path: []const u8) !void {
-    const fs: FileSystem = try .load(path, self.allocator, self.platform);
-    try self.file.layers.append(self.allocator, .{ .cart = fs });
-}
-
 fn closeCartWriter(self: *Self) void {
     if (self.cart_writer) |*w| {
         w.writer.close();
@@ -298,11 +293,11 @@ fn closeCartWriter(self: *Self) void {
         self.cart_writer = null;
     }
 }
-pub fn writeCart(self: *Self, path: []const u8) !void {
+pub fn begin(self: *Self, path: []const u8) !void {
     self.closeCartWriter();
 
     // Create file
-    var writer = try nux.File.NativeFileWriter.open(self, path, &.{});
+    var writer = try nux.File.NativeWriter.open(self.file, path, &.{});
     errdefer writer.close();
     var vfs = try VFS.init(self.allocator);
     errdefer vfs.deinit();
@@ -316,7 +311,7 @@ pub fn writeCart(self: *Self, path: []const u8) !void {
         .vfs = vfs,
     };
 }
-pub fn writeEntry(self: *Self, path: []const u8, data: []const u8) !void {
+pub fn write(self: *Self, path: []const u8, data: []const u8) !void {
     if (self.cart_writer) |*cart_writer| {
         // Create parent dir
         const parent = try cart_writer.vfs.makeDir(std.fs.path.dirname(path) orelse "");

@@ -30,6 +30,12 @@
             ]
         },
         {
+            "path": "base/Cart.zig",
+            "ignore": [
+                "FileSystem"
+            ]
+        },
+        {
             "path": "base/Transform.zig"
         },
         {

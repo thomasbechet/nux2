@@ -201,6 +201,9 @@ fn configNative(b: *std.Build, config: Config) void {
         "--",
     });
     lldb.addArtifactArg(artifact);
+    if (b.args) |args| {
+        lldb.addArgs(args);
+    }
     const lldb_step = b.step("lldb", "Run the console under lldb");
     lldb_step.dependOn(&lldb.step);
 

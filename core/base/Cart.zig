@@ -91,7 +91,7 @@ const VFS = struct {
         });
         self.addChild(parent, new_index);
     }
-    fn newDir(self: *@This(), parent: u32, name: []const u8) !void {
+    fn newDir(self: *@This(), parent: u32, name: []const u8) !u32 {
         if (parent >= self.nodes.items.len) return error.invalidParent;
 
         const parent_node = self.nodes.items[parent];
@@ -110,32 +110,8 @@ const VFS = struct {
         });
 
         self.addChild(parent, new_index);
-    }
-    fn makeDir(self: *@This(), path: []const u8) !u32 {
-        var it = std.mem.splitScalar(u8, path, '/');
-        var index: u32 = 0; // start at root
 
-        while (it.next()) |part| {
-            if (part.len == 0) continue; // skip empty (leading / or //)
-
-            const node = self.nodes.items[index];
-            if (node.data != .dir) return error.notADirectory;
-
-            if (self.findChild(index, part)) |child| {
-                // Exists, descend
-                const child_node = self.nodes.items[child];
-                if (child_node.data != .dir) return error.notADirectory;
-                index = child;
-            } else {
-                // Create missing directory
-                try self.newDir(index, part);
-                // The new dir is now the first child
-                const created = self.findChild(index, part).?;
-                index = created;
-            }
-        }
-
-        return index;
+        return new_index;
     }
 };
 
@@ -149,7 +125,7 @@ pub const FileSystem = struct {
     const EntryData = extern struct {
         is_dir: bool,
         parent: u32,
-        path_len: u32,
+        name_len: u32,
         data_len: u64,
     };
 
@@ -195,8 +171,9 @@ pub const FileSystem = struct {
             reader = std.Io.Reader.fixed(&entry_buf);
             const entry = try reader.takeStruct(EntryData, .little);
             // Read name
-            const path_data = try allocator.alloc(u8, entry.path_len);
-            try platform.vtable.read(platform.ptr, handle, path_data);
+            const name_data = try allocator.alloc(u8, entry.name_len);
+            defer allocator.free(name_data);
+            try platform.vtable.read(platform.ptr, handle, name_data);
             // Check parent dir
             if (entry.parent > vfs.nodes.items.len) {
                 return error.invalidParentIndex;
@@ -205,15 +182,15 @@ pub const FileSystem = struct {
             if (parent.data != .dir) {
                 return error.parentIsNotADirectory;
             }
-            //
+            // Create node in VFS
             if (entry.is_dir) {
-                try vfs.newDir(entry.parent, path_data);
+                _ = try vfs.newDir(entry.parent, name_data);
             } else {
-                const offset = it + @sizeOf(EntryData) + entry.path_len;
-                try vfs.newFile(entry.parent, path_data, offset, entry.data_len);
+                const offset = it + @sizeOf(EntryData) + entry.name_len;
+                try vfs.newFile(entry.parent, name_data, offset, entry.data_len);
             }
             // Go to next entry
-            it += @sizeOf(EntryData) + entry.path_len + entry.data_len;
+            it += @sizeOf(EntryData) + entry.name_len + entry.data_len;
         }
         return .{
             .handle = handle,
@@ -286,6 +263,15 @@ cart_writer: ?CartWriter,
 logger: *nux.Logger,
 file: *nux.File,
 
+pub fn init(self: *Self, core: *const nux.Core) !void {
+    self.allocator = core.platform.allocator;
+    self.platform = core.platform.file;
+    self.cart_writer = null;
+}
+pub fn deinit(self: *Self) void {
+    self.closeCartWriter();
+}
+
 fn closeCartWriter(self: *Self) void {
     if (self.cart_writer) |*w| {
         w.writer.close();
@@ -313,18 +299,48 @@ pub fn begin(self: *Self, path: []const u8) !void {
 }
 pub fn write(self: *Self, path: []const u8, data: []const u8) !void {
     if (self.cart_writer) |*cart_writer| {
-        // Create parent dir
-        const parent = try cart_writer.vfs.makeDir(std.fs.path.dirname(path) orelse "");
-        // Write entry
         const w = &cart_writer.writer;
+        var parent_index: u32 = 0;
+        // Create parent dir
+        if (std.fs.path.dirname(path)) |parent| {
+            var it = std.mem.splitScalar(u8, parent, '/');
+            while (it.next()) |part| {
+                if (cart_writer.vfs.findChild(parent_index, part)) |child| {
+                    // Ensure child is a directory
+                    if (cart_writer.vfs.nodes.items[child].data != .dir) {
+                        return error.NotADirectory;
+                    }
+                    // Already exist
+                    parent_index = child;
+                } else {
+                    // Missing, create the directory
+                    const dir_index = try cart_writer.vfs.newDir(parent_index, part);
+                    // Write entry
+                    try w.interface.writeStruct(FileSystem.EntryData{
+                        .is_dir = true,
+                        .parent = parent_index,
+                        .data_len = 0,
+                        .name_len = @intCast(part.len),
+                    }, .little);
+                    // Write path
+                    _ = try w.interface.write(part);
+                    // Set as next parent
+                    parent_index = dir_index;
+                }
+            }
+        }
+        // Create file
+        const name = std.fs.path.basename(path);
+        _ = try cart_writer.vfs.newFile(parent_index, name, 0, data.len);
+        // Write entry
         try w.interface.writeStruct(FileSystem.EntryData{
             .is_dir = false,
-            .parent = parent,
+            .parent = parent_index,
             .data_len = @intCast(data.len),
-            .path_len = @intCast(path.len),
+            .name_len = @intCast(name.len),
         }, .little);
         // Write path
-        _ = try w.interface.write(path);
+        _ = try w.interface.write(name);
         // Write data
         _ = try w.interface.write(data);
         try w.interface.flush();

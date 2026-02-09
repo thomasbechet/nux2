@@ -83,13 +83,13 @@ pub const Module = struct {
                         else => {},
                     }
                 }
-                // nodes initialization
+                // Nodes initialization
                 if (T != Node) { // Node will register itself as node module
                     if (core.findModule(Node)) |node| {
                         try node.registerNodeModule(self);
                     }
                 }
-                // initialize
+                // Initialize
                 if (@hasDecl(T, "init")) {
                     const ccore: *const Core = core;
                     return self.init(ccore);

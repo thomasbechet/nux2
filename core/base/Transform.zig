@@ -2,6 +2,7 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 
 const Self = @This();
+
 pub const Property = enum {
     position,
     rotation,

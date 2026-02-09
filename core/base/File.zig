@@ -41,7 +41,7 @@ const NativeFileSystem = struct {
     fn list(self: *const @This(), path: []const u8, dirList: *nux.File.DirList) !void {
         var buf: [256]u8 = undefined;
         const final_path = try self.compuleFinalPath(path, &buf);
-        const handle = try self.platform.vtable.openDir(self.platform.ptr, final_path);
+        const handle = self.platform.vtable.openDir(self.platform.ptr, final_path) catch return; // The dir might not exist
         defer self.platform.vtable.closeDir(self.platform.ptr, handle);
         while (try self.platform.vtable.next(self.platform.ptr, handle, &buf)) |size| {
             const name = buf[0..size];
@@ -237,4 +237,11 @@ pub fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirLis
     }
 
     return dirList;
+}
+pub fn logList(self: *Self, path: []const u8) !void {
+    var dirList = try self.list(path, self.allocator);
+    defer dirList.deinit();
+    for (dirList.names.items) |name| {
+        self.logger.info("- {s}", .{name});
+    }
 }

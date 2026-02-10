@@ -151,7 +151,7 @@ pub fn deinit(self: *Self) void {
     self.events.deinit(self.allocator);
 }
 pub fn onEvent(self: *Self, event: nux.Platform.Input.Event) void {
-    self.logger.info("{any} {any}", .{ event.key, event.state });
+    // self.logger.info("{any} {any}", .{ event.key, event.state });
     self.events.append(self.allocator, event) catch return;
 }
 

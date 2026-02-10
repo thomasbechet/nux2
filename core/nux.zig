@@ -42,8 +42,14 @@ pub const Platform = struct {
         window: Platform.Window.Event,
     };
     pub const Config = struct {
-        logModuleInjection: bool = false,
-        entryPoint: ?[]const u8 = null,
+        logModuleInitialization: bool = false,
+        command: union(enum) {
+            run: struct {
+                script: []const u8 = "init.lua",
+            },
+            build: struct { path: []const u8 = "cart.bin", glob: []const u8 = "*" },
+        } = .{ .run = .{} },
+        mount: ?[]const u8 = null,
     };
     allocator: Platform.Allocator = std.heap.page_allocator,
     logger: Platform.Logger = .{},
@@ -74,7 +80,7 @@ pub const Module = struct {
                     switch (@typeInfo(field.type)) {
                         .pointer => |info| {
                             if (core.findModule(info.child)) |dependency| {
-                                if (core.platform.config.logModuleInjection) {
+                                if (core.platform.config.logModuleInitialization) {
                                     core.log("inject {s} to {s}", .{ @typeName(info.child), @typeName(T) });
                                 }
                                 @field(self, field.name) = dependency;
@@ -183,16 +189,28 @@ pub const Core = struct {
         });
         errdefer core.deinit();
 
-        // Handle entryPoint
+        // Mount base file system
         var file = core.findModule(File) orelse unreachable;
-        if (core.platform.config.entryPoint) |entryPoint| {
+        if (core.platform.config.mount) |entryPoint| {
             try file.mount(entryPoint);
         } else {
             try file.mount(".");
         }
-        // Call init script
-        var lua = core.findModule(Lua) orelse unreachable;
-        try lua.callEntryPoint("init.lua");
+
+        // Handle command
+        switch (core.platform.config.command) {
+            .run => |run| {
+                var lua = core.findModule(Lua) orelse unreachable;
+                try lua.callEntryPoint(run.script);
+            },
+            .build => |build| {
+                var cart = core.findModule(Cart) orelse unreachable;
+                var logger = core.findModule(Logger) orelse unreachable;
+                try cart.begin(build.path);
+                try cart.writeGlob(build.glob);
+                logger.info("out {s} ({s})", .{ build.path, build.glob });
+            },
+        }
 
         return core;
     }
@@ -205,7 +223,7 @@ pub const Core = struct {
         var i = self.modules.items.len;
         while (i > 0) : (i -= 1) {
             const module = &self.modules.items[i - 1];
-            if (self.platform.config.logModuleInjection) {
+            if (self.platform.config.logModuleInitialization) {
                 self.log("deinit module {s}...", .{module.name});
             }
             module.call_deinit();
@@ -235,12 +253,14 @@ pub const Core = struct {
     pub fn registerModules(self: *Core, comptime mods: anytype) !void {
         const first = self.modules.items.len;
         inline for (mods) |mod| {
-            self.log("register module {s}...", .{@typeName(mod)});
+            if (self.platform.config.logModuleInitialization) {
+                self.log("register module {s}...", .{@typeName(mod)});
+            }
             const module = try self.modules.addOne(self.platform.allocator);
             module.* = try .init(mod, self.platform.allocator);
         }
         for (self.modules.items[first..]) |*module| {
-            if (self.platform.config.logModuleInjection) {
+            if (self.platform.config.logModuleInitialization) {
                 self.log("init module {s}...", .{module.name});
             }
             try module.call_init(self);

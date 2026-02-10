@@ -114,7 +114,7 @@ pub const FileSystem = struct {
 };
 
 const CartWriter = struct {
-    writer: nux.File.NativeWriter,
+    writer: nux.File.Writer,
     path: []const u8,
 };
 
@@ -146,7 +146,7 @@ pub fn begin(self: *Self, path: []const u8) !void {
     // Create file
     const path_copy = try self.allocator.dupe(u8, path);
     errdefer self.allocator.free(path_copy);
-    var writer = try nux.File.NativeWriter.open(self.file, path, &.{});
+    var writer = try nux.File.Writer.open(self.file, path, &.{});
     errdefer writer.close();
 
     // Write header

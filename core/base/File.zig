@@ -18,14 +18,14 @@ const NativeFileSystem = struct {
     fn deinit(self: *@This()) void {
         self.allocator.free(self.path);
     }
-    fn compuleFinalPath(self: *const @This(), path: []const u8, buf: []u8) ![]const u8 {
+    fn compuleNativePath(self: *const @This(), path: []const u8, buf: []u8) ![]const u8 {
         var w = std.Io.Writer.fixed(buf);
         try w.print("{s}/{s}", .{ self.path, path });
         return buf[0..w.end];
     }
     fn read(self: *@This(), path: []const u8, allocator: std.mem.Allocator) ![]u8 {
         var buf: [256]u8 = undefined;
-        const final_path = try self.compuleFinalPath(path, &buf);
+        const final_path = try self.compuleNativePath(path, &buf);
         const handle = try self.platform.vtable.open(self.platform.ptr, final_path, .read);
         defer self.platform.vtable.close(self.platform.ptr, handle);
         const fstat = try self.platform.vtable.stat(self.platform.ptr, final_path);
@@ -35,12 +35,12 @@ const NativeFileSystem = struct {
     }
     fn stat(self: *@This(), path: []const u8) !nux.Platform.File.Stat {
         var buf: [256]u8 = undefined;
-        const final_path = try self.compuleFinalPath(path, &buf);
+        const final_path = try self.compuleNativePath(path, &buf);
         return try self.platform.vtable.stat(self.platform.ptr, final_path);
     }
     fn list(self: *const @This(), fileList: *nux.File.FileList) !void {
         var buf: [256]u8 = undefined;
-        const final_path = try self.compuleFinalPath(".", &buf);
+        const final_path = try self.compuleNativePath(".", &buf);
         const handle = try self.platform.vtable.openDir(self.platform.ptr, final_path);
         defer self.platform.vtable.closeDir(self.platform.ptr, handle);
         while (try self.platform.vtable.next(self.platform.ptr, handle, &buf)) |size| {
@@ -140,7 +140,7 @@ pub const FileList = struct {
     }
 };
 
-pub const NativeWriter = struct {
+pub const Writer = struct {
     file: *Self,
     handle: nux.Platform.File.Handle,
     interface: std.Io.Writer,
@@ -163,7 +163,7 @@ pub const NativeWriter = struct {
     }
 
     fn drain(io_w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
-        const w: *NativeWriter = @alignCast(@fieldParentPtr("interface", io_w));
+        const w: *Writer = @alignCast(@fieldParentPtr("interface", io_w));
         const file = w.file;
         const buffered = io_w.buffered();
         // Process buffered

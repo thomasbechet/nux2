@@ -753,7 +753,7 @@ pub fn dump(self: *Self, id: ID) void {
 
 pub fn exportNode(self: *Self, id: ID, path: []const u8) !void {
     var buf: [512]u8 = undefined;
-    var file_writer: nux.File.NativeWriter = try .open(self.file, path, &buf);
+    var file_writer: nux.File.Writer = try .open(self.file, path, &buf);
     defer file_writer.close();
     // Collect nodes
     var nodes = try self.collect(self.allocator, id);

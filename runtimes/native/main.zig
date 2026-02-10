@@ -3,6 +3,40 @@ const nux = @import("nux");
 const window = @import("window.zig");
 const api = @import("api.zig");
 
+fn parseConfig(args: [][:0]u8, config: *nux.Platform.Config) !void {
+    var i: usize = 1;
+    while (i < args.len) {
+        var arg = args[i];
+        // Consume - and --
+        var is_param = false;
+        while (arg.len > 0 and arg[0] == '-') {
+            arg = arg[1..];
+            is_param = true;
+        }
+        if (is_param) {
+            // Check param
+            if (std.mem.eql(u8, arg, "p")) {
+                // Read path
+                i += 1;
+                if (i >= args.len) {
+                    return error.MissingPath;
+                }
+                config.mount = args[i];
+            }
+        } else {
+            // Build command
+            if (std.mem.eql(u8, arg, "build")) {
+                i += 1;
+                if (i >= args.len) {
+                    return error.MissingBuildGlob;
+                }
+                config.command = .{ .build = .{ .glob = args[i] } };
+            }
+        }
+        i += 1;
+    }
+}
+
 pub fn main() !void {
     // Create allocator
     var gpa: std.heap.DebugAllocator(.{}) = .init;
@@ -17,9 +51,9 @@ pub fn main() !void {
     var platform = nux.Platform{
         .allocator = allocator,
     };
-    if (args.len > 1) {
-        platform.config.entryPoint = args[1];
-    }
+
+    // Parse arguments
+    try parseConfig(args, &platform.config);
 
     // Run core
     var core: *nux.Core = try .init(platform);

@@ -56,6 +56,8 @@ const VFS = struct {
         var index: u32 = 0;
         while (it.next()) |part| {
             if (part.len == 0) continue; // skip empty (leading / or //)
+            if (std.mem.eql(u8, part, ".")) continue;
+            if (std.mem.eql(u8, part, "..")) continue;
             const child = self.findChild(index, part) orelse return null;
             const child_node = self.nodes.items[child];
             const has_next = it.peek() != null;
@@ -237,14 +239,16 @@ pub const FileSystem = struct {
         }
         return error.entryNotFound;
     }
-    pub fn list(self: *const @This(), path: []const u8, dirList: *nux.File.DirList) !void {
+    pub fn list(self: *const @This(), path: []const u8, fileList: *nux.File.FileList) !void {
+        std.log.info("QWDQWD {s}", .{path});
         if (self.vfs.findIndex(path)) |index| {
+            std.log.info("QWDQWD {s}", .{path});
             const node = self.vfs.nodes.items[index];
             if (node.data == .dir) {
                 var it = node.data.dir.child;
                 while (it) |child_index| {
                     const child = self.vfs.nodes.items[child_index];
-                    try dirList.add(child.name);
+                    try fileList.add(child.name);
                     it = child.next;
                 }
             }

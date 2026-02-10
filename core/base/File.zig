@@ -38,14 +38,14 @@ const NativeFileSystem = struct {
         const final_path = try self.compuleFinalPath(path, &buf);
         return try self.platform.vtable.stat(self.platform.ptr, final_path);
     }
-    fn list(self: *const @This(), path: []const u8, dirList: *nux.File.DirList) !void {
+    fn list(self: *const @This(), path: []const u8, fileList: *nux.File.FileList) !void {
         var buf: [256]u8 = undefined;
         const final_path = try self.compuleFinalPath(path, &buf);
-        const handle = self.platform.vtable.openDir(self.platform.ptr, final_path) catch return; // The dir might not exist
+        const handle = try self.platform.vtable.openDir(self.platform.ptr, final_path);
         defer self.platform.vtable.closeDir(self.platform.ptr, handle);
         while (try self.platform.vtable.next(self.platform.ptr, handle, &buf)) |size| {
             const name = buf[0..size];
-            try dirList.add(name);
+            try fileList.add(name);
         }
     }
 };
@@ -62,7 +62,7 @@ const Layer = union(enum) {
     }
 };
 
-pub const DirList = struct {
+pub const FileList = struct {
     names: std.ArrayList([]const u8),
     allocator: std.mem.Allocator,
 
@@ -168,13 +168,12 @@ pub fn mount(self: *Self, path: []const u8) !void {
     }
 }
 fn logRecursive(self: *Self, path: []const u8, depth: u32) !void {
-    std.log.info("{s}", .{path});
     const fstat = try self.stat(path);
     switch (fstat.kind) {
         .dir => {
-            var dirList = try self.list(path, self.allocator);
-            defer dirList.deinit();
-            for (dirList.names.items) |name| {
+            var fileList = try self.list(path, self.allocator);
+            defer fileList.deinit();
+            for (fileList.names.items) |name| {
                 var buf: [256]u8 = undefined;
                 var writer = std.Io.Writer.fixed(&buf);
                 try writer.print("{s}/{s}", .{ path, name });
@@ -220,28 +219,28 @@ pub fn stat(self: *Self, path: []const u8) !nux.Platform.File.Stat {
     }
     return error.entryNotFound;
 }
-pub fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !DirList {
-    var dirList = try DirList.init(allocator);
-    errdefer dirList.deinit();
+pub fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !FileList {
+    var fileList = try FileList.init(allocator);
+    errdefer fileList.deinit();
 
     // Collect names for each layer
     for (self.layers.items) |layer| {
         switch (layer) {
             .cart => |*cart| {
-                try cart.list(path, &dirList);
+                cart.list(path, &fileList) catch {};
             },
             .native => |*native| {
-                try native.list(path, &dirList);
+                native.list(path, &fileList) catch {};
             },
         }
     }
 
-    return dirList;
+    return fileList;
 }
 pub fn logList(self: *Self, path: []const u8) !void {
-    var dirList = try self.list(path, self.allocator);
-    defer dirList.deinit();
-    for (dirList.names.items) |name| {
+    var fileList = try self.list(path, self.allocator);
+    defer fileList.deinit();
+    for (fileList.names.items) |name| {
         self.logger.info("- {s}", .{name});
     }
 }

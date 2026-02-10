@@ -38,9 +38,9 @@ const NativeFileSystem = struct {
         const final_path = try self.compuleFinalPath(path, &buf);
         return try self.platform.vtable.stat(self.platform.ptr, final_path);
     }
-    fn list(self: *const @This(), path: []const u8, fileList: *nux.File.FileList) !void {
+    fn list(self: *const @This(), fileList: *nux.File.FileList) !void {
         var buf: [256]u8 = undefined;
-        const final_path = try self.compuleFinalPath(path, &buf);
+        const final_path = try self.compuleFinalPath(".", &buf);
         const handle = try self.platform.vtable.openDir(self.platform.ptr, final_path);
         defer self.platform.vtable.closeDir(self.platform.ptr, handle);
         while (try self.platform.vtable.next(self.platform.ptr, handle, &buf)) |size| {
@@ -63,29 +63,80 @@ const Layer = union(enum) {
 };
 
 pub const FileList = struct {
-    names: std.ArrayList([]const u8),
     allocator: std.mem.Allocator,
+    paths: std.ArrayList([]const u8),
+    glob: []const u8,
 
-    fn init(allocator: std.mem.Allocator) !@This() {
+    fn init(allocator: std.mem.Allocator, pattern: []const u8) !@This() {
         return .{
             .allocator = allocator,
-            .names = try .initCapacity(allocator, 8),
+            .paths = try .initCapacity(allocator, 8),
+            .glob = pattern,
         };
     }
-    fn deinit(self: *@This()) void {
-        for (self.names.items) |name| {
-            self.allocator.free(name);
+    pub fn deinit(self: *@This()) void {
+        for (self.paths.items) |path| {
+            self.allocator.free(path);
         }
-        self.names.deinit(self.allocator);
+        self.paths.deinit(self.allocator);
     }
 
-    pub fn add(self: *@This(), name: []const u8) !void {
-        for (self.names.items) |existing_name| {
-            if (std.mem.eql(u8, name, existing_name)) {
+    fn match(pattern: []const u8, path: []const u8) bool {
+        var pattern_i: usize = 0;
+        var name_i: usize = 0;
+        var next_pattern_i: usize = 0;
+        var next_name_i: usize = 0;
+        while (pattern_i < pattern.len or name_i < path.len) {
+            if (pattern_i < pattern.len) {
+                const c = pattern[pattern_i];
+                switch (c) {
+                    '?' => { // single-character wildcard
+                        if (name_i < path.len) {
+                            pattern_i += 1;
+                            name_i += 1;
+                            continue;
+                        }
+                    },
+                    '*' => { // zero-or-more-character wildcard
+                        // Try to match at name_i.
+                        // If that doesn't work out,
+                        // restart at name_i+1 next.
+                        next_pattern_i = pattern_i;
+                        next_name_i = name_i + 1;
+                        pattern_i += 1;
+                        continue;
+                    },
+                    else => { // ordinary character
+                        if (name_i < path.len and path[name_i] == c) {
+                            pattern_i += 1;
+                            name_i += 1;
+                            continue;
+                        }
+                    },
+                }
+            }
+            // Mismatch. Maybe restart.
+            if (next_name_i > 0 and next_name_i <= path.len) {
+                pattern_i = next_pattern_i;
+                name_i = next_name_i;
+                continue;
+            }
+            return false;
+        }
+        // Matched all of pattern to all of name. Success.
+        return true;
+    }
+
+    pub fn add(self: *@This(), path: []const u8) !void {
+        if (!match(self.glob, path)) {
+            return;
+        }
+        for (self.paths.items) |existing_path| {
+            if (std.mem.eql(u8, path, existing_path)) {
                 return;
             }
         }
-        try self.names.append(self.allocator, try self.allocator.dupe(u8, name));
+        try self.paths.append(self.allocator, try self.allocator.dupe(u8, path));
     }
 };
 
@@ -167,26 +218,6 @@ pub fn mount(self: *Self, path: []const u8) !void {
         try self.layers.append(self.allocator, .{ .native = fs });
     }
 }
-fn logRecursive(self: *Self, path: []const u8, depth: u32) !void {
-    const fstat = try self.stat(path);
-    switch (fstat.kind) {
-        .dir => {
-            var fileList = try self.list(path, self.allocator);
-            defer fileList.deinit();
-            for (fileList.names.items) |name| {
-                var buf: [256]u8 = undefined;
-                var writer = std.Io.Writer.fixed(&buf);
-                try writer.print("{s}/{s}", .{ path, name });
-                const subpath = buf[0..writer.end];
-                try self.logRecursive(subpath, depth + 1);
-            }
-        },
-        else => {},
-    }
-}
-pub fn logAll(self: *Self) !void {
-    try self.logRecursive(".", 0);
-}
 pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
     // Find first match
     var i = self.layers.items.len;
@@ -219,28 +250,28 @@ pub fn stat(self: *Self, path: []const u8) !nux.Platform.File.Stat {
     }
     return error.entryNotFound;
 }
-pub fn list(self: *Self, path: []const u8, allocator: std.mem.Allocator) !FileList {
-    var fileList = try FileList.init(allocator);
+pub fn glob(self: *Self, pattern: []const u8, allocator: std.mem.Allocator) !FileList {
+    var fileList = try FileList.init(allocator, pattern);
     errdefer fileList.deinit();
 
-    // Collect names for each layer
+    // Collect files for each layer
     for (self.layers.items) |layer| {
         switch (layer) {
             .cart => |*cart| {
-                cart.list(path, &fileList) catch {};
+                cart.list(&fileList) catch {};
             },
             .native => |*native| {
-                native.list(path, &fileList) catch {};
+                native.list(&fileList) catch {};
             },
         }
     }
 
     return fileList;
 }
-pub fn logList(self: *Self, path: []const u8) !void {
-    var fileList = try self.list(path, self.allocator);
-    defer fileList.deinit();
-    for (fileList.names.items) |name| {
-        self.logger.info("- {s}", .{name});
+pub fn logGlob(self: *Self, pattern: []const u8) !void {
+    var ls = try self.glob(pattern, self.allocator);
+    defer ls.deinit();
+    for (ls.paths.items) |path| {
+        self.logger.info("- {s}", .{path});
     }
 }

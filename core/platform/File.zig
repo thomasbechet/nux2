@@ -10,15 +10,8 @@ pub const Mode = enum {
     write_append,
 };
 
-pub const Kind = enum {
-    file,
-    dir,
-    unknown,
-};
-
 pub const Stat = struct {
     size: u64,
-    kind: Kind,
 };
 
 pub const Handle = *anyopaque;
@@ -41,7 +34,7 @@ const Default = struct {
     };
     const DirHandle = struct {
         dir: std.fs.Dir,
-        it: std.fs.Dir.Iterator,
+        walker: std.fs.Dir.Walker,
     };
     fn open(_: *anyopaque, path: []const u8, mode: Mode) anyerror!Handle {
         const file = out: switch (mode) {
@@ -75,23 +68,8 @@ const Default = struct {
         _ = try file.file.write(data);
     }
     fn stat(_: *anyopaque, path: []const u8) anyerror!Stat {
-        const s = std.fs.cwd().statFile(path) catch |err| switch (err) {
-            error.IsDir => {
-                return .{
-                    .kind = .dir,
-                    .size = 0,
-                };
-            },
-            else => return err,
-        };
-        var kind: Kind = .unknown;
-        switch (s.kind) {
-            .directory => kind = .dir,
-            .file => kind = .file,
-            else => {},
-        }
+        const s = try std.fs.cwd().statFile(path);
         return .{
-            .kind = kind,
             .size = s.size,
         };
     }
@@ -99,23 +77,24 @@ const Default = struct {
         const cwd = std.fs.cwd();
         var dir = try cwd.openDir(path, .{ .iterate = true });
         errdefer dir.close();
-        const it = dir.iterate();
+        const walker = try dir.walk(std.heap.page_allocator);
         const handle = try std.heap.page_allocator.create(DirHandle);
         handle.dir = dir;
-        handle.it = it;
+        handle.walker = walker;
         return @ptrCast(handle);
     }
     fn closeDir(_: *anyopaque, handle: Handle) void {
         const dir: *DirHandle = @ptrCast(@alignCast(handle));
+        dir.walker.deinit();
         dir.dir.close();
         std.heap.page_allocator.destroy(dir);
     }
-    fn next(_: *anyopaque, handle: Handle, name: []u8) anyerror!?usize {
+    fn next(_: *anyopaque, handle: Handle, path: []u8) anyerror!?usize {
         const dir: *DirHandle = @ptrCast(@alignCast(handle));
-        while (try dir.it.next()) |entry| {
-            if (entry.kind == .directory or entry.kind == .file) {
-                std.mem.copyForwards(u8, name, entry.name);
-                return entry.name.len;
+        while (try dir.walker.next()) |entry| {
+            if (entry.kind == .file) {
+                std.mem.copyForwards(u8, path, entry.path);
+                return entry.path.len;
             }
         }
         return null;

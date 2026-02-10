@@ -1,5 +1,4 @@
-Cart.begin("mycart.bin")
-Cart.write("hello/world", "TEST")
+-- Cart.begin("mycart.bin")
+-- Cart.writeGlob("*")
 File.mount("mycart.bin")
--- File.logList("hello")
-File.logAll()
+File.logGlob("*")

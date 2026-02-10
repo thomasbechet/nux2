@@ -23,10 +23,10 @@
             "ignore": [
                 "read",
                 "stat",
-                "list",
+                "glob",
                 "writeFile",
                 "NativeWriter",
-                "DirList"
+                "FileList"
             ]
         },
         {

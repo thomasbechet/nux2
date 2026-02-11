@@ -51,14 +51,14 @@ fn loadString(self: *Self, s: []const u8, name: []const u8) !void {
     const ret = c.luaL_loadbufferx(self.L, s.ptr, s.len, name.ptr, null);
     if (ret != c.LUA_OK) {
         self.logger.err("{s}", .{c.lua_tolstring(self.L, -1, 0)});
-        return error.luaLoadingError;
+        return error.LuaLoadingError;
     }
 }
 fn protectedCall(self: *Self) !void {
     const ret = c.lua_pcallk(self.L, 0, c.LUA_MULTRET, 0, 0, null);
     if (ret != c.LUA_OK) {
         self.logger.err("{s}", .{c.lua_tolstring(self.L, -1, 0)});
-        return error.luaCallError;
+        return error.LuaCallError;
     }
 }
 
@@ -431,7 +431,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 
     // Create lua VM
-    self.L = c.lua_newstate(alloc, self, 0) orelse return error.newstate;
+    self.L = c.lua_newstate(alloc, self, 0) orelse return error.Newstate;
     errdefer c.lua_close(self.L);
 
     // Open api
@@ -480,13 +480,13 @@ pub fn loadModule(self: *Self, module: *LuaModule, id: nux.ID, name: []const u8,
     if (nret != 0) {
         if (nret != 1 or !c.lua_istable(self.L, -1)) {
             // "lua module '%s' returned value is not a table",
-            return error.invalidReturnedLuaScript;
+            return error.InvalidReturnedLuaScript;
         }
     } else {
         _ = c.lua_getglobal(self.L, module_table);
         if (!c.lua_istable(self.L, -1)) {
             // "lua module table '%s' removed"
-            return error.luaTableRemoved;
+            return error.LuaTableRemoved;
         }
     }
     module.ref = c.luaL_ref(self.L, c.LUA_REGISTRYINDEX);
@@ -502,7 +502,7 @@ pub fn unloadModule(self: *Self, module: *LuaModule) !void {
 }
 fn callFunction(self: *Self, nargs: c_int, nreturns: c_int) !void {
     if (c.lua_pcallk(self.L, nargs, nreturns, 0, 0, null) != c.LUA_OK) {
-        return error.luaCallError;
+        return error.LuaCallError;
     }
 }
 pub fn callModule(self: *Self, module: *LuaModule, name: [*c]const u8, nargs: c_int) !void {

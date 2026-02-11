@@ -39,7 +39,7 @@ pub const FileSystem = struct {
         // Get file stat
         const fstat = try platform.vtable.stat(platform.ptr, path);
         if (fstat.size < @sizeOf(HeaderData)) {
-            return error.invalidCartSize;
+            return error.InvalidCartSize;
         }
         // Read header
         var buf: [@sizeOf(HeaderData)]u8 = undefined;
@@ -47,10 +47,10 @@ pub const FileSystem = struct {
         var reader = std.Io.Reader.fixed(&buf);
         const header = try reader.takeStruct(HeaderData, .little);
         if (!std.mem.eql(u8, &header.magic, &magic)) {
-            return error.invalidCartMagic;
+            return error.InvalidCartMagic;
         }
         if (header.version != 1) {
-            return error.invalidCartVersion;
+            return error.InvalidCartVersion;
         }
         // Read entries
         var entry_buf: [@sizeOf(EntryData)]u8 = undefined;
@@ -95,7 +95,7 @@ pub const FileSystem = struct {
             try self.platform.vtable.read(self.platform.ptr, self.handle.?, buffer);
             return buffer;
         }
-        return error.entryNotFound;
+        return error.EntryNotFound;
     }
     pub fn stat(self: *@This(), path: []const u8) !nux.Platform.File.Stat {
         if (self.entries.get(path)) |entry| {
@@ -103,7 +103,7 @@ pub const FileSystem = struct {
                 .size = entry.length,
             };
         }
-        return error.entryNotFound;
+        return error.EntryNotFound;
     }
     pub fn list(self: *const @This(), fileList: *nux.File.FileList) !void {
         var it = self.entries.iterator();

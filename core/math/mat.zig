@@ -221,7 +221,7 @@ pub fn Mat(r: comptime_int, c: comptime_int, comptime T: type) type {
             }
 
             const det_val = self.determinant();
-            if (det_val == 0) return error.singular;
+            if (det_val == 0) return error.Singular;
 
             var cof: Self = undefined;
 

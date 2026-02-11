@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub const Logger = @import("base/Logger.zig");
+pub const Config = @import("base/Config.zig");
 pub const Node = @import("base/Node.zig");
 pub const File = @import("base/File.zig");
 pub const Cart = @import("base/Cart.zig");
@@ -76,7 +77,7 @@ pub const Module = struct {
         const gen = struct {
             fn call_init(pointer: *anyopaque, core: *Core) anyerror!void {
                 const self: *T = @ptrCast(@alignCast(pointer));
-                // dependency injection
+                // Dependency injection
                 inline for (@typeInfo(T).@"struct".fields) |field| {
                     switch (@typeInfo(field.type)) {
                         .pointer => |info| {
@@ -176,6 +177,7 @@ pub const Core = struct {
         // Register core modules
         try core.registerModules(.{Logger});
         try core.registerModules(.{
+            Config,
             Node,
             Input,
             File,
@@ -198,6 +200,10 @@ pub const Core = struct {
         } else {
             try file.mount(".");
         }
+
+        // Load configuration
+        var config = core.findModule(Config) orelse unreachable;
+        try config.load();
 
         // Handle command
         switch (core.platform.config.command) {
@@ -254,7 +260,7 @@ pub const Core = struct {
         const input = self.findModule(Input) orelse return;
         switch (event) {
             .requestExit => self.running = false,
-            else => {}
+            else => {},
         }
         input.onEvent(&event);
     }

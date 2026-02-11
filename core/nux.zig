@@ -38,8 +38,9 @@ pub const Platform = struct {
     pub const File = @import("platform/File.zig");
     pub const GPU = @import("platform/GPU.zig");
     pub const Event = union(enum) {
-        input: Platform.Input.Event,
-        window: Platform.Window.Event,
+        keyPressed: Platform.Input.KeyPressed,
+        windowResized: Platform.Window.WindowResized,
+        requestExit,
     };
     pub const Config = struct {
         logModuleInitialization: bool = false,
@@ -252,9 +253,10 @@ pub const Core = struct {
     pub fn pushEvent(self: *Core, event: Platform.Event) void {
         const input = self.findModule(Input) orelse return;
         switch (event) {
-            .input => |e| input.onEvent(e),
-            .window => |_| {},
+            .requestExit => self.running = false,
+            else => {}
         }
+        input.onEvent(&event);
     }
 
     pub fn registerModules(self: *Core, comptime mods: anytype) !void {

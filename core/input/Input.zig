@@ -141,7 +141,7 @@ controllers: [Controller.max]Controller,
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
 input_map: *nux.InputMap,
-events: std.ArrayList(nux.Platform.Input.Event),
+events: std.ArrayList(nux.Platform.Input.KeyPressed),
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -150,9 +150,11 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn deinit(self: *Self) void {
     self.events.deinit(self.allocator);
 }
-pub fn onEvent(self: *Self, event: nux.Platform.Input.Event) void {
+pub fn onEvent(self: *Self, event: *const nux.Platform.Event) void {
+    _ = self;
+    _ = event;
     // self.logger.info("{any} {any}", .{ event.key, event.state });
-    self.events.append(self.allocator, event) catch return;
+    // self.events.append(self.allocator, event) catch return;
 }
 
 // static void

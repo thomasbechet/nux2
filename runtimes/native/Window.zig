@@ -5,14 +5,12 @@ const nux = @import("nux");
 const gl = @import("gl");
 
 var procs: gl.ProcTable = undefined;
-
 var key_map: [c.GLFW_KEY_LAST + 1]?nux.Input.Key = undefined;
 
 const Self = @This();
 
 running: bool = true,
 window: ?*c.GLFWwindow = null,
-exit_requested: bool = false,
 core: *nux.Core = undefined,
 
 pub fn init() Self {
@@ -163,8 +161,8 @@ pub fn start(self: *Self) !void {
 pub fn pollEvents(self: *Self, core: *nux.Core) !void {
     self.core = core;
     c.glfwPollEvents();
-    if (c.glfwWindowShouldClose(self.window) == 0 or self.exit_requested) {
-        // core.pushEvent();
+    if (c.glfwWindowShouldClose(self.window) != 0) {
+        core.pushEvent(.requestExit);
     }
 }
 pub fn swapBuffers(self: *Self) !void {
@@ -180,13 +178,13 @@ fn keyCallback(win: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, 
     const self: *Self = @ptrCast(@alignCast(c.glfwGetWindowUserPointer(win).?));
     switch (key) {
         c.GLFW_KEY_ESCAPE => {
-            self.exit_requested = true;
+            self.core.pushEvent(.requestExit);
         },
         else => {},
     }
     const state: nux.Input.State = if (action == c.GLFW_RELEASE) .released else .pressed;
     if (key_map[@intCast(key)]) |k| {
-        self.core.pushEvent(.{ .input = .{
+        self.core.pushEvent(.{ .keyPressed = .{
             .key = k,
             .state = state,
         } });

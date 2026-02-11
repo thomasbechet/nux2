@@ -6,7 +6,10 @@ vtable: *const VTable = &.{},
 
 pub const Handle = *anyopaque;
 
-pub const Event = struct { width: u32, height: u32 };
+pub const WindowResized = struct {
+    width: u32,
+    height: u32,
+};
 
 pub const VTable = struct {
     open: *const fn (*anyopaque, w: u32, h: u32) anyerror!Handle = Default.open,

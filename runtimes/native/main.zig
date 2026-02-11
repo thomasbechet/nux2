@@ -1,9 +1,9 @@
 const std = @import("std");
 const nux = @import("nux");
-const window = @import("window.zig");
 const api = @import("api.zig");
+const Window = @import("Window.zig");
 
-fn parseConfig(args: [][:0]u8, config: *nux.Platform.Config) !void {
+fn parseArgs(args: [][:0]u8, config: *nux.Platform.Config) !void {
     var i: usize = 1;
     while (i < args.len) {
         var arg = args[i];
@@ -53,12 +53,20 @@ pub fn main() !void {
     };
 
     // Parse arguments
-    try parseConfig(args, &platform.config);
+    try parseArgs(args, &platform.config);
 
-    // Run core
+    // Init core
     var core: *nux.Core = try .init(platform);
     defer core.deinit();
-    try core.update();
-    var context: window.Context = .init(core);
-    try context.run();
+    // Init window
+    var window: Window = .init();
+    defer window.deinit();
+    try window.start();
+
+    // Run forever
+    while (core.isRunning()) {
+        try window.pollEvents(core);
+        try core.update();
+        try window.swapBuffers();
+    }
 }

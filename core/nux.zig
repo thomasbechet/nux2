@@ -155,6 +155,7 @@ pub const Module = struct {
 pub const Core = struct {
     platform: Platform,
     modules: std.ArrayList(Module),
+    running: bool = false,
 
     fn log(
         self: *Core,
@@ -202,6 +203,7 @@ pub const Core = struct {
             .run => |run| {
                 var lua = core.findModule(Lua) orelse unreachable;
                 try lua.callEntryPoint(run.script);
+                core.running = true;
             },
             .build => |build| {
                 var cart = core.findModule(Cart) orelse unreachable;
@@ -219,7 +221,6 @@ pub const Core = struct {
         if (self.findModule(Node)) |node| {
             node.delete(node.getRoot()) catch {};
         }
-
         var i = self.modules.items.len;
         while (i > 0) : (i -= 1) {
             const module = &self.modules.items[i - 1];
@@ -236,9 +237,15 @@ pub const Core = struct {
         self.platform.allocator.destroy(self);
     }
 
+    pub fn isRunning(self: *const Core) bool {
+        return self.running;
+    }
+
     pub fn update(self: *Core) !void {
-        for (self.modules.items) |*module| {
-            try module.call_update();
+        if (self.running) {
+            for (self.modules.items) |*module| {
+                try module.call_update();
+            }
         }
     }
 

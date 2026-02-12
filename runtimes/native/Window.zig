@@ -9,9 +9,37 @@ var key_map: [c.GLFW_KEY_LAST + 1]?nux.Input.Key = undefined;
 
 const Self = @This();
 
-running: bool = true,
 window: ?*c.GLFWwindow = null,
 core: *nux.Core = undefined,
+
+fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
+    var self: *Self = @ptrCast(@alignCast(ctx));
+    c.glfwInitHint(c.GLFW_PLATFORM, c.GLFW_PLATFORM_X11);
+    if (c.glfwInit() == 0) {
+        @panic("Failed to initialize GLFW");
+    }
+    c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, 4);
+    c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 3);
+    c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
+    c.glfwWindowHint(c.GLFW_SAMPLES, 0);
+
+    const cw: c_int = @intCast(w);
+    const ch: c_int = @intCast(h);
+    self.window = c.glfwCreateWindow(cw, ch, "nux", null, null);
+    c.glfwSetWindowSize(self.window, cw, ch);
+    c.glfwMakeContextCurrent(self.window);
+
+    gl.makeProcTableCurrent(&procs);
+    if (!procs.init(c.glfwGetProcAddress)) return error.initFailed;
+
+    _ = c.glfwSetKeyCallback(self.window, keyCallback);
+    c.glfwSetWindowUserPointer(self.window, @ptrCast(self));
+}
+fn close(ctx: *anyopaque) void {
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    self.deinit();
+}
+fn resize(_: *anyopaque, _: u32, _: u32) anyerror!void {}
 
 pub fn init() Self {
     key_map[c.GLFW_KEY_SPACE] = .space;
@@ -145,31 +173,29 @@ pub fn deinit(self: *Self) void {
         c.glfwTerminate();
     }
 }
-pub fn start(self: *Self) !void {
-    if (c.glfwInit() == 0) {
-        @panic("Failed to initialize GLFW");
-    }
-    self.window = c.glfwCreateWindow(640, 480, "Hello World", null, null);
-    c.glfwMakeContextCurrent(self.window);
-
-    gl.makeProcTableCurrent(&procs);
-    if (!procs.init(c.glfwGetProcAddress)) return error.initFailed;
-
-    _ = c.glfwSetKeyCallback(self.window, keyCallback);
-    c.glfwSetWindowUserPointer(self.window, @ptrCast(self));
+pub fn platform(self: *Self) nux.Platform.Window {
+    return .{ .ptr = self, .vtable = &.{
+        .open = open,
+        .close = close,
+        .resize = resize,
+    } };
 }
 pub fn pollEvents(self: *Self, core: *nux.Core) !void {
-    self.core = core;
-    c.glfwPollEvents();
-    if (c.glfwWindowShouldClose(self.window) != 0) {
-        core.pushEvent(.requestExit);
+    if (self.window) |window| {
+        self.core = core;
+        c.glfwPollEvents();
+        if (c.glfwWindowShouldClose(window) != 0) {
+            core.pushEvent(.requestExit);
+        }
     }
 }
 pub fn swapBuffers(self: *Self) !void {
-    const alpha: gl.float = 1;
-    gl.ClearColor(1, 1, 1, alpha);
-    gl.Clear(gl.COLOR_BUFFER_BIT);
-    c.glfwSwapBuffers(self.window);
+    if (self.window) |window| {
+        const alpha: gl.float = 1;
+        gl.ClearColor(1, 1, 1, alpha);
+        gl.Clear(gl.COLOR_BUFFER_BIT);
+        c.glfwSwapBuffers(window);
+    }
 }
 
 fn keyCallback(win: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {

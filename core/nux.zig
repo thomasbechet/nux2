@@ -18,6 +18,7 @@ pub const Material = @import("graphics/Material.zig");
 pub const StaticMesh = @import("graphics/StaticMesh.zig");
 pub const Camera = @import("graphics/Camera.zig");
 pub const GUI = @import("gui/GUI.zig");
+pub const Window = @import("graphics/Window.zig");
 
 pub const ID = Node.ID;
 pub const PropertyValue = Node.PropertyValue;
@@ -189,6 +190,12 @@ pub const Core = struct {
         // Load configuration
         var config = core.findModule(Config) orelse unreachable;
         try config.loadINI();
+
+        if (config.sections.window.enable) {
+            try core.registerModules(.{
+                Window,
+            });
+        }
 
         // Register other core modules
         try core.registerModules(.{

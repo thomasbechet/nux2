@@ -3,6 +3,8 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
+const Config = struct { window: struct { enable: bool = true, width: u32 = 900, height: u32 = 450 } = .{}, graphics: struct { enable: bool = true } = .{}, input: struct {} = .{} };
+
 const IniError = error{
     UnknownSection,
     UnknownKey,
@@ -11,7 +13,7 @@ const IniError = error{
     InvalidSyntax,
 };
 
-fn loadIniIntoStruct(allocator: std.mem.Allocator, text: []const u8, config: anytype) !void {
+fn parse(allocator: std.mem.Allocator, text: []const u8, config: anytype) !void {
     const T = @TypeOf(config.*);
     comptime {
         if (@typeInfo(T) != .@"struct")
@@ -122,22 +124,17 @@ fn parseAndAssign(allocator: std.mem.Allocator, field_ptr: anytype, value: []con
     }
 }
 
-const Config = struct {
-    window: struct { width: u32 = 900, height: u32 = 450 } = .{},
-};
-
 file: *nux.File,
 logger: *nux.Logger,
 allocator: std.mem.Allocator,
-config: Config = .{},
+sections: Config = .{},
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.config = .{};
+    self.sections = .{};
 }
 pub fn loadINI(self: *Self) !void {
     const ini = try self.file.read("conf.ini", self.allocator);
     defer self.allocator.free(ini);
-    try loadIniIntoStruct(self.allocator, ini, &self.config);
-    self.logger.info("CONF: {any}", .{self.config});
+    try parse(self.allocator, ini, &self.sections);
 }

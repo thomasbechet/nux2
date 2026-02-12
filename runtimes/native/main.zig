@@ -51,6 +51,10 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
+    // Init window
+    var window: Window = .init();
+    defer window.deinit();
+
     // Parse arguments
     const config = try parseArgs(allocator);
 
@@ -58,15 +62,12 @@ pub fn main() !void {
     const platform = nux.Platform{
         .allocator = allocator,
         .config = config,
+        .window = window.platform(),
     };
 
     // Init core
     var core: *nux.Core = try .init(platform);
     defer core.deinit();
-    // Init window
-    var window: Window = .init();
-    defer window.deinit();
-    try window.start();
 
     // Run forever
     while (core.isRunning()) {

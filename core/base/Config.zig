@@ -135,7 +135,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.config = .{};
 }
-pub fn load(self: *Self) !void {
+pub fn loadINI(self: *Self) !void {
     const ini = try self.file.read("conf.ini", self.allocator);
     defer self.allocator.free(ini);
     try loadIniIntoStruct(self.allocator, ini, &self.config);

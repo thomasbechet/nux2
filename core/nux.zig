@@ -174,24 +174,9 @@ pub const Core = struct {
         core.platform = platform;
         core.modules = try .initCapacity(platform.allocator, 32);
 
-        // Register core modules
+        // Register required modules
         try core.registerModules(.{Logger});
-        try core.registerModules(.{
-            Config,
-            Node,
-            Input,
-            File,
-            Cart,
-            Transform,
-            InputMap,
-            SourceFile,
-            Script,
-            Graphics,
-            Texture,
-            Lua,
-            GUI,
-        });
-        errdefer core.deinit();
+        try core.registerModules(.{ File, Cart, Config });
 
         // Mount base file system
         var file = core.findModule(File) orelse unreachable;
@@ -203,7 +188,22 @@ pub const Core = struct {
 
         // Load configuration
         var config = core.findModule(Config) orelse unreachable;
-        try config.load();
+        try config.loadINI();
+
+        // Register other core modules
+        try core.registerModules(.{
+            Node,
+            Input,
+            Transform,
+            InputMap,
+            SourceFile,
+            Script,
+            Graphics,
+            Texture,
+            Lua,
+            GUI,
+        });
+        errdefer core.deinit();
 
         // Handle command
         switch (core.platform.config.command) {

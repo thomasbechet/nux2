@@ -31,6 +31,7 @@ pub const Vec3 = vec.Vec3f;
 pub const Vec4 = vec.Vec4f;
 pub const quat = @import("math/quat.zig");
 pub const Quat = quat.Quat;
+pub const SpanAllocator = @import("utils/SpanAllocator.zig");
 
 pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;

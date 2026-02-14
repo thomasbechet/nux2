@@ -53,7 +53,7 @@ const NodeEntry = struct {
         return self.name[0..self.name_len];
     }
     fn setName(self: *@This(), name: []const u8) void {
-        std.mem.copyForwards(u8, &self.name, name);
+        @memcpy(&self.name, name);
         self.name_len = name.len;
     }
 };

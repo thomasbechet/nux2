@@ -94,6 +94,7 @@ const Default = struct {
         while (try dir.walker.next()) |entry| {
             if (entry.kind == .file) {
                 std.mem.copyForwards(u8, path, entry.path);
+                @memcpy(path, entry.path);
                 return entry.path.len;
             }
         }

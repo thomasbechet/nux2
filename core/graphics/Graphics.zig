@@ -25,27 +25,52 @@ pub fn loadGltf(self: *Self, path: []const u8) !nux.ID {
     const buffer = try std.fs.cwd().readFileAllocOptions(self.allocator, path, 2_000_000, null, std.mem.Alignment.@"4", null);
     defer self.allocator.free(buffer);
 
+    // Load gltf
     var gltf = Gltf.init(self.allocator);
     defer gltf.deinit();
-
     try gltf.parse(buffer);
-
-    for (gltf.data.nodes) |node| {
-        const message =
-            \\\ Node's name: {s}
-            \\\ Children count: {}
-            \\\ Have skin: {}
-        ;
-
-        self.logger.info(message, .{
-            node.name orelse "Unnamed Node",
-            node.children.len,
-            node.skin != null,
-        });
-    }
-
     // Or use the debufPrint method.
     gltf.debugPrint();
+
+    // Create meshes
+    for (gltf.data.meshes) |mesh| {
+        for (mesh.primitives) |primitive| {
+            // Create mesh
+            const node = self.mesh.
+            // Read data
+            for (primitive.attributes) |attribute| {
+                switch (attribute) {
+                    .position => |idx| {
+                        const accessor = gltf.data.accessors.items[idx];
+                        var it = accessor.iterator(f32, &gltf, gltf.glb_binary.?);
+                        while (it.next()) |v| {
+                            // try vertices.append(.{
+                            //     .pos = .{ v[0], v[1], v[2] },
+                            //     .normal = .{ 1, 0, 0 },
+                            //     .color = .{ 1, 1, 1, 1 },
+                            //     .uv_x = 0,
+                            //     .uv_y = 0,
+                            // });
+                        }
+                    },
+                    .texcoord => |idx| {
+                        const accessor = gltf.data.accessors.items[idx];
+                        var it = accessor.iterator(f32, &gltf, gltf.glb_binary.?);
+                        var i: u32 = 0;
+                        while (it.next()) |n| : (i += 1) {
+                            // vertices.items[initial_vertex + i].normal = .{ n[0], n[1], n[2] };
+                        }
+                    },
+                    else => {},
+                }
+            }
+        }
+    }
+
+    // Create textures
+    for (gltf.data.images) |image| {}
+
+    // Create nodes
 
     return .null;
 }

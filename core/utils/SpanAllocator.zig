@@ -32,24 +32,6 @@ pub fn deinit(self: *Self) void {
     self.freelist.deinit(self.allocator);
 }
 
-pub fn allocOld(self: *Self, len: usize) ?Span {
-    for (self.freelist.items, 0..) |span, i| {
-        if (span.length >= len) {
-            const out = Span{ .offset = span.offset, .length = len };
-            if (span.length == len) {
-                _ = self.freelist.swapRemove(i);
-            } else {
-                self.freelist.items[i] = .{
-                    .offset = span.offset + len,
-                    .length = span.length - len,
-                };
-            }
-            return out;
-        }
-    }
-    return null;
-}
-
 pub fn alloc(self: *Self, len: usize) ?Span {
     if (self.freelist.items.len == 0) return null;
 

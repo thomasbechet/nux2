@@ -29,14 +29,12 @@ pub fn loadGltf(self: *Self, path: []const u8) !nux.ID {
     var gltf = Gltf.init(self.allocator);
     defer gltf.deinit();
     try gltf.parse(buffer);
-    // Or use the debufPrint method.
-    gltf.debugPrint();
 
     // Create meshes
     for (gltf.data.meshes) |mesh| {
         for (mesh.primitives) |primitive| {
             // Create mesh
-            const node = self.mesh.
+            // const node = self.mesh.
             // Read data
             for (primitive.attributes) |attribute| {
                 switch (attribute) {
@@ -44,6 +42,9 @@ pub fn loadGltf(self: *Self, path: []const u8) !nux.ID {
                         const accessor = gltf.data.accessors.items[idx];
                         var it = accessor.iterator(f32, &gltf, gltf.glb_binary.?);
                         while (it.next()) |v| {
+                            self.mesh.setPosition(
+                                id,
+                            );
                             // try vertices.append(.{
                             //     .pos = .{ v[0], v[1], v[2] },
                             //     .normal = .{ 1, 0, 0 },

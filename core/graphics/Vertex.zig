@@ -4,7 +4,7 @@ pub const Primitive = enum(u32) {
     points = 2,
 };
 pub const Attributes = packed struct(u32) {
-    position: bool = true,
+    position: bool = false,
     texcoord: bool = false,
     color: bool = false,
 };

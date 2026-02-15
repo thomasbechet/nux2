@@ -7,7 +7,7 @@ pub const Attributes = packed struct(u32) {
     position: bool = false,
     texcoord: bool = false,
     color: bool = false,
-    padding: u29 = undefined,
+    _padding: u29 = undefined,
 };
 pub const Layout = struct {
     stride: u8 = 0,

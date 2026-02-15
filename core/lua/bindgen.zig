@@ -47,35 +47,70 @@ const AstIter = struct {
         };
     }
 
+    fn fullFieldAccessName(
+        self: *AstIter,
+        node: Ast.Node,
+    ) ![]const u8 {
+        switch (node.tag) {
+            .field_access => {
+                const l, const r = node.data.node_and_token;
+                // Read most left node
+                var left = self.ast.nodes.get(@intFromEnum(l));
+                while (left.tag == .field_access) {
+                    const ll, _ = left.data.node_and_token;
+                    left = self.ast.nodes.get(@intFromEnum(ll));
+                }
+                const start_tok = left.main_token;
+                const end_tok = r;
+                const starts = self.ast.tokens.items(.start);
+                const start_off = starts[start_tok];
+                const end_off =
+                    if (end_tok + 1 < starts.len)
+                        starts[end_tok + 1]
+                    else
+                        self.ast.source.len;
+                return self.ast.source[start_off..end_off];
+            },
+            .identifier => {
+                return self.ast.tokenSlice(node.main_token);
+            },
+            else => return error.UnexpectedNode,
+        }
+    }
+
     fn parse(self: *AstIter, idx: Ast.Node.Index) !?Item {
         const node = self.ast.nodes.get(@intFromEnum(idx));
-        // check visibility
+        // Check visibility
         if (node.main_token > 0) {
             const visib = self.ast.tokenSlice(node.main_token - 1);
             if (!std.mem.eql(u8, visib, "pub")) {
                 return null;
             }
         }
-        // check function and enums
+        // Check function and enums
         switch (node.tag) {
             .fn_decl,
             .fn_proto_multi,
             .fn_proto_simple,
             => {
-                // parse function
+                // Parse function
                 var buf: [1]Ast.Node.Index = undefined;
                 const proto = self.ast.fullFnProto(&buf, idx).?;
                 const name = self.ast.tokenSlice(proto.name_token.?);
 
-                // parse params
+                // Parse params
                 var params = try self.alloc.alloc(FunctionParam, proto.ast.params.len);
                 errdefer self.alloc.free(params);
-                for (proto.ast.params, 0..) |param, i| {
-                    const param_node = self.ast.nodes.get(@intFromEnum(param));
+
+                var parm_it = proto.iterate(self.ast);
+                var i: usize = 0;
+                while (parm_it.next()) |param| : (i += 1) {
+                    const param_name = self.ast.tokenSlice(param.name_token.?);
+                    if (param.type_expr == null) continue;
+                    const param_node = self.ast.nodes.get(@intFromEnum(param.type_expr.?));
                     switch (param_node.tag) {
                         .identifier => {
                             const param_type = self.ast.tokenSlice(param_node.main_token);
-                            const param_name = self.ast.tokenSlice(param_node.main_token - 2);
                             params[i] = .{
                                 .ident = param_name,
                                 .typ = param_type,
@@ -87,7 +122,7 @@ const AstIter = struct {
                             var ptr_type = self.ast.tokenSlice(ptr_node.main_token);
                             var ptr_name = self.ast.tokenSlice(ptr_node.main_token - 3);
 
-                            // patch for strings parameter
+                            // Patch for strings parameter
                             if (std.mem.eql(u8, ptr_name, "[") and std.mem.eql(u8, ptr_type, "u8")) {
                                 ptr_type = "string";
                                 ptr_name = self.ast.tokenSlice(ptr_node.main_token - 5);
@@ -99,13 +134,10 @@ const AstIter = struct {
                             };
                         },
                         .field_access => {
-                            const l, const r = param_node.data.node_and_token;
-                            const ident_node = self.ast.nodes.get(@intFromEnum(l));
-                            const ident_name = self.ast.tokenSlice(ident_node.main_token - 2);
-                            const field_name = self.ast.tokenSlice(r);
+                            const typ = try self.fullFieldAccessName(param_node);
                             params[i] = .{
-                                .ident = ident_name,
-                                .typ = field_name,
+                                .ident = param_name,
+                                .typ = typ,
                             };
                         },
                         else => {
@@ -115,18 +147,18 @@ const AstIter = struct {
                     }
                 }
 
-                // parse return type
+                // Parse return type
                 const ret_token = self.ast.nodes.get(@intFromEnum(proto.ast.return_type)).main_token;
                 var return_type = self.ast.tokenSlice(ret_token);
                 if (std.mem.eql(u8, return_type, ".")) {
                     return_type = self.ast.tokenSlice(ret_token + 1);
                 }
-                // patch for strings parameter
+                // Patch for strings parameter
                 if (std.mem.eql(u8, return_type, "[")) {
                     return_type = "string";
                 }
 
-                // find if function throw error
+                // Find if function throw error
                 var throw_error = false;
                 var it = ret_token;
                 while (true) {
@@ -156,7 +188,7 @@ const AstIter = struct {
                         var buffer: [2]Ast.Node.Index = undefined;
                         const decl = self.ast.fullContainerDecl(&buffer, c.unwrap().?).?;
                         const name = self.ast.tokenSlice(node.main_token + 1);
-                        // Detect is flags
+                        // Detect is bitfield
                         const isPacked = self.ast.tokenSlice(node.main_token + 3);
                         const isStruct = self.ast.tokenSlice(node.main_token + 4);
                         const isU32 = self.ast.tokenSlice(node.main_token + 6);
@@ -168,7 +200,9 @@ const AstIter = struct {
                         for (decl.ast.members) |member| {
                             const mem = self.ast.nodes.get(@intFromEnum(member));
                             if (mem.tag != .container_field_init) continue;
-                            try values.append(self.alloc, self.ast.tokenSlice(mem.main_token));
+                            const value_name = self.ast.tokenSlice(mem.main_token);
+                            if (std.mem.eql(u8, value_name, "_padding")) continue; // Ignore bitfield padding field
+                            try values.append(self.alloc, value_name);
                         }
 
                         return .{ .@"enum" = Enum{ .alloc = self.alloc, .name = name, .typ = "test", .values = values, .isBitfield = isBitfield } };
@@ -349,7 +383,7 @@ const Modules = struct {
                 }
             }
             for (module.enums.items) |*enu| {
-                std.log.info("\t{s}:", .{enu.name});
+                std.log.info("\t{s} (bitfield: {}):", .{ enu.name, enu.isBitfield });
                 for (enu.values.items) |value| {
                     std.log.info("\t\t{s}", .{value});
                 }
@@ -522,7 +556,11 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                 const value_name = try alloc.dupe(u8, value);
                 defer alloc.free(value_name);
                 _ = std.ascii.upperString(value_name, value_name);
-                try writer.print("\t\t\t\tc.lua_pushinteger(lua, @intFromEnum({s}.Module.{s}.{s}));\n", .{ module_name, enu.name, value });
+                if (enu.isBitfield) {
+                    try writer.print("\t\t\t\tc.lua_pushinteger(lua, @bitCast({s}.Module.{s}{{.{s} = true }}));\n", .{ module_name, enu.name, value });
+                } else {
+                    try writer.print("\t\t\t\tc.lua_pushinteger(lua, @intFromEnum({s}.Module.{s}.{s}));\n", .{ module_name, enu.name, value });
+                }
                 try writer.print("\t\t\t\tc.lua_setfield(lua, -2, \"{s}_{s}\");\n", .{ enum_name.items, value_name });
             }
         }

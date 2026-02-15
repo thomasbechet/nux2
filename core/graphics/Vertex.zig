@@ -7,6 +7,7 @@ pub const Attributes = packed struct(u32) {
     position: bool = false,
     texcoord: bool = false,
     color: bool = false,
+    padding: u29 = undefined,
 };
 pub const Layout = struct {
     stride: u8 = 0,
@@ -14,7 +15,7 @@ pub const Layout = struct {
     texcoord: ?u8 = null,
     color: ?u8 = null,
 
-    fn make(attributes: Attributes) Layout {
+    pub fn make(attributes: Attributes) Layout {
         var layout: Layout = .{};
         if (attributes.position) {
             layout.position = layout.stride;

@@ -25,7 +25,7 @@
                 "stat",
                 "glob",
                 "writeFile",
-                "NativeWriter",
+                "Writer",
                 "FileList"
             ]
         },
@@ -60,7 +60,16 @@
             "path": "graphics/Material.zig"
         },
         {
-            "path": "graphics/Mesh.zig"
+            "path": "graphics/Mesh.zig",
+            "ignore": [
+                "loadGltfPrimitive"
+            ]
+        },
+        {
+            "path": "graphics/Vertex.zig",
+            "ignore": [
+                "Layout"
+            ]
         },
         {
             "path": "graphics/StaticMesh.zig"

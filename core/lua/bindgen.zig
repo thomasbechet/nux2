@@ -30,6 +30,7 @@ const AstIter = struct {
         name: []const u8,
         typ: []const u8,
         values: std.ArrayList([]const u8),
+        isBitfield: bool,
 
         fn deinit(self: *@This()) void {
             self.values.deinit(self.alloc);
@@ -155,6 +156,13 @@ const AstIter = struct {
                         var buffer: [2]Ast.Node.Index = undefined;
                         const decl = self.ast.fullContainerDecl(&buffer, c.unwrap().?).?;
                         const name = self.ast.tokenSlice(node.main_token + 1);
+                        // Detect is flags
+                        const isPacked = self.ast.tokenSlice(node.main_token + 3);
+                        const isStruct = self.ast.tokenSlice(node.main_token + 4);
+                        const isU32 = self.ast.tokenSlice(node.main_token + 6);
+                        const isBitfield =
+                            std.mem.eql(u8, isPacked, "packed") and std.mem.eql(u8, isStruct, "struct") and std.mem.eql(u8, isU32, "u32");
+                        // Parse values
                         var values = try std.ArrayList([]const u8).initCapacity(self.alloc, decl.ast.members.len);
                         errdefer values.deinit(self.alloc);
                         for (decl.ast.members) |member| {
@@ -163,7 +171,7 @@ const AstIter = struct {
                             try values.append(self.alloc, self.ast.tokenSlice(mem.main_token));
                         }
 
-                        return .{ .@"enum" = Enum{ .alloc = self.alloc, .name = name, .typ = "test", .values = values } };
+                        return .{ .@"enum" = Enum{ .alloc = self.alloc, .name = name, .typ = "test", .values = values, .isBitfield = isBitfield } };
                     },
                     else => {},
                 }
@@ -416,6 +424,18 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                     }
                 } else { // enum constant
                     try writer.print("std.enums.fromInt(@typeInfo(@TypeOf(Module.{s})).@\"fn\".params[{d}].type.?, c.luaL_checkinteger(lua, {d})) orelse return c.luaL_error(lua, \"invalid enum value\");\n", .{ function.name, i, i });
+                    // try writer.print(
+                    //     \\const T = @typeInfo(@TypeOf(Module.{s})).@"fn".params[{d}].type.?;
+                    //     \\const ti = @typeInfo(T);
+                    //     \\if (ti == .@"enum") {{
+                    //     \\    // enum
+                    //     \\}} else if (ti == .@"struct" and
+                    //     \\           ti.@"struct".layout == .@"packed" and
+                    //     \\           @bitSizeOf(T) == 32) {{
+                    //     \\    // packed struct(u32)
+                    //     \\}}
+                    //     \\
+                    // , .{ function.name, i });
                 }
             }
             // return variable

@@ -21,7 +21,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn deinit(self: *Self) void {
     self.vertex_span_allocator.deinit();
 }
-pub fn loadGltf(self: *Self, path: []const u8) !nux.ID {
+pub fn loadGltf(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
     const buffer = try std.fs.cwd().readFileAllocOptions(self.allocator, path, 2_000_000, null, std.mem.Alignment.@"4", null);
     defer self.allocator.free(buffer);
 
@@ -34,42 +34,15 @@ pub fn loadGltf(self: *Self, path: []const u8) !nux.ID {
     for (gltf.data.meshes) |mesh| {
         for (mesh.primitives) |primitive| {
             // Create mesh
-            // const node = self.mesh.
-            // Read data
-            for (primitive.attributes) |attribute| {
-                switch (attribute) {
-                    .position => |idx| {
-                        const accessor = gltf.data.accessors.items[idx];
-                        var it = accessor.iterator(f32, &gltf, gltf.glb_binary.?);
-                        while (it.next()) |v| {
-                            self.mesh.setPosition(
-                                id,
-                            );
-                            // try vertices.append(.{
-                            //     .pos = .{ v[0], v[1], v[2] },
-                            //     .normal = .{ 1, 0, 0 },
-                            //     .color = .{ 1, 1, 1, 1 },
-                            //     .uv_x = 0,
-                            //     .uv_y = 0,
-                            // });
-                        }
-                    },
-                    .texcoord => |idx| {
-                        const accessor = gltf.data.accessors.items[idx];
-                        var it = accessor.iterator(f32, &gltf, gltf.glb_binary.?);
-                        var i: u32 = 0;
-                        while (it.next()) |n| : (i += 1) {
-                            // vertices.items[initial_vertex + i].normal = .{ n[0], n[1], n[2] };
-                        }
-                    },
-                    else => {},
-                }
-            }
+            const node = try self.mesh.loadGltfPrimitive(parent, &gltf, &primitive);
+            _ = node;
         }
     }
 
     // Create textures
-    for (gltf.data.images) |image| {}
+    for (gltf.data.images) |image| {
+        _ = image;
+    }
 
     // Create nodes
 

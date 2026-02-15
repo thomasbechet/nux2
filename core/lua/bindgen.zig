@@ -19,6 +19,7 @@ const AstIter = struct {
     alloc: Allocator,
     ast: *const Ast,
     slice: []const Ast.Node.Index,
+    ignore: ?[][]const u8 = null,
 
     const Type = struct {
         name: []const u8,
@@ -35,7 +36,6 @@ const AstIter = struct {
         };
 
         alloc: Allocator,
-        name: []const u8,
         params: []const Param,
         ret: Type,
         throw_error: bool,
@@ -47,8 +47,6 @@ const AstIter = struct {
 
     const Enum = struct {
         alloc: Allocator,
-        name: []const u8,
-        typ: []const u8,
         values: std.ArrayList([]const u8),
         isBitfield: bool,
 
@@ -57,20 +55,31 @@ const AstIter = struct {
         }
     };
 
-    const Constant = struct {
+    const Constant = struct {};
+
+    const Declaration = struct {
         name: []const u8,
+        data: union(enum) {
+            function: Function,
+            @"enum": Enum,
+            constant: Constant,
+        },
+
+        fn deinit(self: *Declaration) void {
+            switch (self.data) {
+                .function => |*function| function.deinit(),
+                .@"enum" => |*enu| enu.deinit(),
+                else => {},
+            }
+        }
     };
 
-    const Item = union(enum) {
-        function: Function,
-        @"enum": Enum,
-    };
-
-    pub fn init(alloc: Allocator, ast: *const Ast) !AstIter {
+    pub fn init(alloc: Allocator, ast: *const Ast, ignore: ?[][]const u8) !AstIter {
         return .{
             .alloc = alloc,
             .ast = ast,
             .slice = ast.rootDecls(),
+            .ignore = ignore,
         };
     }
 
@@ -101,159 +110,195 @@ const AstIter = struct {
             .identifier => {
                 return self.ast.tokenSlice(node.main_token);
             },
-            else => return error.UnexpectedNode,
+            else => return error.Unsupported,
         }
     }
 
-    fn parse(self: *AstIter, idx: Ast.Node.Index) !?Item {
-        const node = self.ast.nodes.get(@intFromEnum(idx));
-        // Check visibility
-        if (node.main_token > 0) {
-            const visib = self.ast.tokenSlice(node.main_token - 1);
-            if (!std.mem.eql(u8, visib, "pub")) {
-                return null;
+    fn isIgnored(self: *const AstIter, name: []const u8) bool {
+        var ignore = false;
+        for ([_][]const u8{ "init", "deinit", "delete", "load", "save", "onEvent", "setProperty", "getProperty" }) |keyword| {
+            if (std.mem.eql(u8, name, keyword)) {
+                ignore = true;
             }
         }
-        // Check function and enums
-        switch (node.tag) {
-            .fn_decl,
-            .fn_proto_multi,
-            .fn_proto_simple,
-            => {
-                // Parse function
-                var buf: [1]Ast.Node.Index = undefined;
-                const proto = self.ast.fullFnProto(&buf, idx).?;
-                const name = self.ast.tokenSlice(proto.name_token.?);
-
-                // Parse params
-                var params = try self.alloc.alloc(Function.Param, proto.ast.params.len);
-                errdefer self.alloc.free(params);
-
-                var parm_it = proto.iterate(self.ast);
-                var i: usize = 0;
-                while (parm_it.next()) |param| : (i += 1) {
-                    const param_name = self.ast.tokenSlice(param.name_token.?);
-                    if (param.type_expr == null) continue;
-                    const param_node = self.ast.nodes.get(@intFromEnum(param.type_expr.?));
-                    switch (param_node.tag) {
-                        .identifier => {
-                            const param_type = self.ast.tokenSlice(param_node.main_token);
-                            params[i] = .{
-                                .ident = param_name,
-                                .typ = .{ .name = param_type },
-                            };
-                        },
-                        .ptr_type_aligned => {
-                            _, const rhs = param_node.data.opt_node_and_node;
-                            const ptr_node = self.ast.nodes.get(@intFromEnum(rhs));
-                            var ptr_type = self.ast.tokenSlice(ptr_node.main_token);
-                            var ptr_name = self.ast.tokenSlice(ptr_node.main_token - 3);
-
-                            // Patch for strings parameter
-                            if (std.mem.eql(u8, ptr_name, "[") and std.mem.eql(u8, ptr_type, "u8")) {
-                                ptr_type = "string";
-                                ptr_name = self.ast.tokenSlice(ptr_node.main_token - 5);
-                            }
-
-                            params[i] = .{
-                                .ident = ptr_name,
-                                .typ = .{ .name = ptr_type },
-                            };
-                        },
-                        .field_access => {
-                            const typ = try self.fullFieldAccessName(param_node);
-                            params[i] = .{
-                                .ident = param_name,
-                                .typ = .{ .name = typ },
-                            };
-                        },
-                        else => {
-                            std.log.err("unhandled arg type: {any}", .{param_node.tag});
-                            return error.Unimplemented;
-                        },
-                    }
+        if (self.ignore) |ignore_list| {
+            for (ignore_list) |ignore_name| {
+                if (std.mem.eql(u8, ignore_name, name)) {
+                    ignore = true;
+                    break;
                 }
-
-                // Parse return type
-                const ret_token = self.ast.nodes.get(@intFromEnum(proto.ast.return_type)).main_token;
-                var return_type = self.ast.tokenSlice(ret_token);
-                if (std.mem.eql(u8, return_type, ".")) {
-                    return_type = self.ast.tokenSlice(ret_token + 1);
-                }
-                // Patch for strings parameter
-                if (std.mem.eql(u8, return_type, "[")) {
-                    return_type = "string";
-                }
-
-                // Find if function throw error
-                var throw_error = false;
-                var it = ret_token;
-                while (true) {
-                    const tok = self.ast.tokenSlice(it);
-                    if (std.mem.eql(u8, tok, ")")) break;
-                    if (std.mem.eql(u8, tok, "!")) {
-                        throw_error = true;
-                        break;
-                    }
-                    it -= 1;
-                }
-
-                return .{ .function = Function{
-                    .alloc = self.alloc,
-                    .name = name,
-                    .params = params,
-                    .ret = return_type,
-                    .throw_error = throw_error,
-                } };
-            },
-            .simple_var_decl => {
-                // const a: b = c;
-                _, const c = node.data.opt_node_and_opt_node;
-                const nc = self.ast.nodes.get(@intFromEnum(c));
-                switch (nc.tag) {
-                    .container_decl, .container_decl_trailing, .container_decl_arg, .container_decl_arg_trailing => {
-                        var buffer: [2]Ast.Node.Index = undefined;
-                        const decl = self.ast.fullContainerDecl(&buffer, c.unwrap().?).?;
-                        const name = self.ast.tokenSlice(node.main_token + 1);
-                        // Detect is bitfield
-                        const isPacked = self.ast.tokenSlice(node.main_token + 3);
-                        const isStruct = self.ast.tokenSlice(node.main_token + 4);
-                        const isU32 = self.ast.tokenSlice(node.main_token + 6);
-                        const isBitfield =
-                            std.mem.eql(u8, isPacked, "packed") and std.mem.eql(u8, isStruct, "struct") and std.mem.eql(u8, isU32, "u32");
-                        // Parse values
-                        var values = try std.ArrayList([]const u8).initCapacity(self.alloc, decl.ast.members.len);
-                        errdefer values.deinit(self.alloc);
-                        for (decl.ast.members) |member| {
-                            const mem = self.ast.nodes.get(@intFromEnum(member));
-                            if (mem.tag != .container_field_init) continue;
-                            const value_name = self.ast.tokenSlice(mem.main_token);
-                            if (std.mem.eql(u8, value_name, "_padding")) continue; // Ignore bitfield padding field
-                            try values.append(self.alloc, value_name);
-                        }
-
-                        return .{ .@"enum" = Enum{ .alloc = self.alloc, .name = name, .typ = "test", .values = values, .isBitfield = isBitfield } };
-                    },
-                    else => {},
-                }
-            },
-            else => {
-                return null;
-            },
+            }
         }
-        return null;
+        return ignore;
     }
 
-    pub fn next(self: *AstIter) !?Item {
-        var ret: ?Item = null;
-        for (self.slice) |index| {
-            self.slice = self.slice[1..];
-            if (try self.parse(index)) |item| {
-                ret = item;
+    fn parseFunction(self: *AstIter, index: Ast.Node.Index) !Declaration {
+        // Parse function
+        var buf: [1]Ast.Node.Index = undefined;
+        const proto = self.ast.fullFnProto(&buf, index).?;
+        const name = self.ast.tokenSlice(proto.name_token.?);
+
+        // Parse params
+        var params = try self.alloc.alloc(Function.Param, proto.ast.params.len);
+        errdefer self.alloc.free(params);
+
+        // Iterate params
+        var param_it = proto.iterate(self.ast);
+        var i: usize = 0;
+        while (param_it.next()) |param| : (i += 1) {
+            const param_name = self.ast.tokenSlice(param.name_token.?);
+            if (param.type_expr == null) continue;
+            const param_node = self.ast.nodes.get(@intFromEnum(param.type_expr.?));
+            switch (param_node.tag) {
+                .identifier => {
+                    const param_type = self.ast.tokenSlice(param_node.main_token);
+                    params[i] = .{
+                        .ident = param_name,
+                        .typ = .{ .name = param_type },
+                    };
+                },
+                .ptr_type_aligned => {
+                    _, const rhs = param_node.data.opt_node_and_node;
+                    const ptr_node = self.ast.nodes.get(@intFromEnum(rhs));
+                    var ptr_type = self.ast.tokenSlice(ptr_node.main_token);
+                    var ptr_name = self.ast.tokenSlice(ptr_node.main_token - 3);
+
+                    // Patch for strings parameter
+                    if (std.mem.eql(u8, ptr_name, "[") and std.mem.eql(u8, ptr_type, "u8")) {
+                        ptr_type = "string";
+                        ptr_name = self.ast.tokenSlice(ptr_node.main_token - 5);
+                    }
+
+                    params[i] = .{
+                        .ident = ptr_name,
+                        .typ = .{ .name = ptr_type },
+                    };
+                },
+                .field_access => {
+                    const typ = try self.fullFieldAccessName(param_node);
+                    params[i] = .{
+                        .ident = param_name,
+                        .typ = .{ .name = typ },
+                    };
+                },
+                else => {
+                    std.log.err("unhandled arg type: {any}", .{param_node.tag});
+                    return error.Unimplemented;
+                },
+            }
+        }
+
+        // Parse return type
+        const param_node = self.ast.nodes.get(@intFromEnum(proto.ast.return_type.unwrap().?));
+        const ret_token = self.ast.nodes.get(@intFromEnum(proto.ast.return_type)).main_token;
+        const return_type = try self.fullFieldAccessName(param_node);
+
+        // Find if function throw error
+        var throw_error = false;
+        var it = ret_token;
+        while (true) {
+            const tok = self.ast.tokenSlice(it);
+            if (std.mem.eql(u8, tok, ")")) break;
+            if (std.mem.eql(u8, tok, "!")) {
+                throw_error = true;
                 break;
             }
+            it -= 1;
         }
-        return ret;
+
+        return .{
+            .name = name,
+            .data = .{
+                .function = .{
+                    .alloc = self.alloc,
+                    .params = params,
+                    .ret = .{ .name = return_type },
+                    .throw_error = throw_error,
+                },
+            },
+        };
+    }
+    fn parseEnum(self: *AstIter, node: Ast.Node) !Declaration {
+        // const a: b = c;
+        _, const c = node.data.opt_node_and_opt_node;
+        const nc = self.ast.nodes.get(@intFromEnum(c));
+        switch (nc.tag) {
+            .container_decl, .container_decl_trailing, .container_decl_arg, .container_decl_arg_trailing => {
+                var buffer: [2]Ast.Node.Index = undefined;
+                const decl = self.ast.fullContainerDecl(&buffer, c.unwrap().?).?;
+                const name = self.ast.tokenSlice(node.main_token + 1);
+
+                // Detect is bitfield
+                const isPacked = self.ast.tokenSlice(node.main_token + 3);
+                const isStruct = self.ast.tokenSlice(node.main_token + 4);
+                const isU32 = self.ast.tokenSlice(node.main_token + 6);
+                const isBitfield =
+                    std.mem.eql(u8, isPacked, "packed") and std.mem.eql(u8, isStruct, "struct") and std.mem.eql(u8, isU32, "u32");
+
+                // Parse values
+                var values = try std.ArrayList([]const u8).initCapacity(self.alloc, decl.ast.members.len);
+                errdefer values.deinit(self.alloc);
+                for (decl.ast.members) |member| {
+                    const mem = self.ast.nodes.get(@intFromEnum(member));
+                    if (mem.tag != .container_field_init) continue;
+                    const value_name = self.ast.tokenSlice(mem.main_token);
+                    if (std.mem.eql(u8, value_name, "_padding")) continue; // Ignore bitfield padding field
+                    try values.append(self.alloc, value_name);
+                }
+
+                return .{
+                    .name = name,
+                    .data = .{
+                        .@"enum" = .{
+                            .alloc = self.alloc,
+                            .values = values,
+                            .isBitfield = isBitfield,
+                        },
+                    },
+                };
+            },
+            else => {},
+        }
+        return error.Unsupported;
+    }
+    fn parseConstant(self: *AstIter) !Constant {
+        _ = self;
+        return error.Unsupported;
+    }
+
+    pub fn next(self: *AstIter) !?Declaration {
+        for (self.slice) |index| {
+            self.slice = self.slice[1..];
+            const node = self.ast.nodes.get(@intFromEnum(index));
+
+            // Check visibility
+            if (node.main_token > 0) {
+                const visib = self.ast.tokenSlice(node.main_token - 1);
+                if (!std.mem.eql(u8, visib, "pub")) {
+                    continue;
+                }
+            }
+
+            // Try parse declaration
+            var decl: ?Declaration = null;
+            switch (node.tag) {
+                .fn_decl,
+                .fn_proto_multi,
+                .fn_proto_simple,
+                => decl = self.parseFunction(index) catch continue,
+                .simple_var_decl => decl = self.parseEnum(node) catch continue,
+                else => {},
+            }
+
+            if (decl) |*declaration| {
+                if (!self.isIgnored(declaration.name)) {
+                    return decl;
+                } else {
+                    declaration.deinit();
+                }
+            }
+        }
+        return null;
     }
 };
 
@@ -268,20 +313,23 @@ const BindingsJson = struct {
 
 const Module = struct {
     source: [:0]const u8,
+    name: []const u8,
     path: []const u8,
     ast: Ast,
-    functions: ArrayList(AstIter.Function),
-    enums: ArrayList(AstIter.Enum),
+    functions: std.StringHashMap(AstIter.Function),
+    enums: std.StringHashMap(AstIter.Enum),
 
     fn deinit(self: *Module, alloc: Allocator) void {
-        for (self.functions.items) |*proto| {
-            proto.deinit();
+        var function_it = self.functions.valueIterator();
+        while (function_it.next()) |function| {
+            function.deinit();
         }
-        for (self.enums.items) |*enu| {
+        var enum_it = self.enums.valueIterator();
+        while (enum_it.next()) |enu| {
             enu.deinit();
         }
-        self.functions.deinit(alloc);
-        self.enums.deinit(alloc);
+        self.functions.deinit();
+        self.enums.deinit();
         self.ast.deinit(alloc);
         alloc.free(self.path);
         alloc.free(self.source);
@@ -293,6 +341,21 @@ const Modules = struct {
     rootpath: []const u8,
     modules: ArrayList(Module),
     source: []const u8,
+
+    fn resolveType(modules: []Module, typ: *AstIter.Type) !void {
+        var parts = std.mem.splitScalar(u8, typ.name, '.');
+        _ = parts.next(); // skip nux
+        const module_name = parts.next() orelse return;
+        const decl_name = parts.next() orelse return;
+        for (modules) |*module| {
+            if (std.mem.eql(u8, module.name, module_name)) {
+                if (module.enums.getPtr(decl_name)) |enu| {
+                    typ.resolved = .{ .@"enum" = enu };
+                }
+            }
+        }
+        return error.UnresolvedType;
+    }
 
     fn load(alloc: Allocator, modules_path: []const u8) !Modules {
         var buffer: [1024]u8 = undefined;
@@ -315,6 +378,7 @@ const Modules = struct {
             const parts = [_][]const u8{ "core/", module.path };
             const module_path = try std.mem.concat(alloc, u8, &parts);
             defer alloc.free(module_path);
+
             // Read file
             const file = try std.fs.cwd().openFile(module_path, .{});
             defer file.close();
@@ -323,48 +387,24 @@ const Modules = struct {
             defer alloc.free(source);
             const sourceZ = try alloc.dupeZ(u8, source);
             errdefer alloc.free(sourceZ);
+
             // Parse ast
             var ast = try std.zig.Ast.parse(alloc, sourceZ, .zig);
             errdefer ast.deinit(alloc);
 
             // Allocate items
-            var functions = try ArrayList(AstIter.Function).initCapacity(alloc, 32);
-            errdefer functions.deinit(alloc);
-            var enums = try ArrayList(AstIter.Enum).initCapacity(alloc, 32);
-            errdefer enums.deinit(alloc);
+            var functions = std.StringHashMap(AstIter.Function).init(alloc);
+            errdefer functions.deinit();
+            var enums = std.StringHashMap(AstIter.Enum).init(alloc);
+            errdefer enums.deinit();
 
             // Filter items
-            var it = try AstIter.init(alloc, &ast);
+            var it = try AstIter.init(alloc, &ast, module.ignore);
             while (try it.next()) |next| {
-                var item = next;
-                const name = switch (item) {
-                    .function => |func| func.name,
-                    .@"enum" => |enu| enu.name,
-                };
-                var ignore = false;
-                for ([_][]const u8{ "init", "deinit", "delete", "load", "save", "onEvent", "setProperty", "getProperty" }) |keyword| {
-                    if (std.mem.eql(u8, name, keyword)) {
-                        ignore = true;
-                    }
-                }
-                if (module.ignore) |ignore_list| {
-                    for (ignore_list) |ignore_name| {
-                        if (std.mem.eql(u8, ignore_name, name)) {
-                            ignore = true;
-                            break;
-                        }
-                    }
-                }
-                if (!ignore) {
-                    switch (item) {
-                        .function => |*func| try functions.append(alloc, func.*),
-                        .@"enum" => |*enu| try enums.append(alloc, enu.*),
-                    }
-                } else {
-                    switch (item) {
-                        .function => |*func| func.deinit(),
-                        .@"enum" => |*enu| enu.deinit(),
-                    }
+                switch (next.data) {
+                    .function => |*func| try functions.putNoClobber(next.name, func.*),
+                    .@"enum" => |*enu| try enums.putNoClobber(next.name, enu.*),
+                    else => {},
                 }
             }
 
@@ -375,10 +415,21 @@ const Modules = struct {
                 .functions = functions,
                 .enums = enums,
                 .path = try alloc.dupe(u8, module.path),
+                .name = std.fs.path.stem(module.path),
             });
         }
 
         // Resolve types
+        for (modules.items) |*module| {
+            var func_it = module.functions.valueIterator();
+            while (func_it.next()) |*func| {
+                var ptr = func.*;
+                try resolveType(modules.items, &ptr.ret);
+                for (ptr.params) |*param| {
+                    try resolveType(modules.items, &param.typ);
+                }
+            }
+        }
 
         return .{
             .rootpath = rootpath,
@@ -399,20 +450,23 @@ const Modules = struct {
 
     fn print(self: *const Modules) !void {
         for (self.modules.items) |*module| {
-            const module_name = std.fs.path.stem(module.path);
-            std.log.info("{s}:", .{module_name});
-            for (module.functions.items) |*function| {
+            std.log.info("{s}:", .{module.name});
+            var function_it = module.functions.iterator();
+            while (function_it.next()) |*entry| {
+                const function = entry.value_ptr;
                 const exception = if (function.throw_error)
                     "!"
                 else
                     "";
-                std.log.info("\t{s}: {s} {s}", .{ function.name, function.ret, exception });
+                std.log.info("\t{s}: {s} {s}", .{ entry.key_ptr.*, function.ret.name, exception });
                 for (function.params) |*param| {
-                    std.log.info("\t\t{s}: {s}", .{ param.ident, param.typ });
+                    std.log.info("\t\t{s}: {s}", .{ param.ident, param.typ.name });
                 }
             }
-            for (module.enums.items) |*enu| {
-                std.log.info("\t{s} (bitfield: {}):", .{ enu.name, enu.isBitfield });
+            var enum_it = module.enums.iterator();
+            while (enum_it.next()) |*entry| {
+                const enu = entry.value_ptr;
+                std.log.info("\t{s} (bitfield: {}):", .{ entry.key_ptr.*, enu.isBitfield });
                 for (enu.values.items) |value| {
                     std.log.info("\t\t{s}", .{value});
                 }
@@ -604,11 +658,12 @@ pub fn main() !void {
     // load modules
     var modules: Modules = try .load(alloc, inputs);
     defer modules.deinit();
+    try modules.print();
 
     // generate bindings
     const out_file = try std.fs.cwd().createFile(output, .{});
     defer out_file.close();
     var writer = out_file.writer(&buffer);
-    try generateBindings(alloc, &writer.interface, &modules);
+    // try generateBindings(alloc, &writer.interface, &modules);
     try writer.interface.flush();
 }

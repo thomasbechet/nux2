@@ -3,21 +3,41 @@ const Ast = std.zig.Ast;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
+const PrimitiveType = enum {
+    void,
+    bool,
+    u32,
+    string,
+    ID,
+    Vec2,
+    Vec3,
+    Vec4,
+    Quat,
+};
+
 const AstIter = struct {
     alloc: Allocator,
     ast: *const Ast,
     slice: []const Ast.Node.Index,
 
-    const FunctionParam = struct {
-        ident: []const u8,
-        typ: []const u8,
+    const Type = struct {
+        name: []const u8,
+        resolved: ?union(enum) {
+            primitive: PrimitiveType,
+            @"enum": *Enum,
+        } = null,
     };
 
     const Function = struct {
+        const Param = struct {
+            ident: []const u8,
+            typ: Type,
+        };
+
         alloc: Allocator,
         name: []const u8,
-        params: []const FunctionParam,
-        ret: []const u8,
+        params: []const Param,
+        ret: Type,
         throw_error: bool,
 
         fn deinit(self: *@This()) void {
@@ -37,7 +57,14 @@ const AstIter = struct {
         }
     };
 
-    const Item = union(enum) { function: Function, @"enum": Enum };
+    const Constant = struct {
+        name: []const u8,
+    };
+
+    const Item = union(enum) {
+        function: Function,
+        @"enum": Enum,
+    };
 
     pub fn init(alloc: Allocator, ast: *const Ast) !AstIter {
         return .{
@@ -99,7 +126,7 @@ const AstIter = struct {
                 const name = self.ast.tokenSlice(proto.name_token.?);
 
                 // Parse params
-                var params = try self.alloc.alloc(FunctionParam, proto.ast.params.len);
+                var params = try self.alloc.alloc(Function.Param, proto.ast.params.len);
                 errdefer self.alloc.free(params);
 
                 var parm_it = proto.iterate(self.ast);
@@ -113,7 +140,7 @@ const AstIter = struct {
                             const param_type = self.ast.tokenSlice(param_node.main_token);
                             params[i] = .{
                                 .ident = param_name,
-                                .typ = param_type,
+                                .typ = .{ .name = param_type },
                             };
                         },
                         .ptr_type_aligned => {
@@ -130,14 +157,14 @@ const AstIter = struct {
 
                             params[i] = .{
                                 .ident = ptr_name,
-                                .typ = ptr_type,
+                                .typ = .{ .name = ptr_type },
                             };
                         },
                         .field_access => {
                             const typ = try self.fullFieldAccessName(param_node);
                             params[i] = .{
                                 .ident = param_name,
-                                .typ = typ,
+                                .typ = .{ .name = typ },
                             };
                         },
                         else => {
@@ -284,11 +311,11 @@ const Modules = struct {
 
         // iter files and generate bindings
         for (bindings_json.value.modules) |module| {
-            // convert module path to core
+            // Convert module path to core
             const parts = [_][]const u8{ "core/", module.path };
             const module_path = try std.mem.concat(alloc, u8, &parts);
             defer alloc.free(module_path);
-            // read file
+            // Read file
             const file = try std.fs.cwd().openFile(module_path, .{});
             defer file.close();
             var reader = file.reader(&buffer);
@@ -296,17 +323,17 @@ const Modules = struct {
             defer alloc.free(source);
             const sourceZ = try alloc.dupeZ(u8, source);
             errdefer alloc.free(sourceZ);
-            // parse ast
+            // Parse ast
             var ast = try std.zig.Ast.parse(alloc, sourceZ, .zig);
             errdefer ast.deinit(alloc);
 
-            // allocate items
+            // Allocate items
             var functions = try ArrayList(AstIter.Function).initCapacity(alloc, 32);
             errdefer functions.deinit(alloc);
             var enums = try ArrayList(AstIter.Enum).initCapacity(alloc, 32);
             errdefer enums.deinit(alloc);
 
-            // filter items
+            // Filter items
             var it = try AstIter.init(alloc, &ast);
             while (try it.next()) |next| {
                 var item = next;
@@ -341,7 +368,7 @@ const Modules = struct {
                 }
             }
 
-            // add new module
+            // Add new module
             try modules.append(alloc, .{
                 .source = sourceZ,
                 .ast = ast,
@@ -350,6 +377,8 @@ const Modules = struct {
                 .path = try alloc.dupe(u8, module.path),
             });
         }
+
+        // Resolve types
 
         return .{
             .rootpath = rootpath,
@@ -406,18 +435,6 @@ fn toSnakeCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
     }
     return out;
 }
-
-const PrimitiveType = enum {
-    void,
-    bool,
-    u32,
-    string,
-    ID,
-    Vec2,
-    Vec3,
-    Vec4,
-    Quat,
-};
 
 fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
     try modules.print();

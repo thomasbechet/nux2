@@ -36,7 +36,7 @@ const AstIter = struct {
         };
 
         alloc: Allocator,
-        params: []const Param,
+        params: []Param,
         ret: Type,
         throw_error: bool,
 
@@ -351,24 +351,36 @@ const Modules = struct {
             if (std.mem.eql(u8, module.name, module_name)) {
                 if (module.enums.getPtr(decl_name)) |enu| {
                     typ.resolved = .{ .@"enum" = enu };
+                    return;
                 }
             }
         }
+        std.log.err("unresolved type {s}", .{typ.name});
         return error.UnresolvedType;
     }
 
     fn load(alloc: Allocator, modules_path: []const u8) !Modules {
         var buffer: [1024]u8 = undefined;
 
+        // Open json file
         const modules_file = try std.fs.cwd().openFile(modules_path, .{});
         defer modules_file.close();
         var modules_reader = modules_file.reader(&buffer);
+        // Load json file
         const modules_source = try modules_reader.interface.allocRemaining(alloc, .unlimited);
         errdefer alloc.free(modules_source);
+        // Parse json
         const bindings_json = try std.json.parseFromSlice(BindingsJson, alloc, modules_source, .{});
         defer bindings_json.deinit();
+        // Allocate arrays
         var modules: ArrayList(Module) = try .initCapacity(alloc, bindings_json.value.modules.len);
-        errdefer modules.deinit(alloc);
+        errdefer {
+            for (modules.items) |*module| {
+                module.deinit(alloc);
+            }
+            modules.deinit(alloc);
+        }
+        // Copy rootpath
         const rootpath = try alloc.dupe(u8, bindings_json.value.rootpath);
         errdefer alloc.free(rootpath);
 
@@ -422,10 +434,9 @@ const Modules = struct {
         // Resolve types
         for (modules.items) |*module| {
             var func_it = module.functions.valueIterator();
-            while (func_it.next()) |*func| {
-                var ptr = func.*;
-                try resolveType(modules.items, &ptr.ret);
-                for (ptr.params) |*param| {
+            while (func_it.next()) |func| {
+                try resolveType(modules.items, &func.ret);
+                for (func.params) |*param| {
                     try resolveType(modules.items, &param.typ);
                 }
             }

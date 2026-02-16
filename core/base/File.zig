@@ -23,13 +23,13 @@ const NativeFileSystem = struct {
         try w.print("{s}/{s}", .{ self.path, path });
         return buf[0..w.end];
     }
-    fn read(self: *@This(), path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+    fn read(self: *@This(), path: []const u8, allocator: std.mem.Allocator, comptime alignment: ?std.mem.Alignment) ![]u8 {
         var buf: [256]u8 = undefined;
         const final_path = try self.compuleNativePath(path, &buf);
         const handle = try self.platform.vtable.open(self.platform.ptr, final_path, .read);
         defer self.platform.vtable.close(self.platform.ptr, handle);
         const fstat = try self.platform.vtable.stat(self.platform.ptr, final_path);
-        const buffer = try allocator.alloc(u8, fstat.size);
+        const buffer = try allocator.alignedAlloc(u8, alignment, fstat.size);
         try self.platform.vtable.read(self.platform.ptr, handle, buffer);
         return buffer;
     }
@@ -218,21 +218,24 @@ pub fn mount(self: *Self, path: []const u8) !void {
         try self.layers.append(self.allocator, .{ .native = fs });
     }
 }
-pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+pub fn readAligned(self: *Self, path: []const u8, allocator: std.mem.Allocator, comptime alignment: ?std.mem.Alignment) ![]u8 {
     // Find first match
     var i = self.layers.items.len;
     while (i > 0) {
         i -= 1;
         switch (self.layers.items[i]) {
-            .cart => |*cart| return cart.read(path, allocator) catch {
+            .cart => |*cart| return cart.read(path, allocator, alignment) catch {
                 continue;
             },
-            .native => |*fs| return fs.read(path, allocator) catch {
+            .native => |*fs| return fs.read(path, allocator, alignment) catch {
                 continue;
             },
         }
     }
     return error.entryNotFound;
+}
+pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+    return self.readAligned(path, allocator, null);
 }
 pub fn stat(self: *Self, path: []const u8) !nux.Platform.File.Stat {
     // Find first match

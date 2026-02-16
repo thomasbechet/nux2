@@ -2,3 +2,5 @@
 -- Cart.writeGlob("*")
 -- File.mount("mycart.bin")
 File.logGlob("*")
+Graphics.loadGltf(Node.getRoot(), "industrial.glb")
+Node.dump(Node.getRoot())

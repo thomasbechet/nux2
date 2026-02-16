@@ -38,6 +38,7 @@ pub const ID = packed struct(u32) {
 };
 
 const NodeEntry = struct {
+    const max_name: usize = 64;
     version: Version = 1,
     pool_index: PoolIndex = 0,
     type_index: TypeIndex = 0,
@@ -46,7 +47,7 @@ const NodeEntry = struct {
     next: EntryIndex = 0,
     first_child: EntryIndex = 0,
     last_child: EntryIndex = 0,
-    name: [64]u8 = undefined,
+    name: [max_name]u8 = undefined,
     name_len: usize = 0,
 
     fn getName(self: *@This()) []const u8 {
@@ -669,6 +670,17 @@ pub fn findChild(self: *Self, id: ID, name: []const u8) !ID {
         }
     }
     return error.childNotFound;
+}
+pub fn setNameFormat(
+    self: *Self,
+    id: ID,
+    comptime format: []const u8,
+    args: anytype,
+) !void {
+    var buf: [NodeEntry.max_name]u8 = undefined;
+    var w = std.Io.Writer.fixed(&buf);
+    try w.print(format, args);
+    try self.setName(id, buf[0..w.end]);
 }
 pub fn setName(self: *Self, id: ID, name: []const u8) !void {
     const entry = try self.getEntry(id);

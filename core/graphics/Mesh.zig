@@ -32,8 +32,9 @@ pub fn newCapacity(self: *Self, parent: nux.ID, capa: u32, primitive: nux.Vertex
 }
 pub fn delete(self: *Self, id: nux.ID) !void {
     const node = try self.nodes.get(id);
+    node.vertices.deinit(self.allocator);
     if (node.span) |span| {
-        self.graphics.vertex_span_allocator.free(span);
+        try self.graphics.vertex_span_allocator.free(span);
     }
 }
 pub fn resize(self: *Self, id: nux.ID, size: u32) !void {
@@ -71,35 +72,61 @@ pub fn loadGltfPrimitive(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, p
         else => return error.UnsupportedPrimitive,
     };
     // Create mesh
-    // var node = try Node.initCapacity(self.allocator, vertexCount.?, vertex_primitive, attributes);
-    const value: u32 = 32;
-    var node = try Node.initCapacity(self.allocator, vertexCount.?, vertex_primitive, @bitCast(value));
+    var node = try Node.initCapacity(self.allocator, vertexCount.?, vertex_primitive, attributes);
     // Resize mesh
-    try node.vertices.resize(self.allocator, vertexCount.?);
+    try node.vertices.resize(self.allocator, vertexCount.? * node.layout.stride);
     // Read values
     for (primitive.attributes) |attribute| {
         switch (attribute) {
             .position => |idx| {
-                const accessor = gltf.data.accessors[idx];
-                var it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
-                while (it.next()) |v| {
-                    _ = v;
-                    // try vertices.append(.{
-                    //     .pos = .{ v[0], v[1], v[2] },
-                    //     .normal = .{ 1, 0, 0 },
-                    //     .color = .{ 1, 1, 1, 1 },
-                    //     .uv_x = 0,
-                    //     .uv_y = 0,
-                    // });
+                if (node.layout.position) |position| {
+                    const accessor = gltf.data.accessors[idx];
+                    var it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
+                    var i: usize = 0;
+                    while (it.next()) |v| : (i += 1) {
+                        var buf = node.vertices.items[node.layout.stride * i + position ..];
+                        buf[0] = v[0];
+                        buf[1] = v[1];
+                        buf[2] = v[2];
+                    }
                 }
             },
             .texcoord => |idx| {
-                const accessor = gltf.data.accessors[idx];
-                var it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
-                var i: u32 = 0;
-                while (it.next()) |n| : (i += 1) {
-                    _ = n;
-                    // vertices.items[initial_vertex + i].normal = .{ n[0], n[1], n[2] };
+                if (node.layout.texcoord) |texcoord| {
+                    const accessor = gltf.data.accessors[idx];
+                    var it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
+                    var i: u32 = 0;
+                    while (it.next()) |v| : (i += 1) {
+                        var buf = node.vertices.items[node.layout.stride * i + texcoord ..];
+                        buf[0] = v[0];
+                        buf[1] = v[1];
+                    }
+                }
+            },
+            .color => |idx| {
+                if (node.layout.color) |color| {
+                    const accessor = gltf.data.accessors[idx];
+                    var it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
+                    var i: u32 = 0;
+                    while (it.next()) |v| : (i += 1) {
+                        var buf = node.vertices.items[node.layout.stride * i + color ..];
+                        buf[0] = v[0];
+                        buf[1] = v[1];
+                        buf[2] = v[2];
+                    }
+                }
+            },
+            .normal => |idx| {
+                if (node.layout.normal) |normal| {
+                    const accessor = gltf.data.accessors[idx];
+                    var it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
+                    var i: u32 = 0;
+                    while (it.next()) |v| : (i += 1) {
+                        var buf = node.vertices.items[node.layout.stride * i + normal ..];
+                        buf[0] = v[0];
+                        buf[1] = v[1];
+                        buf[2] = v[2];
+                    }
                 }
             },
             else => {},

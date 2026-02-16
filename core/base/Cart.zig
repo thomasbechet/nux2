@@ -88,9 +88,9 @@ pub const FileSystem = struct {
             self.platform.vtable.close(self.platform.ptr, handle);
         }
     }
-    pub fn read(self: *@This(), path: []const u8, allocator: std.mem.Allocator) ![]u8 {
+    pub fn read(self: *@This(), path: []const u8, allocator: std.mem.Allocator, comptime alignment: ?std.mem.Alignment) ![]u8 {
         if (self.entries.get(path)) |entry| {
-            const buffer = try allocator.alloc(u8, entry.length);
+            const buffer = try allocator.alignedAlloc(u8, alignment, entry.length);
             try self.platform.vtable.seek(self.platform.ptr, self.handle.?, entry.offset);
             try self.platform.vtable.read(self.platform.ptr, self.handle.?, buffer);
             return buffer;

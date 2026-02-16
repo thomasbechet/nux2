@@ -7,13 +7,15 @@ pub const Attributes = packed struct(u32) {
     position: bool = false,
     texcoord: bool = false,
     color: bool = false,
-    _padding: u29 = undefined,
+    normal: bool = false,
+    _padding: u28 = undefined,
 };
 pub const Layout = struct {
     stride: u8 = 0,
     position: ?u8 = null,
     texcoord: ?u8 = null,
     color: ?u8 = null,
+    normal: ?u8 = null,
 
     pub fn make(attributes: Attributes) Layout {
         var layout: Layout = .{};
@@ -29,9 +31,13 @@ pub const Layout = struct {
             layout.color = layout.stride;
             layout.stride += 3;
         }
+        if (attributes.normal) {
+            layout.normal = layout.stride;
+            layout.stride += 3;
+        }
         return layout;
     }
     fn primitive(self: Layout) Attributes {
-        return .{ .position = self.position != null, .texcoord = self.texcoord != null, .color = self.color != null };
+        return .{ .position = self.position != null, .texcoord = self.texcoord != null, .color = self.color != null, .normal = self.normal != null };
     }
 };

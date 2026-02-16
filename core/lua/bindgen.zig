@@ -345,7 +345,10 @@ const Modules = struct {
 
     fn resolveType(modules: []Module, typ: *AstIter.Type) !void {
         // Remove nux.
-        const name = std.mem.trimLeft(u8, typ.name, "nux.");
+        var name = typ.name;
+        if (std.mem.startsWith(u8, typ.name, "nux.")) {
+            name = typ.name[4..];
+        }
         // Try resolve primitive
         if (std.meta.stringToEnum(PrimitiveType, name)) |primitive| {
             typ.resolved = .{ .primitive = primitive };
@@ -480,8 +483,7 @@ const Modules = struct {
                     "";
                 std.log.info("\t{s}: {s} {s}", .{ entry.key_ptr.*, function.ret.name, exception });
                 for (function.params) |*param| {
-                    std.log.info("QWEQWE {s}", .{param.typ.name});
-                    std.log.info("\t\t{s}: {}", .{ param.ident, param.typ.resolved.? });
+                    std.log.info("\t\t{s}: {s}", .{ param.ident, param.typ.name });
                 }
             }
             var enum_it = module.enums.iterator();
@@ -525,51 +527,46 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
         \\        }}
     , .{});
     for (modules.modules.items, 0..) |*module, module_index| {
-        const module_name = std.fs.path.stem(module.path);
-        try writer.print("\t\tconst {s} = struct {{\n", .{module_name});
+        try writer.print("\t\tconst {s} = struct {{\n", .{module.name});
         try writer.print("\t\t\tconst Module = @import(\"{s}/{s}\");\n", .{ modules.rootpath, module.path });
-        for (module.functions.items) |*function| {
-            try writer.print("\t\t\tfn {s}(lua: ?*c.lua_State) callconv(.c) c_int {{\n", .{function.name});
+        var func_it = module.functions.iterator();
+        while (func_it.next()) |entry| {
+            const function = entry.value_ptr;
+            const function_name = entry.key_ptr.*;
+            try writer.print("\t\t\tfn {s}(lua: ?*c.lua_State) callconv(.c) c_int {{\n", .{function_name});
             // retrieve context
             try writer.print("\t\t\t\tconst self = context(lua);\n", .{});
             for (function.params[1..], 1..) |param, i| { // skip self parameter
-                // parameter variable
-                const primitive_type = std.meta.stringToEnum(PrimitiveType, param.typ);
+                // Parameter variable
                 try writer.print("\t\t\t\tconst p{d} = ", .{i});
-                if (primitive_type) |typ| {
-                    switch (typ) {
-                        .bool => try writer.print("c.lua_toboolean(lua, {d});\n", .{i}),
-                        .u32 => try writer.print("@as(u32, @intCast(c.luaL_checkinteger(lua, {d})));\n", .{i}),
-                        .string => try writer.print("std.mem.span(c.luaL_checklstring(lua, {d}, null));\n", .{i}),
-                        .ID => try writer.print("@as(nux.ID, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, {d})))));\n", .{i}),
-                        .Vec2 => try writer.print("Lua.checkUserData(lua, .vec2, {d}).vec2;\n", .{i}),
-                        .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d}).vec3;\n", .{i}),
-                        .Vec4 => try writer.print("Lua.checkUserData(lua, .vec4, {d}).vec4;\n", .{i}),
-                        .Quat => try writer.print("Lua.checkUserData(lua, .quat, {d}).quat;\n", .{i}),
-                        else => {},
-                    }
-                } else { // enum constant
-                    try writer.print("std.enums.fromInt(@typeInfo(@TypeOf(Module.{s})).@\"fn\".params[{d}].type.?, c.luaL_checkinteger(lua, {d})) orelse return c.luaL_error(lua, \"invalid enum value\");\n", .{ function.name, i, i });
-                    // try writer.print(
-                    //     \\const T = @typeInfo(@TypeOf(Module.{s})).@"fn".params[{d}].type.?;
-                    //     \\const ti = @typeInfo(T);
-                    //     \\if (ti == .@"enum") {{
-                    //     \\    // enum
-                    //     \\}} else if (ti == .@"struct" and
-                    //     \\           ti.@"struct".layout == .@"packed" and
-                    //     \\           @bitSizeOf(T) == 32) {{
-                    //     \\    // packed struct(u32)
-                    //     \\}}
-                    //     \\
-                    // , .{ function.name, i });
+                switch (param.typ.resolved.?) {
+                    .primitive => |primitive| {
+                        switch (primitive) {
+                            .bool => try writer.print("c.lua_toboolean(lua, {d});\n", .{i}),
+                            .u32 => try writer.print("@as(u32, @intCast(c.luaL_checkinteger(lua, {d})));\n", .{i}),
+                            .string => try writer.print("std.mem.span(c.luaL_checklstring(lua, {d}, null));\n", .{i}),
+                            .ID => try writer.print("@as(nux.ID, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, {d})))));\n", .{i}),
+                            .Vec2 => try writer.print("Lua.checkUserData(lua, .vec2, {d}).vec2;\n", .{i}),
+                            .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d}).vec3;\n", .{i}),
+                            .Vec4 => try writer.print("Lua.checkUserData(lua, .vec4, {d}).vec4;\n", .{i}),
+                            .Quat => try writer.print("Lua.checkUserData(lua, .quat, {d}).quat;\n", .{i}),
+                            else => {},
+                        }
+                    },
+                    .@"enum" => |enu| {
+                        if (enu.isBitfield) {
+                            try writer.print("@as(@typeInfo(@TypeOf(Module.{s})).@\"fn\".params[{d}].type.?, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, {d})))));\n", .{ function_name, i, i });
+                        } else {
+                            try writer.print("std.enums.fromInt(@typeInfo(@TypeOf(Module.{s})).@\"fn\".params[{d}].type.?, c.luaL_checkinteger(lua, {d})) orelse return c.luaL_error(lua, \"invalid enum value\");\n", .{ function_name, i, i });
+                        }
+                    },
                 }
             }
             // return variable
-            var has_return_value = false;
-            const ret_primitive_type = std.meta.stringToEnum(PrimitiveType, function.ret);
-            if (ret_primitive_type) |typ| {
-                if (typ != .void) {
-                    has_return_value = true;
+            var has_return_value = true;
+            if (function.ret.resolved) |typ| {
+                if (typ == .primitive and typ.primitive == .void) {
+                    has_return_value = false;
                 }
             }
             try writer.print("\t\t\t\t", .{});
@@ -577,7 +574,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                 try writer.print("const ret = ", .{});
             }
             // function call
-            try writer.print("self.mod{d}.{s}(", .{ module_index, function.name });
+            try writer.print("self.mod{d}.{s}(", .{ module_index, function_name });
             for (1..function.params.len) |i| {
                 try writer.print("p{d}", .{i});
                 if (i != function.params.len - 1) {
@@ -595,22 +592,28 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
             // return value
             if (has_return_value) {
                 try writer.print("\t\t\t\t", .{});
-                if (ret_primitive_type) |typ| {
-                    switch (typ) {
-                        .void => {},
-                        .bool => try writer.print("c.lua_pushboolean(lua, @intFromBool(ret));\n", .{}),
-                        .string => try writer.print("_ = c.lua_pushlstring(lua, ret.ptr, ret.len);\n", .{}),
-                        .ID => try writer.print("c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));\n", .{}),
-                        .Vec2 => try writer.print("Lua.pushUserData(lua, .vec2, ret);\n", .{}),
-                        .Vec3 => try writer.print("Lua.pushUserData(lua, .vec3, ret);\n", .{}),
-                        .Vec4 => try writer.print("Lua.pushUserData(lua, .vec4, ret);\n", .{}),
-                        .Quat => try writer.print("Lua.pushUserData(lua, .quat, ret);\n", .{}),
-                        else => {
-                            try writer.print("c.lua_pushinteger(lua, 1);\n", .{});
-                        },
-                    }
-                } else { // cast enum type to int
-                    try writer.print("c.lua_pushinteger(lua, @intFromEnum(ret));\n", .{});
+                switch (function.ret.resolved.?) {
+                    .primitive => |primitive| {
+                        switch (primitive) {
+                            .bool => try writer.print("c.lua_pushboolean(lua, @intFromBool(ret));\n", .{}),
+                            .string => try writer.print("_ = c.lua_pushlstring(lua, ret.ptr, ret.len);\n", .{}),
+                            .ID => try writer.print("c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));\n", .{}),
+                            .Vec2 => try writer.print("Lua.pushUserData(lua, .vec2, ret);\n", .{}),
+                            .Vec3 => try writer.print("Lua.pushUserData(lua, .vec3, ret);\n", .{}),
+                            .Vec4 => try writer.print("Lua.pushUserData(lua, .vec4, ret);\n", .{}),
+                            .Quat => try writer.print("Lua.pushUserData(lua, .quat, ret);\n", .{}),
+                            else => {
+                                try writer.print("c.lua_pushinteger(lua, 1);\n", .{});
+                            },
+                        }
+                    },
+                    .@"enum" => |enu| {
+                        if (enu.isBitfield) {
+                            try writer.print("c.lua_pushinteger(lua, @intCast(@bitCast(ret)));\n", .{});
+                        } else {
+                            try writer.print("c.lua_pushinteger(lua, @intFromEnum(ret));\n", .{});
+                        }
+                    },
                 }
                 try writer.print("\t\t\t\treturn 1;\n", .{});
             } else {
@@ -622,25 +625,27 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
     }
 
     for (modules.modules.items, 0..) |*module, module_index| {
-        const module_name = std.fs.path.stem(module.path);
-        try writer.print("\t\tmod{d}: *{s}.Module,\n", .{ module_index, module_name });
+        try writer.print("\t\tmod{d}: *{s}.Module,\n", .{ module_index, module.name });
     }
 
     try writer.print("\t\tpub fn openModules(self: *@This(), lua: *c.lua_State, core: *const nux.Core) void {{\n", .{});
     for (modules.modules.items, 0..) |*module, module_index| {
-        const module_name = std.fs.path.stem(module.path);
-        try writer.print("\t\t\tif (core.findModule({s}.Module)) |module| {{\n", .{module_name});
+        try writer.print("\t\t\tif (core.findModule({s}.Module)) |module| {{\n", .{module.name});
         try writer.print("\t\t\t\tself.mod{d} = module;\n", .{module_index});
         try writer.print("\t\t\t\tc.lua_newtable(lua);\n", .{});
-        try writer.print("\t\t\t\tconst {s}_lib: [*]const c.luaL_Reg = &.{{\n", .{module_name});
-        for (module.functions.items) |*function| {
-            try writer.print("\t\t\t\t\t.{{ .name = \"{s}\", .func = {s}.{s} }},\n", .{ function.name, module_name, function.name });
+        try writer.print("\t\t\t\tconst {s}_lib: [*]const c.luaL_Reg = &.{{\n", .{module.name});
+        var func_it = module.functions.iterator();
+        while (func_it.next()) |entry| {
+            const function_name = entry.key_ptr.*;
+            try writer.print("\t\t\t\t\t.{{ .name = \"{s}\", .func = {s}.{s} }},\n", .{ function_name, module.name, function_name });
         }
         try writer.print("\t\t\t\t\t.{{ .name = null, .func = null }},\n", .{});
         try writer.print("\t\t\t\t}};\n", .{});
-        try writer.print("\t\t\t\tc.luaL_setfuncs(lua, {s}_lib, 0);\n", .{module_name});
-        for (module.enums.items) |enu| {
-            var enum_name = try toSnakeCase(alloc, enu.name);
+        try writer.print("\t\t\t\tc.luaL_setfuncs(lua, {s}_lib, 0);\n", .{module.name});
+        var enum_it = module.enums.iterator();
+        while (enum_it.next()) |entry| {
+            const enu = entry.value_ptr;
+            var enum_name = try toSnakeCase(alloc, entry.key_ptr.*);
             defer enum_name.deinit(alloc);
             _ = std.ascii.upperString(enum_name.items, enum_name.items);
             for (enu.values.items) |value| {
@@ -649,14 +654,14 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                 defer alloc.free(value_name);
                 _ = std.ascii.upperString(value_name, value_name);
                 if (enu.isBitfield) {
-                    try writer.print("\t\t\t\tc.lua_pushinteger(lua, @bitCast({s}.Module.{s}{{.{s} = true }}));\n", .{ module_name, enu.name, value });
+                    try writer.print("\t\t\t\tc.lua_pushinteger(lua, @intCast(@as(u32, @bitCast({s}.Module.{s}{{.{s} = true }}))));\n", .{ module.name, entry.key_ptr.*, value });
                 } else {
-                    try writer.print("\t\t\t\tc.lua_pushinteger(lua, @intFromEnum({s}.Module.{s}.{s}));\n", .{ module_name, enu.name, value });
+                    try writer.print("\t\t\t\tc.lua_pushinteger(lua, @intFromEnum({s}.Module.{s}.{s}));\n", .{ module.name, entry.key_ptr.*, value });
                 }
                 try writer.print("\t\t\t\tc.lua_setfield(lua, -2, \"{s}_{s}\");\n", .{ enum_name.items, value_name });
             }
         }
-        try writer.print("\t\t\t\tc.lua_setglobal(lua, \"{s}\");\n", .{module_name});
+        try writer.print("\t\t\t\tc.lua_setglobal(lua, \"{s}\");\n", .{module.name});
         try writer.print("\t\t\t}}\n", .{});
     }
     try writer.print("\t\t}}\n", .{});
@@ -685,6 +690,6 @@ pub fn main() !void {
     const out_file = try std.fs.cwd().createFile(output, .{});
     defer out_file.close();
     var writer = out_file.writer(&buffer);
-    // try generateBindings(alloc, &writer.interface, &modules);
+    try generateBindings(alloc, &writer.interface, &modules);
     try writer.interface.flush();
 }

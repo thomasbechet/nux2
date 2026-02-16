@@ -53,8 +53,8 @@ const NodeEntry = struct {
         return self.name[0..self.name_len];
     }
     fn setName(self: *@This(), name: []const u8) void {
-        @memcpy(&self.name, name);
-        self.name_len = name.len;
+        self.name_len = @min(name.len, self.name.len);
+        @memcpy(self.name[0..self.name_len], name[0..self.name_len]);
     }
 };
 

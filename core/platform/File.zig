@@ -93,9 +93,9 @@ const Default = struct {
         const dir: *DirHandle = @ptrCast(@alignCast(handle));
         while (try dir.walker.next()) |entry| {
             if (entry.kind == .file) {
-                std.mem.copyForwards(u8, path, entry.path);
-                @memcpy(path, entry.path);
-                return entry.path.len;
+                const len = @min(entry.path.len, path.len);
+                @memcpy(path[0..len], entry.path[0..len]);
+                return len;
             }
         }
         return null;

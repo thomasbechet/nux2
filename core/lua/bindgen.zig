@@ -13,6 +13,7 @@ const PrimitiveType = enum {
     Vec3,
     Vec4,
     Quat,
+    Self,
 };
 
 const AstIter = struct {
@@ -105,10 +106,10 @@ const AstIter = struct {
                         starts[end_tok + 1]
                     else
                         self.ast.source.len;
-                return self.ast.source[start_off..end_off];
+                return std.mem.trim(u8, self.ast.source[start_off..end_off], " ");
             },
             .identifier => {
-                return self.ast.tokenSlice(node.main_token);
+                return std.mem.trim(u8, self.ast.tokenSlice(node.main_token), " ");
             },
             else => return error.Unsupported,
         }
@@ -226,7 +227,7 @@ const AstIter = struct {
             .container_decl, .container_decl_trailing, .container_decl_arg, .container_decl_arg_trailing => {
                 var buffer: [2]Ast.Node.Index = undefined;
                 const decl = self.ast.fullContainerDecl(&buffer, c.unwrap().?).?;
-                const name = self.ast.tokenSlice(node.main_token + 1);
+                const name = std.mem.trim(u8, self.ast.tokenSlice(node.main_token + 1), " ");
 
                 // Detect is bitfield
                 const isPacked = self.ast.tokenSlice(node.main_token + 3);
@@ -343,8 +344,15 @@ const Modules = struct {
     source: []const u8,
 
     fn resolveType(modules: []Module, typ: *AstIter.Type) !void {
-        var parts = std.mem.splitScalar(u8, typ.name, '.');
-        _ = parts.next(); // skip nux
+        // Remove nux.
+        const name = std.mem.trimLeft(u8, typ.name, "nux.");
+        // Try resolve primitive
+        if (std.meta.stringToEnum(PrimitiveType, name)) |primitive| {
+            typ.resolved = .{ .primitive = primitive };
+            return;
+        }
+        // Resolve enum declaration
+        var parts = std.mem.splitScalar(u8, name, '.');
         const module_name = parts.next() orelse return;
         const decl_name = parts.next() orelse return;
         for (modules) |*module| {
@@ -355,7 +363,8 @@ const Modules = struct {
                 }
             }
         }
-        std.log.err("unresolved type {s}", .{typ.name});
+        // Not type found
+        std.log.err("unresolved type {s}", .{name});
         return error.UnresolvedType;
     }
 
@@ -471,7 +480,8 @@ const Modules = struct {
                     "";
                 std.log.info("\t{s}: {s} {s}", .{ entry.key_ptr.*, function.ret.name, exception });
                 for (function.params) |*param| {
-                    std.log.info("\t\t{s}: {s}", .{ param.ident, param.typ.name });
+                    std.log.info("QWEQWE {s}", .{param.typ.name});
+                    std.log.info("\t\t{s}: {}", .{ param.ident, param.typ.resolved.? });
                 }
             }
             var enum_it = module.enums.iterator();

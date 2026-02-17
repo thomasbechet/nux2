@@ -14,6 +14,9 @@ allocator: std.mem.Allocator,
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
+pub fn new(self: *Self, parent: nux.ID) !nux.ID {
+    return try self.nodes.new(parent, .{});
+}
 pub fn setMesh(self: *Self, id: nux.ID, mesh: nux.ID) !void {
     (try self.nodes.get(id)).mesh = mesh;
 }

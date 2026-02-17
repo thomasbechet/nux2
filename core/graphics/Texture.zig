@@ -47,7 +47,6 @@ pub fn loadGltfImage(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, image
     if (image.data) |data| {
         var img = try zigimg.Image.fromMemory(self.allocator, data);
         defer img.deinit(self.allocator);
-        self.logger.info("load {d} {d}", .{ img.width, img.height });
     }
     return try self.nodes.new(parent, .{});
 }

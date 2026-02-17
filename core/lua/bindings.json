@@ -14,6 +14,7 @@
                 "iterChildren",
                 "visit",
                 "collect",
+                "setNameFormat",
                 "Reader",
                 "Writer"
             ]
@@ -55,7 +56,10 @@
             "path": "graphics/Graphics.zig"
         },
         {
-            "path": "graphics/Texture.zig"
+            "path": "graphics/Texture.zig",
+            "ignore": [
+                "loadGltfImage"
+            ]
         },
         {
             "path": "graphics/Material.zig"

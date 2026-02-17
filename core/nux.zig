@@ -210,6 +210,7 @@ pub const Core = struct {
             Graphics,
             Texture,
             Mesh,
+            StaticMesh,
             Lua,
             GUI,
         });

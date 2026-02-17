@@ -18,6 +18,9 @@ const Node = struct {
 
 nodes: nux.NodePool(Node),
 
+pub fn new(self: *Self, parent: nux.ID) !nux.ID {
+    return try self.nodes.new(parent, .{});
+}
 pub fn save(self: *Self, id: nux.ID, writer: *nux.Writer) !void {
     const n = try self.nodes.get(id);
     try writer.write(n);

@@ -343,7 +343,7 @@ const Modules = struct {
     modules: ArrayList(Module),
     source: []const u8,
 
-    fn resolveType(modules: []Module, typ: *AstIter.Type) !void {
+    fn resolveType(modules: []Module, typ: *AstIter.Type, source: []const u8) !void {
         // Remove nux.
         var name = typ.name;
         if (std.mem.startsWith(u8, typ.name, "nux.")) {
@@ -367,7 +367,7 @@ const Modules = struct {
             }
         }
         // Not type found
-        std.log.err("unresolved type {s}", .{name});
+        std.log.err("unresolved type {s} at {s}", .{ name, source });
         return error.UnresolvedType;
     }
 
@@ -444,12 +444,19 @@ const Modules = struct {
         }
 
         // Resolve types
+        var source: [256]u8 = undefined;
         for (modules.items) |*module| {
-            var func_it = module.functions.valueIterator();
-            while (func_it.next()) |func| {
-                try resolveType(modules.items, &func.ret);
+            var func_it = module.functions.iterator();
+            while (func_it.next()) |entry| {
+                const func = entry.value_ptr;
+                const func_name = entry.key_ptr.*;
+                var w = std.Io.Writer.fixed(&source);
+                try w.print("{s}:{s}:return", .{ module.name, func_name });
+                try resolveType(modules.items, &func.ret, source[0..w.end]);
                 for (func.params) |*param| {
-                    try resolveType(modules.items, &param.typ);
+                    w = std.Io.Writer.fixed(&source);
+                    try w.print("{s}:{s}:{s}", .{ module.name, func_name, param.ident });
+                    try resolveType(modules.items, &param.typ, source[0..w.end]);
                 }
             }
         }

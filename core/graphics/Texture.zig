@@ -1,6 +1,7 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
 const zigimg = @import("zigimg");
+const zgltf = @import("zgltf");
 
 const Self = @This();
 const Node = struct {
@@ -40,6 +41,15 @@ pub fn load(self: *Self, id: nux.ID, reader: *nux.Reader) !void {
         node.path = try self.allocator.dupe(u8, path);
         try self.loadFromPath(id, path);
     }
+}
+pub fn loadGltfImage(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, image: *const zgltf.Gltf.Image) !nux.ID {
+    _ = gltf;
+    if (image.data) |data| {
+        var img = try zigimg.Image.fromMemory(self.allocator, data);
+        defer img.deinit(self.allocator);
+        self.logger.info("load {d} {d}", .{ img.width, img.height });
+    }
+    return try self.nodes.new(parent, .{});
 }
 pub fn newFromPath(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
     const id = try self.nodes.new(parent, .{});

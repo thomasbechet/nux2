@@ -32,13 +32,17 @@ pub fn loadGltf(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
     defer gltf.deinit();
     try gltf.parse(buffer);
 
+    // Create assets nodes
+    const meshes = try self.node.new(parent);
+    try self.node.setName(meshes, "mesh");
+    const textures = try self.node.new(parent);
+    try self.node.setName(textures, "texture");
+
     // Create meshes
     for (gltf.data.meshes) |mesh| {
         for (mesh.primitives, 0..) |primitive, i| {
             // Create mesh
-            const node = try self.mesh.loadGltfPrimitive(parent, &gltf, &primitive);
-            // const m = try self.mesh.nodes.get(node);
-            // self.logger.info("load primitive {s} with {d} vertices", .{ mesh.name orelse "", m.vertices.items.len });
+            const node = try self.mesh.loadGltfPrimitive(meshes, &gltf, &primitive);
             // Set name
             if (mesh.name) |name| {
                 if (i == 0) {
@@ -52,10 +56,39 @@ pub fn loadGltf(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
 
     // Create textures
     for (gltf.data.images) |image| {
-        _ = image;
+        // Create texture
+        const node = try self.texture.loadGltfImage(textures, &gltf, &image);
+        if (image.name) |name| {
+            try self.node.setName(node, name);
+        }
     }
 
     // Create nodes
+    for (gltf.data.scenes) |scene| {
+
+        // Create root node
+        const root = try self.node.new(parent);
+        if (scene.name) |name| {
+            try self.node.setName(root, name);
+        }
+
+        // Iterate nodes
+        if (scene.nodes) |indices| {
+            for (indices) |index| {
+                const gltf_node = gltf.data.nodes[index];
+
+                // const node: nux.ID = undefined;
+                // if (gltf_node.parent) |gltf_parent| {
+                //     node = try self.node.new(gltf_parent)
+                // } else {}
+
+                // Set name
+                if (gltf_node.name) |name| {
+                    self.logger.info("{s}", .{name});
+                }
+            }
+        }
+    }
 
     return .null;
 }

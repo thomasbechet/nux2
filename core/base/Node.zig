@@ -106,7 +106,7 @@ pub const Writer = struct {
                     try self.writer.writeLeb128(@as(u32, @bitCast(v)));
                 },
                 .bool => {
-                    try self.writer.writeByte(@bitCast(v));
+                    try self.writer.writeByte(@intFromBool(v));
                 },
                 .optional => {
                     if (v) |data| {

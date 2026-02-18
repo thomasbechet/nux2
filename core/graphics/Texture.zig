@@ -33,6 +33,7 @@ fn deinitNode(self: *Self, node: *Node) !void {
     if (node.handle) |handle| {
         try self.platform.vtable.delete_texture(self.platform.ptr, handle);
     }
+    node.* = .{};
 }
 pub fn delete(self: *Self, id: nux.ID) !void {
     const node = try self.nodes.get(id);
@@ -49,28 +50,31 @@ pub fn save(self: *Self, id: nux.ID, writer: *nux.Writer) !void {
 }
 pub fn load(self: *Self, id: nux.ID, reader: *nux.Reader) !void {
     const node = try self.nodes.get(id);
-    if (try reader.takeOptionalBytes()) |path| {
+    if (try reader.takeOptionalBytes()) |path| { // File source
         node.path = try self.allocator.dupe(u8, path);
         try self.loadFromPath(id, path);
-    } else if (try reader.takeOptionalBytes()) |data| {
+    } else if (try reader.takeOptionalBytes()) |data| { // Data source
         try self.loadFromData(id, data);
     }
 }
-pub fn loadGltfImage(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, image: *const zgltf.Gltf.Image) !nux.ID {
-    _ = gltf;
-    if (image.data) |data| {
-        var img = try zigimg.Image.fromMemory(self.allocator, data);
-        defer img.deinit(self.allocator);
+pub fn shortDescription(self: *Self, id: nux.ID, w: *std.Io.Writer) !void {
+    const node = try self.nodes.get(id);
+    try w.print("{d}x{d} ", .{ node.info.width, node.info.height });
+    if (node.path) |path| {
+        try w.print("{s}", .{path});
     }
-    return try self.nodes.new(parent, .{});
+}
+pub fn loadGltfImage(self: *Self, parent: nux.ID, image: *const zgltf.Gltf.Image) !nux.ID {
+    const id = try self.nodes.new(parent, .{});
+    if (image.data) |data| {
+        try self.loadFromData(id, data);
+    }
+    return id;
 }
 pub fn newFromPath(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
     const id = try self.nodes.new(parent, .{});
     try self.loadFromPath(id, path);
     return id;
-}
-pub fn loadFromData(self: *Self, id: nux.ID, data: []const u8) !void {
-    const node = try self.nodes.get(id);
 }
 pub fn loadFromPath(self: *Self, id: nux.ID, path: []const u8) !void {
     const node = try self.nodes.get(id);
@@ -85,6 +89,17 @@ pub fn loadFromPath(self: *Self, id: nux.ID, path: []const u8) !void {
     // Set as source
     node.data = data;
     node.path = try self.allocator.dupe(u8, path);
+}
+pub fn loadFromData(self: *Self, id: nux.ID, data: []const u8) !void {
+    const node = try self.nodes.get(id);
+    // Load image
+    var img = try zigimg.Image.fromMemory(self.allocator, data);
+    defer img.deinit(self.allocator);
+    node.data = try self.allocator.dupe(u8, img.rawBytes());
+    // Deinit node
+    try self.deinitNode(node);
+    node.info.width = @intCast(img.width);
+    node.info.height = @intCast(img.height);
 }
 pub fn syncGPU(self: *Self) !void {
     for (self.nodes.data.items) |*texture| {

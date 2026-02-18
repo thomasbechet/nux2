@@ -268,6 +268,7 @@ pub const NodeType = struct {
     v_load: *const fn (*anyopaque, reader: *Reader, id: ID) anyerror!void,
     v_get_property: *const fn (*anyopaque, id: ID, name: []const u8) anyerror!?PropertyValue,
     v_set_property: *const fn (*anyopaque, id: ID, name: []const u8, value: PropertyValue) anyerror!void,
+    v_short_description: *const fn (*anyopaque, id: ID, w: *std.Io.Writer) anyerror!void,
 };
 
 pub fn NodePool(comptime T: type) type {
@@ -564,6 +565,12 @@ pub fn registerNodeModule(self: *Self, module: anytype) !void {
                 }
                 return null;
             }
+            fn shortDescription(pointer: *anyopaque, id: ID, w: *std.Io.Writer) !void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                if (@hasDecl(T, "shortDescription")) {
+                    try mod.shortDescription(id, w);
+                }
+            }
         };
 
         // Register type
@@ -579,6 +586,7 @@ pub fn registerNodeModule(self: *Self, module: anytype) !void {
             .v_load = gen.load,
             .v_get_property = gen.getProperty,
             .v_set_property = gen.setProperty,
+            .v_short_description = gen.shortDescription,
         };
     }
 }
@@ -750,8 +758,18 @@ const Dumper = struct {
         } else {
             self.header[self.depth] = 3;
         }
+        // Write name
+        try w.print("\x1b[36m", .{}); // cyan
+        try w.print("{s} ", .{entry.getName()});
+        // Write type
+        try w.print("\x1b[31m", .{}); // red
+        try w.print("{s} ", .{typ.name});
+        // Write short description
+        try w.print("\x1b[90m", .{}); // light gray
+        try typ.v_short_description(typ.v_ptr, id, &w);
+        try w.print("\x1b[37m", .{}); // white
         // Print entry.
-        self.node.logger.info("{s}\x1b[36m{s}\x1b[37m \x1b[31m{s}\x1b[37m", .{ buf[0..w.end], entry.getName(), typ.name });
+        self.node.logger.info("{s}", .{buf[0..w.end]});
         self.depth += 1;
     }
     fn onPostOrder(self: *@This(), _: ID) !void {

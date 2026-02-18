@@ -116,7 +116,7 @@ pub fn loadGltf(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
     for (gltf.data.images) |image| {
 
         // Create texture
-        const node = try self.texture.loadGltfImage(textures, &gltf, &image);
+        const node = try self.texture.loadGltfImage(textures, &image);
         if (image.name) |name| {
             try self.node.setName(node, name);
         }

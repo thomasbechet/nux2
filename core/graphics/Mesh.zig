@@ -45,6 +45,13 @@ pub fn resize(self: *Self, id: nux.ID, size: u32) !void {
         @memset(node.vertices.items[old_size..], 0);
     }
 }
+pub fn shortDescription(self: *Self, id: nux.ID, w: *std.Io.Writer) !void {
+    const node = try self.nodes.get(id);
+    try w.print("{d} vertices ", .{node.vertices.items.len});
+    if (node.span) |span| {
+        try w.print("[{d}-{d}]", .{ span.offset, span.offset + span.length });
+    }
+}
 pub fn loadGltfPrimitive(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, primitive: *const zgltf.Gltf.Primitive) !nux.ID {
     // Create layout
     var attributes = nux.Vertex.Attributes{};

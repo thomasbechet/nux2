@@ -22,19 +22,6 @@ const GltfContext = struct {
     textures: nux.ID,
 };
 
-pub fn init(self: *Self, core: *const nux.Core) !void {
-    self.allocator = core.platform.allocator;
-    self.vertex_span_allocator = try .init(self.allocator, self.config.sections.graphics.defaultVertexBufferSize, self.config.sections.graphics.defaultVertexBufferSpanCapacity);
-}
-pub fn deinit(self: *Self) void {
-    self.vertex_span_allocator.deinit();
-}
-pub fn onPostUpdate(self: *Self) !void {
-    try self.mesh.syncGPU();
-    try self.texture.syncGPU();
-    self.node.dump(self.node.getRoot());
-}
-
 fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize) !nux.ID {
     // Get root node
     const gltf_node = ctx.gltf.data.nodes[index];
@@ -85,6 +72,19 @@ fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize
 
     return node;
 }
+
+pub fn init(self: *Self, core: *const nux.Core) !void {
+    self.allocator = core.platform.allocator;
+    self.vertex_span_allocator = try .init(self.allocator, self.config.sections.graphics.defaultVertexBufferSize, self.config.sections.graphics.defaultVertexBufferSpanCapacity);
+}
+pub fn deinit(self: *Self) void {
+    self.vertex_span_allocator.deinit();
+}
+pub fn onPostUpdate(self: *Self) !void {
+    try self.mesh.syncGPU();
+    try self.texture.syncGPU();
+}
+
 pub fn loadGltf(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
     // Read buffer aligned
     const buffer: []align(std.mem.Alignment.@"4".toByteUnits()) u8 = @alignCast(try self.file.readAligned(path, self.allocator, std.mem.Alignment.@"4"));

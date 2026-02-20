@@ -33,6 +33,7 @@ const Error = error{
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
 file: *nux.File,
+node: *nux.Node,
 L: *c.lua_State,
 bindings: Bindings(c, nux, @This()),
 

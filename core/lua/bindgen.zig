@@ -545,6 +545,23 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
         \\            const self: *Lua = @ptrCast(@alignCast(ud));
         \\            return &@field(self, "bindings");
         \\        }}
+        \\
+    , .{});
+    try writer.print(
+        \\        fn checkID(lua: ?*c.lua_State, index: c_int) nux.ID {{
+        \\            var ud: ?*anyopaque = undefined;
+        \\            _ = c.lua_getallocf(lua, &ud);
+        \\            const self: *Lua = @ptrCast(@alignCast(ud));
+        \\            if (c.lua_isinteger(lua, index) != 0) {{
+        \\                return @as(nux.ID, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, index)))));
+        \\            }}
+        \\            const path: []const u8 = std.mem.span(c.luaL_checklstring(lua, index, null));
+        \\            return self.node.findGlobal(path) catch |err| {{
+        \\                _ = c.luaL_error(lua, @errorName(err));
+        \\                return .null;
+        \\            }};
+        \\        }}
+        \\
     , .{});
     for (modules.modules.items, 0..) |*module, module_index| {
         try writer.print("\t\tconst {s} = struct {{\n", .{module.name});
@@ -554,7 +571,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
             const function = entry.value_ptr;
             const function_name = entry.key_ptr.*;
             try writer.print("\t\t\tfn {s}(lua: ?*c.lua_State) callconv(.c) c_int {{\n", .{function_name});
-            // retrieve context
+            // Retrieve context
             try writer.print("\t\t\t\tconst self = context(lua);\n", .{});
             for (function.params[1..], 1..) |param, i| { // skip self parameter
                 // Parameter variable
@@ -565,7 +582,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                             .bool => try writer.print("c.lua_toboolean(lua, {d});\n", .{i}),
                             .u32 => try writer.print("@as(u32, @intCast(c.luaL_checkinteger(lua, {d})));\n", .{i}),
                             .string => try writer.print("std.mem.span(c.luaL_checklstring(lua, {d}, null));\n", .{i}),
-                            .ID => try writer.print("@as(nux.ID, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, {d})))));\n", .{i}),
+                            .ID => try writer.print("checkID(lua, {d});\n", .{i}),
                             .Vec2 => try writer.print("Lua.checkUserData(lua, .vec2, {d}).vec2;\n", .{i}),
                             .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d}).vec3;\n", .{i}),
                             .Vec4 => try writer.print("Lua.checkUserData(lua, .vec4, {d}).vec4;\n", .{i}),

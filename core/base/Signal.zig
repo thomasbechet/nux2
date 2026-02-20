@@ -3,12 +3,8 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
-const Callable = struct {
-    callback: *const fn (*anyopaque) anyerror!void,
-};
-
 const Node = struct {
-    callables: std.ArrayList(Callable),
+    callables: std.ArrayList(nux.Callable),
 };
 
 nodes: nux.NodePool(Node),
@@ -30,11 +26,11 @@ pub fn emit(self: *Self, id: nux.ID, source: nux.ID) !void {
     _ = node;
     _ = source;
 }
-pub fn connect(self: *Self, id: nux.ID, callable: Callable) !void {
+pub fn connect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
     const node = try self.nodes.get(id);
     try node.callables.append(self.allocator, callable);
 }
-pub fn disconnect(self: *Self, id: nux.ID, callable: Callable) !void {
+pub fn disconnect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
     const node = try self.nodes.get(id);
     _ = node;
     _ = callable;

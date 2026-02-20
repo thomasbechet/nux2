@@ -117,7 +117,7 @@ const AstIter = struct {
 
     fn isIgnored(self: *const AstIter, name: []const u8) bool {
         var ignore = false;
-        for ([_][]const u8{ "init", "deinit", "delete", "load", "save", "onEvent", "setProperty", "getProperty" }) |keyword| {
+        for ([_][]const u8{ "init", "deinit", "delete", "load", "save", "onEvent", "setProperty", "getProperty", "shortDescription" }) |keyword| {
             if (std.mem.eql(u8, name, keyword)) {
                 ignore = true;
             }

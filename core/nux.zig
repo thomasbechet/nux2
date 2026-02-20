@@ -3,6 +3,7 @@ const std = @import("std");
 pub const Logger = @import("base/Logger.zig");
 pub const Config = @import("base/Config.zig");
 pub const Node = @import("base/Node.zig");
+pub const Signal = @import("base/Signal.zig");
 pub const File = @import("base/File.zig");
 pub const Cart = @import("base/Cart.zig");
 pub const Transform = @import("base/Transform.zig");
@@ -71,7 +72,6 @@ pub const Module = struct {
     v_ptr: *anyopaque,
     v_call_init: ?*const fn (*anyopaque, core: *Core) anyerror!void,
     v_call_deinit: ?*const fn (*anyopaque) void,
-    v_call_update: ?*const fn (*anyopaque) anyerror!void,
     v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
 
     pub fn init(comptime T: type, allocator: std.mem.Allocator) !@This() {
@@ -105,17 +105,33 @@ pub const Module = struct {
                     const ccore: *const Core = core;
                     return self.init(ccore);
                 }
+                // Register callbacks
+                if (@hasDecl(T, "onPreUpdate")) {
+                    try core.registerPhase(.pre_update, .{ .ptr = pointer, .func = T.onPreUpdate });
+                }
             }
-            fn call_deinit(pointer: *anyopaque) void {
+            fn callDeinit(pointer: *anyopaque) void {
                 const self: *T = @ptrCast(@alignCast(pointer));
                 if (@hasDecl(T, "deinit")) {
                     self.deinit();
                 }
             }
-            fn call_update(pointer: *anyopaque) anyerror!void {
+            fn callPreUpdate(pointer: *anyopaque) anyerror!void {
+                const self: *T = @ptrCast(@alignCast(pointer));
+                if (@hasDecl(T, "onPreUpdate")) {
+                    return self.onPreUpdate();
+                }
+            }
+            fn callUpdate(pointer: *anyopaque) anyerror!void {
                 const self: *T = @ptrCast(@alignCast(pointer));
                 if (@hasDecl(T, "update")) {
-                    return self.update();
+                    return self.onUpdate();
+                }
+            }
+            fn callPostUpdate(pointer: *anyopaque) anyerror!void {
+                const self: *T = @ptrCast(@alignCast(pointer));
+                if (@hasDecl(T, "onPostUpdate")) {
+                    return self.onPostUpdate();
                 }
             }
             fn destroy(
@@ -132,35 +148,36 @@ pub const Module = struct {
             .name = @typeName(T),
             .v_ptr = mod,
             .v_call_init = gen.call_init,
-            .v_call_deinit = gen.call_deinit,
-            .v_call_update = gen.call_update,
+            .v_call_deinit = gen.callDeinit,
             .v_destroy = gen.destroy,
         };
     }
     pub fn deinit(self: *@This()) void {
         self.v_destroy(self.v_ptr, self.allocator);
     }
-    pub fn call_init(self: *@This(), core: *Core) !void {
+    pub fn callInit(self: *@This(), core: *Core) !void {
         if (self.v_call_init) |call| {
             try call(self.v_ptr, core);
         }
     }
-    pub fn call_deinit(self: *@This()) void {
+    pub fn callDeinit(self: *@This()) void {
         if (self.v_call_deinit) |call| {
             call(self.v_ptr);
         }
     }
-    pub fn call_update(self: *@This()) !void {
-        if (self.v_call_update) |call| {
-            try call(self.v_ptr);
-        }
-    }
+};
+
+const EventPhase = enum { pre_update, update, post_update };
+const EventCallback = struct {
+    ptr: *anyopaque,
+    func: *const fn (*anyopaque) anyerror!void,
 };
 
 pub const Core = struct {
     platform: Platform,
     modules: std.ArrayList(Module),
     running: bool = false,
+    phases: std.EnumMap(EventPhase, std.ArrayList(EventCallback)),
 
     fn log(
         self: *Core,
@@ -176,6 +193,10 @@ pub const Core = struct {
         var core = try platform.allocator.create(@This());
         core.platform = platform;
         core.modules = try .initCapacity(platform.allocator, 32);
+        core.phases = .{};
+        inline for (std.meta.fields(EventPhase)) |field| {
+            core.phases.put(@field(EventPhase, field.name), .empty);
+        }
 
         // Register required modules
         try core.registerModules(.{Logger});
@@ -202,6 +223,7 @@ pub const Core = struct {
         // Register other core modules
         try core.registerModules(.{
             Node,
+            Signal,
             Input,
             Transform,
             InputMap,
@@ -245,7 +267,7 @@ pub const Core = struct {
             if (self.platform.config.logModuleInitialization) {
                 self.log("deinit module {s}...", .{module.name});
             }
-            module.call_deinit();
+            module.callDeinit();
         }
         i = self.modules.items.len;
         while (i > 0) : (i -= 1) {
@@ -259,11 +281,22 @@ pub const Core = struct {
         return self.running;
     }
 
+    fn registerPhase(self: *Core, phase: EventPhase, callback: EventCallback) !void {
+        var callbacks = self.phases.get(phase) orelse unreachable;
+        try callbacks.append(self.platform.allocator, callback);
+    }
+    fn callPhase(self: *Core, phase: EventPhase) !void {
+        const callbacks = self.phases.get(phase) orelse unreachable;
+        for (callbacks.items) |callback| {
+            try callback.func(callback.ptr);
+        }
+    }
+
     pub fn update(self: *Core) !void {
         if (self.running) {
-            for (self.modules.items) |*module| {
-                try module.call_update();
-            }
+            try self.callPhase(.pre_update);
+            try self.callPhase(.update);
+            try self.callPhase(.post_update);
         }
     }
 
@@ -289,7 +322,7 @@ pub const Core = struct {
             if (self.platform.config.logModuleInitialization) {
                 self.log("init module {s}...", .{module.name});
             }
-            try module.call_init(self);
+            try module.callInit(self);
         }
     }
 

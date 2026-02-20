@@ -20,6 +20,13 @@
             ]
         },
         {
+            "path": "base/Signal.zig",
+            "ignore": [
+                "connect", 
+                "disconnect"
+            ]
+        },
+        {
             "path": "base/File.zig",
             "ignore": [
                 "read",

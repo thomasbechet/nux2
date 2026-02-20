@@ -18,7 +18,7 @@ signal_queue: std.DoublyLinkedList,
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
-pub fn dispatch(self: *Self) !void {}
+// pub fn dispatch(self: *Self) !void {}
 
 pub fn new(self: *Self, parent: nux.ID) !nux.ID {
     return try self.nodes.new(parent, .{

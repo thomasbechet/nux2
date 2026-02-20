@@ -16,6 +16,12 @@ material: *nux.Material,
 staticmesh: *nux.StaticMesh,
 vertex_span_allocator: nux.SpanAllocator,
 
+const GltfContext = struct {
+    gltf: *const Gltf,
+    meshes: nux.ID,
+    textures: nux.ID,
+};
+
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.vertex_span_allocator = try .init(self.allocator, self.config.sections.graphics.defaultVertexBufferSize, self.config.sections.graphics.defaultVertexBufferSpanCapacity);
@@ -23,11 +29,12 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn deinit(self: *Self) void {
     self.vertex_span_allocator.deinit();
 }
-const GltfContext = struct {
-    gltf: *const Gltf,
-    meshes: nux.ID,
-    textures: nux.ID,
-};
+pub fn onPostUpdate(self: *Self) !void {
+    try self.mesh.syncGPU();
+    try self.texture.syncGPU();
+    self.node.dump(self.node.getRoot());
+}
+
 fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize) !nux.ID {
     // Get root node
     const gltf_node = ctx.gltf.data.nodes[index];

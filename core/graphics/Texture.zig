@@ -109,7 +109,9 @@ pub fn syncGPU(self: *Self) !void {
                 texture.handle = try self.platform.vtable.create_texture(self.platform.ptr, texture.info);
             }
             // Upload data
-            try self.platform.vtable.update_texture(self.platform.ptr, texture.handle.?, 0, 0, texture.info.width, texture.info.height, texture.data.?);
+            if (texture.data != null) {
+                try self.platform.vtable.update_texture(self.platform.ptr, texture.handle.?, 0, 0, texture.info.width, texture.info.height, texture.data.?);
+            }
             // Reset sync flag
             texture.sync = true;
         }

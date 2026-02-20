@@ -5,7 +5,7 @@ const Self = @This();
 
 const Config = struct { window: struct { enable: bool = true, width: u32 = 900, height: u32 = 450 } = .{}, graphics: struct {
     enable: bool = true,
-    defaultVertexBufferSize: u32 = (1 << 10),
+    defaultVertexBufferSize: u32 = (1 << 22),
     defaultVertexBufferSpanCapacity: u32 = 64,
 } = .{}, input: struct {} = .{} };
 

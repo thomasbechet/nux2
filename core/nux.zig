@@ -34,6 +34,7 @@ pub const Vec4 = vec.Vec4f;
 pub const quat = @import("math/quat.zig");
 pub const Quat = quat.Quat;
 pub const SpanAllocator = @import("utils/SpanAllocator.zig");
+pub const Callable = @import("utils/Callable.zig");
 
 pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;
@@ -66,6 +67,8 @@ pub const Platform = struct {
     config: Platform.Config = .{},
 };
 
+const Stage = enum { pre_update, update, post_update };
+
 pub const Module = struct {
     allocator: std.mem.Allocator,
     name: []const u8,
@@ -78,7 +81,7 @@ pub const Module = struct {
         const mod: *T = try allocator.create(T);
 
         const gen = struct {
-            fn call_init(pointer: *anyopaque, core: *Core) anyerror!void {
+            fn callInit(pointer: *anyopaque, core: *Core) anyerror!void {
                 const self: *T = @ptrCast(@alignCast(pointer));
                 // Dependency injection
                 inline for (@typeInfo(T).@"struct".fields) |field| {
@@ -100,38 +103,26 @@ pub const Module = struct {
                         try node.registerNodeModule(self);
                     }
                 }
+                // Register callbacks
+                if (@hasDecl(T, "onPreUpdate")) {
+                    try core.registerStageCallback(.pre_update, .wrap(T, T.onPreUpdate, self));
+                }
+                if (@hasDecl(T, "onUpdate")) {
+                    try core.registerStageCallback(.update, .wrap(T, T.onUpdate, self));
+                }
+                if (@hasDecl(T, "onPostUpdate")) {
+                    try core.registerStageCallback(.post_update, .wrap(T, T.onPostUpdate, self));
+                }
                 // Initialize
                 if (@hasDecl(T, "init")) {
                     const ccore: *const Core = core;
                     return self.init(ccore);
-                }
-                // Register callbacks
-                if (@hasDecl(T, "onPreUpdate")) {
-                    try core.registerPhase(.pre_update, .{ .ptr = pointer, .func = T.onPreUpdate });
                 }
             }
             fn callDeinit(pointer: *anyopaque) void {
                 const self: *T = @ptrCast(@alignCast(pointer));
                 if (@hasDecl(T, "deinit")) {
                     self.deinit();
-                }
-            }
-            fn callPreUpdate(pointer: *anyopaque) anyerror!void {
-                const self: *T = @ptrCast(@alignCast(pointer));
-                if (@hasDecl(T, "onPreUpdate")) {
-                    return self.onPreUpdate();
-                }
-            }
-            fn callUpdate(pointer: *anyopaque) anyerror!void {
-                const self: *T = @ptrCast(@alignCast(pointer));
-                if (@hasDecl(T, "update")) {
-                    return self.onUpdate();
-                }
-            }
-            fn callPostUpdate(pointer: *anyopaque) anyerror!void {
-                const self: *T = @ptrCast(@alignCast(pointer));
-                if (@hasDecl(T, "onPostUpdate")) {
-                    return self.onPostUpdate();
                 }
             }
             fn destroy(
@@ -147,7 +138,7 @@ pub const Module = struct {
             .allocator = allocator,
             .name = @typeName(T),
             .v_ptr = mod,
-            .v_call_init = gen.call_init,
+            .v_call_init = gen.callInit,
             .v_call_deinit = gen.callDeinit,
             .v_destroy = gen.destroy,
         };
@@ -167,17 +158,11 @@ pub const Module = struct {
     }
 };
 
-const EventPhase = enum { pre_update, update, post_update };
-const EventCallback = struct {
-    ptr: *anyopaque,
-    func: *const fn (*anyopaque) anyerror!void,
-};
-
 pub const Core = struct {
     platform: Platform,
     modules: std.ArrayList(Module),
     running: bool = false,
-    phases: std.EnumMap(EventPhase, std.ArrayList(EventCallback)),
+    stages: std.EnumMap(Stage, std.ArrayList(Callable)),
 
     fn log(
         self: *Core,
@@ -188,14 +173,24 @@ pub const Core = struct {
             logger.info(format, args);
         }
     }
+    fn registerStageCallback(self: *Core, phase: Stage, callable: Callable) !void {
+        var callbacks = self.stages.getPtr(phase) orelse unreachable;
+        try callbacks.append(self.platform.allocator, callable);
+    }
+    fn callStage(self: *Core, phase: Stage) !void {
+        const callbacks = self.stages.get(phase) orelse unreachable;
+        for (callbacks.items) |callback| {
+            try callback.call();
+        }
+    }
 
     pub fn init(platform: Platform) !*Core {
         var core = try platform.allocator.create(@This());
         core.platform = platform;
         core.modules = try .initCapacity(platform.allocator, 32);
-        core.phases = .{};
-        inline for (std.meta.fields(EventPhase)) |field| {
-            core.phases.put(@field(EventPhase, field.name), .empty);
+        core.stages = .{};
+        inline for (std.meta.fields(Stage)) |field| {
+            core.stages.put(@field(Stage, field.name), .empty);
         }
 
         // Register required modules
@@ -258,9 +253,11 @@ pub const Core = struct {
     }
 
     pub fn deinit(self: *Core) void {
+        // Delete nodes
         if (self.findModule(Node)) |node| {
             node.delete(node.getRoot()) catch {};
         }
+        // Call deinit on modules
         var i = self.modules.items.len;
         while (i > 0) : (i -= 1) {
             const module = &self.modules.items[i - 1];
@@ -269,11 +266,18 @@ pub const Core = struct {
             }
             module.callDeinit();
         }
+        // Free callbacks
+        var it = self.stages.iterator();
+        while (it.next()) |entry| {
+            entry.value.deinit(self.platform.allocator);
+        }
+        // Free modules
         i = self.modules.items.len;
         while (i > 0) : (i -= 1) {
             self.modules.items[i - 1].deinit();
         }
         self.modules.deinit(self.platform.allocator);
+        // Free core
         self.platform.allocator.destroy(self);
     }
 
@@ -281,22 +285,11 @@ pub const Core = struct {
         return self.running;
     }
 
-    fn registerPhase(self: *Core, phase: EventPhase, callback: EventCallback) !void {
-        var callbacks = self.phases.get(phase) orelse unreachable;
-        try callbacks.append(self.platform.allocator, callback);
-    }
-    fn callPhase(self: *Core, phase: EventPhase) !void {
-        const callbacks = self.phases.get(phase) orelse unreachable;
-        for (callbacks.items) |callback| {
-            try callback.func(callback.ptr);
-        }
-    }
-
     pub fn update(self: *Core) !void {
         if (self.running) {
-            try self.callPhase(.pre_update);
-            try self.callPhase(.update);
-            try self.callPhase(.post_update);
+            try self.callStage(.pre_update);
+            try self.callStage(.update);
+            try self.callStage(.post_update);
         }
     }
 
@@ -311,6 +304,7 @@ pub const Core = struct {
 
     pub fn registerModules(self: *Core, comptime mods: anytype) !void {
         const first = self.modules.items.len;
+        // Register modules
         inline for (mods) |mod| {
             if (self.platform.config.logModuleInitialization) {
                 self.log("register module {s}...", .{@typeName(mod)});
@@ -318,6 +312,7 @@ pub const Core = struct {
             const module = try self.modules.addOne(self.platform.allocator);
             module.* = try .init(mod, self.platform.allocator);
         }
+        // Initialize modules
         for (self.modules.items[first..]) |*module| {
             if (self.platform.config.logModuleInitialization) {
                 self.log("init module {s}...", .{module.name});

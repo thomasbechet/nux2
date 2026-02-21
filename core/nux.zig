@@ -35,6 +35,7 @@ pub const quat = @import("math/quat.zig");
 pub const Quat = quat.Quat;
 pub const SpanAllocator = @import("utils/SpanAllocator.zig");
 pub const Callable = @import("utils/Callable.zig");
+pub const Deque = @import("utils/Deque.zig").Deque; // TODO: wait 0.16.0 for std
 
 pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;

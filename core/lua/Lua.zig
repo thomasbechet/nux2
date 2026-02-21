@@ -10,10 +10,6 @@ pub const c = @cImport({
 
 const Self = @This();
 
-pub const LuaModule = struct {
-    ref: c_int = 0,
-};
-
 const UserData = union(enum) {
     const Field = enum { x, y, z, w, normal, position };
     vec2: nux.Vec2,
@@ -28,6 +24,11 @@ const Error = error{
     OutOfMemory,
     LuaRuntime,
     LuaMsgHandler,
+};
+
+pub const LuaModule = struct {
+    ref: c_int = 0,
+    signals: std.ArrayList(nux.ID) = .empty,
 };
 
 allocator: std.mem.Allocator,

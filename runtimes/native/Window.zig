@@ -14,7 +14,7 @@ core: *nux.Core = undefined,
 
 fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     var self: *Self = @ptrCast(@alignCast(ctx));
-    c.glfwInitHint(c.GLFW_PLATFORM, c.GLFW_PLATFORM_X11);
+    // c.glfwInitHint(c.GLFW_PLATFORM, c.GLFW_PLATFORM_X11);
     if (c.glfwInit() == 0) {
         @panic("Failed to initialize GLFW");
     }

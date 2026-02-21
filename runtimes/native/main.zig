@@ -3,10 +3,10 @@ const nux = @import("nux");
 const api = @import("api.zig");
 const Window = @import("Window.zig");
 
-pub fn parseArgs(allocator: std.mem.Allocator) !nux.Platform.Config {
+pub fn parseArgs(args: std.process.ArgIterator, allocator: std.mem.Allocator) !nux.Platform.Config {
     var cfg = nux.Platform.Config{};
 
-    var it = std.process.args();
+    var it = args;
     _ = it.next(); // skip program name
 
     while (it.next()) |arg| {
@@ -56,7 +56,9 @@ pub fn main() !void {
     defer window.deinit();
 
     // Parse arguments
-    const config = try parseArgs(allocator);
+    var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
+    const config = try parseArgs(args, allocator);
 
     // Configure platform
     const platform = nux.Platform{

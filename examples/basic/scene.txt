@@ -1,4 +1,0 @@
-type empty
-name root
-
-    

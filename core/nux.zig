@@ -51,11 +51,9 @@ pub const Platform = struct {
     pub const Config = struct {
         logModuleInitialization: bool = false,
         command: union(enum) {
-            run: struct {
-                script: []const u8 = "init.lua",
-            },
+            run,
             build: struct { path: []const u8 = "cart.bin", glob: []const u8 = "*" },
-        } = .{ .run = .{} },
+        } = .run,
         mount: ?[]const u8 = null,
     };
     allocator: Platform.Allocator = std.heap.page_allocator,
@@ -252,7 +250,6 @@ pub const Core = struct {
 
         // Register other core modules
         try core.registerModules(.{
-            Node,
             Signal,
             Input,
             Transform,
@@ -268,9 +265,9 @@ pub const Core = struct {
 
         // Handle command
         switch (core.platform.config.command) {
-            .run => |run| {
+            .run => {
                 var lua = core.findModule(Lua) orelse unreachable;
-                try lua.callEntryPoint(run.script);
+                _ = try lua.loadModule("init.lua");
                 core.running = true;
             },
             .build => |build| {

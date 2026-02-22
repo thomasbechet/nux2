@@ -21,6 +21,7 @@ fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     if (c.glfwInit() == 0) {
         @panic("Failed to initialize GLFW");
     }
+    c.glfwWindowHint(c.GLFW_DECORATED, c.GLFW_FALSE);
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, 4);
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 3);
     c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);

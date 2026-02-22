@@ -16,15 +16,9 @@ pub fn parseArgs(args: std.process.ArgIterator, allocator: std.mem.Allocator) !n
             const v = it.next() orelse return error.MissingValue;
             cfg.mount = v;
         } else if (std.mem.eql(u8, arg, "run")) {
-            cfg.command = .{ .run = .{} };
+            cfg.command = .run;
         } else if (std.mem.eql(u8, arg, "build")) {
             cfg.command = .{ .build = .{} };
-        } else if (std.mem.eql(u8, arg, "--script")) {
-            const v = it.next() orelse return error.MissingValue;
-            switch (cfg.command) {
-                .run => |*r| r.script = try allocator.dupe(u8, v),
-                else => return error.WrongCommand,
-            }
         } else if (std.mem.eql(u8, arg, "--path")) {
             const v = it.next() orelse return error.MissingValue;
             switch (cfg.command) {

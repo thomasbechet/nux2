@@ -477,22 +477,18 @@ pub fn onUpdate(self: *Self) !void {
         try self.callModule(entry.value_ptr.*, "onUpdate", 0);
     }
 }
-pub fn callEntryPoint(self: *Self, entryPoint: []const u8) !void {
-    _ = try self.loadModule(entryPoint);
-    try self.logModules();
-}
 pub fn logModules(self: *Self) !void {
     var it = self.modules.keyIterator();
     while (it.next()) |path| {
         self.logger.info("{s}", .{path.*});
     }
 }
-fn loadModule(self: *Self, path: []const u8) !*Module {
+pub fn loadModule(self: *Self, path: []const u8) !*Module {
     // Setup module
     const module = try self.allocator.create(Module);
     errdefer self.allocator.destroy(module);
     module.path = try self.allocator.dupe(u8, path);
-    errdefer self.allocator.free(path);
+    errdefer self.allocator.free(module.path);
     try self.modules.put(module.path, module);
     module.ref = 0;
     module.signals = .empty;

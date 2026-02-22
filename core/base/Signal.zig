@@ -21,12 +21,17 @@ nodes: nux.NodePool(Node),
 allocator: nux.Platform.Allocator,
 signal_queue: nux.Deque(SignalEvent),
 active_signal: ?*ActiveSignal,
+logger: *nux.Logger,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.active_signal = null;
+    self.signal_queue = try .initCapacity(self.allocator, 64);
 }
-pub fn dispatchAll(self: *Self) !void {
+pub fn deinit(self: *Self) void {
+    self.signal_queue.deinit(self.allocator);
+}
+pub fn onPostUpdate(self: *Self) !void {
     while (self.signal_queue.popFront()) |event| {
         // Keep reference to signal
         var active_signal = ActiveSignal{

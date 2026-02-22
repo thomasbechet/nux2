@@ -1,6 +1,7 @@
 const c = @cImport({
     @cInclude("glfw3.h");
 });
+const builtin = @import("builtin");
 const nux = @import("nux");
 const gl = @import("gl");
 
@@ -14,7 +15,9 @@ core: *nux.Core = undefined,
 
 fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     var self: *Self = @ptrCast(@alignCast(ctx));
-    // c.glfwInitHint(c.GLFW_PLATFORM, c.GLFW_PLATFORM_X11);
+    if (builtin.os.tag == .linux) { // Force X11 on linux
+        c.glfwInitHint(c.GLFW_PLATFORM, c.GLFW_PLATFORM_X11);
+    }
     if (c.glfwInit() == 0) {
         @panic("Failed to initialize GLFW");
     }
@@ -192,7 +195,7 @@ pub fn pollEvents(self: *Self, core: *nux.Core) !void {
 pub fn swapBuffers(self: *Self) !void {
     if (self.window) |window| {
         const alpha: gl.float = 1;
-        gl.ClearColor(1, 1, 1, alpha);
+        gl.ClearColor(0, 0, 0, alpha);
         gl.Clear(gl.COLOR_BUFFER_BIT);
         c.glfwSwapBuffers(window);
     }

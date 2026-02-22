@@ -28,14 +28,10 @@ const Error = error{
 
 pub const Table = struct {
     ref: c_int = 0,
-    path: []const u8,
-
-    fn deinit(self: @This(), allocator: std.mem.Allocator) void {
-        allocator.free(self.path);
-    }
 };
 
 pub const Module = struct {
+    path: []const u8,
     ref: c_int = 0,
     signals: std.ArrayList(nux.ID) = .empty,
 };
@@ -43,6 +39,7 @@ pub const Module = struct {
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
 file: *nux.File,
+signal: *nux.Signal,
 node: *nux.Node,
 L: *c.lua_State,
 bindings: Bindings(c, nux, @This()),
@@ -85,21 +82,16 @@ fn loadString(self: *Self, s: []const u8, name: []const u8) !void {
         return error.LuaLoadingError;
     }
 }
-fn protectedCall(self: *Self) !void {
-    const ret = c.lua_pcallk(self.L, 0, c.LUA_MULTRET, 0, 0, null);
+fn protectedCall(self: *Self, nargs: c_int, nreturns: c_int) !void {
+    const ret = c.lua_pcallk(self.L, nargs, nreturns, 0, 0, null);
     if (ret != c.LUA_OK) {
         self.logger.err("{s}", .{c.lua_tolstring(self.L, -1, 0)});
         return error.LuaCallError;
     }
 }
-fn callFunction(self: *Self, nargs: c_int, nreturns: c_int) !void {
-    if (c.lua_pcallk(self.L, nargs, nreturns, 0, 0, null) != c.LUA_OK) {
-        return error.LuaCallError;
-    }
-}
 fn doString(self: *Self, source: []const u8, name: []const u8) !void {
     try loadString(self, source, name);
-    try protectedCall(self);
+    try protectedCall(self, 0, c.LUA_MULTRET);
 }
 fn doFile(self: *Self, path: []const u8) !void {
     const source = try self.file.read(path, self.allocator);
@@ -428,24 +420,25 @@ fn context(lua: ?*c.lua_State) *@This() {
     return @as(*Self, @ptrCast(@alignCast(ud)));
 }
 fn require(lua: ?*c.lua_State) callconv(.c) c_int {
-    _ = lua;
-    // const self = context(lua);
-    // const path = std.mem.span(c.luaL_checklstring(lua, 1, null));
-    // if (self.node.findChild(self.package, path)) |_| {
-    //     self.logger.info("FOUND {s}", .{path});
-    // } else |_| {
-    //     var buf: [256]u8 = undefined;
-    //     var w = std.Io.Writer.fixed(&buf);
-    //     w.print("{s}.lua", .{path}) catch {
-    //         return c.luaL_error(lua, "invalid lua file path");
-    //     };
-    //     const final_path = buf[0..w.end];
-    //     const id = self.script.load(self.package, final_path) catch {
-    //         return c.luaL_error(lua, "failed to load lua file");
-    //     };
-    //     self.node.setName(id, path) catch unreachable;
-    // }
-    return 0;
+    const self = context(lua);
+    const path = std.mem.span(c.luaL_checklstring(lua, 1, null));
+
+    // Compute final path
+    var final_path_buf: [256]u8 = undefined;
+    var w = std.Io.Writer.fixed(&final_path_buf);
+    w.print("{s}.lua", .{path}) catch {};
+    const final_path = final_path_buf[0..w.end];
+
+    // Check already exists
+    if (self.modules.get(final_path)) |module| {
+        _ = c.lua_rawgeti(self.L, c.LUA_REGISTRYINDEX, module.ref);
+        return 1;
+    }
+
+    // Load the module
+    const module = self.loadModule(final_path) catch |err| return c.luaL_error(self.L, @errorName(err));
+    _ = c.lua_rawgeti(self.L, c.LUA_REGISTRYINDEX, module.ref);
+    return 1;
 }
 fn openRequire(lua: *c.lua_State) !void {
     c.lua_pushcfunction(lua, require);
@@ -472,7 +465,7 @@ pub fn deinit(self: *Self) void {
     // Deinitialize modules
     var it = self.modules.valueIterator();
     while (it.next()) |module| {
-        self.deinitModule(module) catch {};
+        self.unloadModule(module.*);
     }
     self.modules.deinit();
     // Delete VM
@@ -481,26 +474,53 @@ pub fn deinit(self: *Self) void {
 pub fn onUpdate(self: *Self) !void {
     var it = self.modules.iterator();
     while (it.next()) |entry| {
-        try self.callModule(entry.value_ptr, "onUpdate", 0);
+        try self.callModule(entry.value_ptr.*, "onUpdate", 0);
     }
 }
 pub fn callEntryPoint(self: *Self, entryPoint: []const u8) !void {
-    const init_script = try self.file.read(entryPoint, self.allocator);
-    defer self.allocator.free(init_script);
-    try self.doString(init_script, entryPoint);
+    _ = try self.loadModule(entryPoint);
+    try self.logModules();
 }
-fn initModule(self: *Self, path: []const u8) !*Module {
-    if ()
+pub fn logModules(self: *Self) !void {
+    var it = self.modules.keyIterator();
+    while (it.next()) |path| {
+        self.logger.info("{s}", .{path.*});
+    }
 }
-fn deinitModule(self: *Self, module: *Module) !void {
+fn loadModule(self: *Self, path: []const u8) !*Module {
+    // Setup module
+    const module = try self.allocator.create(Module);
+    errdefer self.allocator.destroy(module);
+    module.path = try self.allocator.dupe(u8, path);
+    errdefer self.allocator.free(path);
+    try self.modules.put(module.path, module);
+    module.ref = 0;
+    module.signals = .empty;
+    // Load file
+    try self.loadModuleFile(module);
+    // Call init
+    // TODO: avoid reentrant function by deferring initialization function
+    try self.callModule(module, "onInit", 0);
+    return module;
+}
+fn unloadModule(self: *Self, module: *Module) void {
+    // Call deinit
+    self.callModule(module, "onDeinit", 0) catch {};
+    // Disconnect singals
+    for (module.signals.items) |signal| {
+        _ = signal;
+        // try self.signal.disconnect(signal, .{});
+    }
     // Unregister lua module
     if (module.ref != 0) {
         c.luaL_unref(self.L, c.LUA_REGISTRYINDEX, module.ref);
     }
+    // Free path
+    self.allocator.free(module.path);
+    self.allocator.destroy(module);
 }
-fn loadModule(self: *Self, module: *Module, path: []const u8) !void {
+fn loadModuleFile(self: *Self, module: *Module) !void {
     const module_table = "M";
-    // const module_id = "id";
 
     // 1. Keep previous module on stack
     _ = c.lua_getglobal(self.L, module_table);
@@ -511,27 +531,23 @@ fn loadModule(self: *Self, module: *Module, path: []const u8) !void {
         c.luaL_unref(self.L, c.LUA_REGISTRYINDEX, module.ref);
     } else {
         c.lua_newtable(self.L);
-        // _ = c.lua_pushinteger(self.L, id.value());
-        // c.lua_setfield(self.L, -2, module_id);
     }
     std.debug.assert(c.lua_istable(self.L, -1));
     c.lua_setglobal(self.L, module_table);
 
     // 3. Execute module
     const prev = c.lua_gettop(self.L);
-    try self.doFile(path);
+    try self.doFile(module.path);
 
     // 4. Assign module table to registry
     const nret = c.lua_gettop(self.L) - prev;
     if (nret != 0) {
         if (nret != 1 or !c.lua_istable(self.L, -1)) {
-            // "lua module '%s' returned value is not a table",
             return error.InvalidReturnedLuaScript;
         }
     } else {
         _ = c.lua_getglobal(self.L, module_table);
         if (!c.lua_istable(self.L, -1)) {
-            // "lua module table '%s' removed"
             return error.LuaTableRemoved;
         }
     }
@@ -550,7 +566,7 @@ pub fn callModule(self: *Self, module: *Module, name: [*c]const u8, nargs: c_int
     if (c.lua_isfunction(self.L, -1)) {
         c.lua_insert(self.L, -2 - nargs); // Move function before args
         c.lua_insert(self.L, -1 - nargs); // Move module before args
-        try self.callFunction(1 + nargs, 0);
+        try self.protectedCall(1 + nargs, 0);
     } else {
         c.lua_pop(self.L, 2 + nargs); // Remove M + F + args
     }

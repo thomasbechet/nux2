@@ -11,7 +11,6 @@ pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
 pub const Lua = @import("lua/Lua.zig");
 pub const SourceFile = @import("base/SourceFile.zig");
-pub const Script = @import("base/Script.zig");
 pub const Graphics = @import("graphics/Graphics.zig");
 pub const Texture = @import("graphics/Texture.zig");
 pub const Mesh = @import("graphics/Mesh.zig");
@@ -185,18 +184,53 @@ pub const Core = struct {
         }
     }
 
+    fn deinitModules(self: *@This()) void {
+        // Call deinit on modules
+        var i = self.modules.items.len;
+        while (i > 0) : (i -= 1) {
+            const module = &self.modules.items[i - 1];
+            if (self.platform.config.logModuleInitialization) {
+                self.log("deinit module {s}...", .{module.name});
+            }
+            module.callDeinit();
+        }
+        // Free modules
+        i = self.modules.items.len;
+        while (i > 0) : (i -= 1) {
+            self.modules.items[i - 1].deinit();
+        }
+        self.modules.deinit(self.platform.allocator);
+    }
+    fn deinitStages(self: *@This()) void {
+        var it = self.stages.iterator();
+        while (it.next()) |entry| {
+            entry.value.deinit(self.platform.allocator);
+        }
+    }
+    fn deinitNodes(self: *@This()) void {
+        if (self.findModule(Node)) |node| {
+            node.delete(node.getRoot()) catch {};
+        }
+    }
+
     pub fn init(platform: Platform) !*Core {
         var core = try platform.allocator.create(@This());
+        errdefer platform.allocator.destroy(core);
         core.platform = platform;
-        core.modules = try .initCapacity(platform.allocator, 32);
+        // Init stages
         core.stages = .{};
         inline for (std.meta.fields(Stage)) |field| {
             core.stages.put(@field(Stage, field.name), .empty);
         }
+        errdefer core.deinitStages();
+        // Init modules
+        core.modules = try .initCapacity(platform.allocator, 32);
+        errdefer core.deinitModules();
 
         // Register required modules
         try core.registerModules(.{Logger});
-        try core.registerModules(.{ File, Cart, Config });
+        try core.registerModules(.{ File, Cart, Config, Node });
+        errdefer core.deinitNodes();
 
         // Mount base file system
         var file = core.findModule(File) orelse unreachable;
@@ -224,7 +258,6 @@ pub const Core = struct {
             Transform,
             InputMap,
             SourceFile,
-            Script,
             Graphics,
             Texture,
             Mesh,
@@ -232,7 +265,6 @@ pub const Core = struct {
             Lua,
             GUI,
         });
-        errdefer core.deinit();
 
         // Handle command
         switch (core.platform.config.command) {
@@ -254,30 +286,9 @@ pub const Core = struct {
     }
 
     pub fn deinit(self: *Core) void {
-        // Delete nodes
-        if (self.findModule(Node)) |node| {
-            node.delete(node.getRoot()) catch {};
-        }
-        // Call deinit on modules
-        var i = self.modules.items.len;
-        while (i > 0) : (i -= 1) {
-            const module = &self.modules.items[i - 1];
-            if (self.platform.config.logModuleInitialization) {
-                self.log("deinit module {s}...", .{module.name});
-            }
-            module.callDeinit();
-        }
-        // Free callbacks
-        var it = self.stages.iterator();
-        while (it.next()) |entry| {
-            entry.value.deinit(self.platform.allocator);
-        }
-        // Free modules
-        i = self.modules.items.len;
-        while (i > 0) : (i -= 1) {
-            self.modules.items[i - 1].deinit();
-        }
-        self.modules.deinit(self.platform.allocator);
+        self.deinitNodes();
+        self.deinitStages();
+        self.deinitModules();
         // Free core
         self.platform.allocator.destroy(self);
     }
@@ -306,6 +317,11 @@ pub const Core = struct {
     pub fn registerModules(self: *Core, comptime mods: anytype) !void {
         const first = self.modules.items.len;
         // Register modules
+        errdefer {
+            for (self.modules.items[first..]) |*module| {
+                module.deinit();
+            }
+        }
         inline for (mods) |mod| {
             if (self.platform.config.logModuleInitialization) {
                 self.log("register module {s}...", .{@typeName(mod)});
@@ -314,6 +330,11 @@ pub const Core = struct {
             module.* = try .init(mod, self.platform.allocator);
         }
         // Initialize modules
+        errdefer {
+            for (self.modules.items[first..]) |*module| {
+                module.callDeinit();
+            }
+        }
         for (self.modules.items[first..]) |*module| {
             if (self.platform.config.logModuleInitialization) {
                 self.log("init module {s}...", .{module.name});

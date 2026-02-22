@@ -57,9 +57,6 @@
             "path": "base/SourceFile.zig"
         },
         {
-            "path": "base/Script.zig"
-        },
-        {
             "path": "graphics/Graphics.zig"
         },
         {

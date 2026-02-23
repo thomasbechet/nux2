@@ -29,7 +29,7 @@ const NativeFileSystem = struct {
         const handle = try self.platform.vtable.open(self.platform.ptr, final_path, .read);
         defer self.platform.vtable.close(self.platform.ptr, handle);
         const fstat = try self.platform.vtable.stat(self.platform.ptr, final_path);
-        const buffer = try allocator.alignedAlloc(u8, alignment, fstat.size);
+        const buffer = try allocator.alignedAlloc(u8, alignment, @intCast(fstat.size));
         try self.platform.vtable.read(self.platform.ptr, handle, buffer);
         return buffer;
     }

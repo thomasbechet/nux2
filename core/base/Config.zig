@@ -3,38 +3,26 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
-const Config = struct {
-    window: struct {
-        enable: bool = true,
-        width: u32 = 900,
-        height: u32 = 450,
-    } = .{},
-    graphics: struct {
-        enable: bool = true,
-        defaultVertexBufferSize: u32 = (1 << 22),
-        defaultVertexBufferSpanCapacity: u32 = 64,
-    } = .{},
-    input: struct {} = .{},
-    lua: struct {
-        init_module: []const u8 = "init.lua",
-    } = .{},
+const Key = struct {
+    section: []const u8,
+    key: []const u8,
 };
 
-const IniError = error{
-    UnknownSection,
-    UnknownKey,
-    InvalidValue,
-    UnsupportedType,
-    InvalidSyntax,
-};
-
-fn parse(self: *Self, text: []const u8, config: anytype) !void {
-    const T = @TypeOf(config.*);
-    comptime {
-        if (@typeInfo(T) != .@"struct")
-            @compileError("cfg must point to a struct");
+const KeyContext = struct {
+    pub fn hash(_: @This(), key: Key) u32 {
+        var h = std.hash.Fnv1a_32.init();
+        h.update(key.section);
+        h.update(key.key);
+        return h.final();
     }
+    pub fn eql(_: @This(), a: Key, b: Key, _: usize) bool {
+        return std.mem.eql(u8, a.section, b.section) and std.mem.eql(u8, a.key, b.key);
+    }
+};
 
+const default_ini = @embedFile("../default.ini");
+
+fn parse(self: *Self, text: []const u8) !void {
     var current_section: []const u8 = "";
     var line_no: usize = 0;
 
@@ -55,101 +43,66 @@ fn parse(self: *Self, text: []const u8, config: anytype) !void {
         // key = value
         const eq = std.mem.indexOfScalar(u8, line, '=') orelse {
             self.logger.err("INI syntax error at line {}", .{line_no});
-            return IniError.InvalidSyntax;
+            return error.InvalidSyntax;
         };
 
         const key = std.mem.trim(u8, line[0..eq], " \t");
         const value = std.mem.trim(u8, line[eq + 1 ..], " \t");
 
-        self.setField(config, current_section, key, value) catch |err| {
-            self.logger.err("INI error at line {}: {}", .{ line_no, err });
-            return err;
-        };
-    }
-}
-
-fn setField(
-    self: *Self,
-    cfg: anytype,
-    section: []const u8,
-    key: []const u8,
-    value: []const u8,
-) !void {
-    const T = @TypeOf(cfg.*);
-    const ti = @typeInfo(T).@"struct";
-    inline for (ti.fields) |f| {
-        if (std.mem.eql(u8, f.name, section)) {
-            const sub = &@field(cfg.*, f.name);
-            return self.setSubField(sub, key, value);
-        }
-    }
-    self.logger.err("Unknown section '{s}'", .{section});
-    return IniError.UnknownSection;
-}
-
-fn setSubField(
-    self: *Self,
-    sub: anytype,
-    key: []const u8,
-    value: []const u8,
-) !void {
-    const ST = @TypeOf(sub.*);
-    const sti = @typeInfo(ST).@"struct";
-    inline for (sti.fields) |f| {
-        if (std.mem.eql(u8, f.name, key)) {
-            const field_ptr = &@field(sub.*, f.name);
-            self.parseAndAssign(field_ptr, value) catch {
-                std.debug.print("Invalid value for '{s}'\n", .{key});
-                return IniError.InvalidValue;
-            };
-            return;
-        }
-    }
-    std.debug.print("Unknown key '{s}'\n", .{key});
-    return IniError.UnknownKey;
-}
-
-fn parseAndAssign(self: *Self, field_ptr: anytype, value: []const u8) !void {
-    const FT = @TypeOf(field_ptr.*);
-
-    switch (@typeInfo(FT)) {
-        .bool => {
-            if (std.mem.eql(u8, value, "true") or std.mem.eql(u8, value, "1")) {
-                field_ptr.* = true;
-            } else if (std.mem.eql(u8, value, "false") or std.mem.eql(u8, value, "0")) {
-                field_ptr.* = false;
-            } else {
-                return IniError.InvalidValue;
-            }
-        },
-        .int => {
-            field_ptr.* = std.fmt.parseInt(FT, value, 10) catch return IniError.InvalidValue;
-        },
-        .float => {
-            field_ptr.* = std.fmt.parseFloat(FT, value) catch return IniError.InvalidValue;
-        },
-        .pointer => |p| {
-            if (p.size == .slice and p.child == u8) {
-                field_ptr.* = try self.allocator.dupe(u8, value);
-            } else {
-                return IniError.UnsupportedType;
-            }
-        },
-        else => return IniError.UnsupportedType,
+        // Set config
+        try self.config.put(.{ .section = current_section, .key = key }, value);
     }
 }
 
 file: *nux.File,
 logger: *nux.Logger,
 allocator: std.mem.Allocator,
-sections: Config = .{},
+config: std.ArrayHashMap(Key, []const u8, KeyContext, true),
+ini_files: std.ArrayList([]const u8),
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.sections = .{};
+    self.config = .init(self.allocator);
+    self.ini_files = .empty;
+    // Load default configuration
+    try self.parse(default_ini);
+}
+pub fn deinit(self: *Self) void {
+    self.config.deinit();
+    for (self.ini_files.items) |ini| {
+        self.allocator.free(ini);
+    }
+    self.ini_files.deinit(self.allocator);
 }
 pub fn loadINI(self: *Self) !void {
     const ini = try self.file.read("conf.ini", self.allocator);
-    defer self.allocator.free(ini);
-    try self.parse(ini, &self.sections);
+    errdefer self.allocator.free(ini);
+    try self.parse(ini);
+    try self.ini_files.append(self.allocator, ini);
+}
+pub fn get(self: *Self, key: []const u8) ![]const u8 {
+    var it = std.mem.splitScalar(u8, key, '.');
+    const section = it.next() orelse return error.MissingSection;
+    const k = it.next() orelse return error.MissingKey;
+    if (self.config.get(.{ .section = section, .key = k })) |value| {
+        return value;
+    }
+    return error.KeyNotFound;
+}
+pub fn getBool(self: *Self, key: []const u8) !bool {
+    const value = try self.get(key);
+    if (std.mem.eql(u8, value, "true")) {
+        return true;
+    } else if (std.mem.eql(u8, value, "false")) {
+        return false;
+    }
+    return error.InvalidBoolValue;
+}
+pub fn getInt(self: *Self, comptime T: type, key: []const u8) !T {
+    const value = try self.get(key);
+    return std.fmt.parseInt(T, value, 10) catch return error.InvalidSizeValue;
+}
+pub fn getFloat(self: *Self, key: []const u8) !f32 {
+    const value = try self.get(key);
+    return std.fmt.parseFloat(f32, value) catch return error.InvalidFloatValue;
 }

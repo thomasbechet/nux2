@@ -245,7 +245,7 @@ pub const Core = struct {
         var config = core.findModule(Config) orelse unreachable;
         try config.loadINI();
 
-        if (config.sections.window.enable) {
+        if (try config.getBool("Window.enable")) {
             try core.registerModules(.{
                 Window,
             });

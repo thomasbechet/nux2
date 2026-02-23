@@ -90,7 +90,7 @@ pub const FileSystem = struct {
     }
     pub fn read(self: *@This(), path: []const u8, allocator: std.mem.Allocator, comptime alignment: ?std.mem.Alignment) ![]u8 {
         if (self.entries.get(path)) |entry| {
-            const buffer = try allocator.alignedAlloc(u8, alignment, entry.length);
+            const buffer = try allocator.alignedAlloc(u8, alignment, @intCast(entry.length));
             try self.platform.vtable.seek(self.platform.ptr, self.handle.?, entry.offset);
             try self.platform.vtable.read(self.platform.ptr, self.handle.?, buffer);
             return buffer;

@@ -75,7 +75,11 @@ fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.vertex_span_allocator = try .init(self.allocator, self.config.sections.graphics.defaultVertexBufferSize, self.config.sections.graphics.defaultVertexBufferSpanCapacity);
+    self.vertex_span_allocator = try .init(
+        self.allocator,
+        try self.config.getInt(usize, "Graphics.defaultVertexBufferSize"),
+        try self.config.getInt(usize, "Graphics.defaultVertexBufferSpanCapacity"),
+    );
 }
 pub fn deinit(self: *Self) void {
     self.vertex_span_allocator.deinit();

@@ -8,8 +8,8 @@ platform: nux.Platform.Window,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.platform = core.platform.window;
-    const w = self.config.sections.window.width;
-    const h = self.config.sections.window.height;
+    const w = try self.config.getInt(u32, "Window.width");
+    const h = try self.config.getInt(u32, "Window.height");
     try self.platform.vtable.open(self.platform.ptr, w, h);
 }
 pub fn deinit(self: *Self) void {

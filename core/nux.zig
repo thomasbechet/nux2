@@ -52,7 +52,10 @@ pub const Platform = struct {
         logModuleInitialization: bool = false,
         command: union(enum) {
             run,
-            build: struct { path: []const u8 = "cart.bin", glob: []const u8 = "*" },
+            build: struct {
+                path: []const u8 = "cart.bin",
+                glob: []const u8 = "*",
+            },
         } = .run,
         mount: ?[]const u8 = null,
     };

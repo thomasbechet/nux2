@@ -3,11 +3,22 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
-const Config = struct { window: struct { enable: bool = true, width: u32 = 900, height: u32 = 450 } = .{}, graphics: struct {
-    enable: bool = true,
-    defaultVertexBufferSize: u32 = (1 << 22),
-    defaultVertexBufferSpanCapacity: u32 = 64,
-} = .{}, input: struct {} = .{} };
+const Config = struct {
+    window: struct {
+        enable: bool = true,
+        width: u32 = 900,
+        height: u32 = 450,
+    } = .{},
+    graphics: struct {
+        enable: bool = true,
+        defaultVertexBufferSize: u32 = (1 << 22),
+        defaultVertexBufferSpanCapacity: u32 = 64,
+    } = .{},
+    input: struct {} = .{},
+    lua: struct {
+        init_module: []const u8 = "init.lua",
+    } = .{},
+};
 
 const IniError = error{
     UnknownSection,
@@ -17,7 +28,7 @@ const IniError = error{
     InvalidSyntax,
 };
 
-fn parse(allocator: std.mem.Allocator, text: []const u8, config: anytype) !void {
+fn parse(self: *Self, text: []const u8, config: anytype) !void {
     const T = @TypeOf(config.*);
     comptime {
         if (@typeInfo(T) != .@"struct")
@@ -43,22 +54,22 @@ fn parse(allocator: std.mem.Allocator, text: []const u8, config: anytype) !void 
 
         // key = value
         const eq = std.mem.indexOfScalar(u8, line, '=') orelse {
-            // std.debug.print("INI syntax error at line {}\n", .{line_no});
+            self.logger.err("INI syntax error at line {}", .{line_no});
             return IniError.InvalidSyntax;
         };
 
         const key = std.mem.trim(u8, line[0..eq], " \t");
         const value = std.mem.trim(u8, line[eq + 1 ..], " \t");
 
-        setField(allocator, config, current_section, key, value) catch |err| {
-            // std.debug.print("INI error at line {}: {}\n", .{ line_no, err });
+        self.setField(config, current_section, key, value) catch |err| {
+            self.logger.err("INI error at line {}: {}", .{ line_no, err });
             return err;
         };
     }
 }
 
 fn setField(
-    allocator: std.mem.Allocator,
+    self: *Self,
     cfg: anytype,
     section: []const u8,
     key: []const u8,
@@ -69,15 +80,15 @@ fn setField(
     inline for (ti.fields) |f| {
         if (std.mem.eql(u8, f.name, section)) {
             const sub = &@field(cfg.*, f.name);
-            return setSubField(allocator, sub, key, value);
+            return self.setSubField(sub, key, value);
         }
     }
-    std.debug.print("Unknown section '{s}'\n", .{section});
+    self.logger.err("Unknown section '{s}'", .{section});
     return IniError.UnknownSection;
 }
 
 fn setSubField(
-    allocator: std.mem.Allocator,
+    self: *Self,
     sub: anytype,
     key: []const u8,
     value: []const u8,
@@ -87,7 +98,7 @@ fn setSubField(
     inline for (sti.fields) |f| {
         if (std.mem.eql(u8, f.name, key)) {
             const field_ptr = &@field(sub.*, f.name);
-            parseAndAssign(allocator, field_ptr, value) catch {
+            self.parseAndAssign(field_ptr, value) catch {
                 std.debug.print("Invalid value for '{s}'\n", .{key});
                 return IniError.InvalidValue;
             };
@@ -98,7 +109,7 @@ fn setSubField(
     return IniError.UnknownKey;
 }
 
-fn parseAndAssign(allocator: std.mem.Allocator, field_ptr: anytype, value: []const u8) !void {
+fn parseAndAssign(self: *Self, field_ptr: anytype, value: []const u8) !void {
     const FT = @TypeOf(field_ptr.*);
 
     switch (@typeInfo(FT)) {
@@ -118,8 +129,8 @@ fn parseAndAssign(allocator: std.mem.Allocator, field_ptr: anytype, value: []con
             field_ptr.* = std.fmt.parseFloat(FT, value) catch return IniError.InvalidValue;
         },
         .pointer => |p| {
-            if (p.size == .Slice and p.child == u8) {
-                field_ptr.* = try allocator.dupe(u8, value);
+            if (p.size == .slice and p.child == u8) {
+                field_ptr.* = try self.allocator.dupe(u8, value);
             } else {
                 return IniError.UnsupportedType;
             }
@@ -140,5 +151,5 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn loadINI(self: *Self) !void {
     const ini = try self.file.read("conf.ini", self.allocator);
     defer self.allocator.free(ini);
-    try parse(self.allocator, ini, &self.sections);
+    try self.parse(ini, &self.sections);
 }

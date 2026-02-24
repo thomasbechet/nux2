@@ -7,7 +7,7 @@ const Self = @This();
 const Node = struct {
     data: ?[]u8 = null,
     path: ?[]const u8 = null, // Nonnull if loaded from file
-    sync: bool = true,
+    sync: bool = false,
     info: nux.Platform.GPU.TextureInfo = .{},
     handle: ?nux.Platform.GPU.Handle = null,
 };
@@ -89,6 +89,7 @@ pub fn loadFromPath(self: *Self, id: nux.ID, path: []const u8) !void {
     // Set as source
     node.data = data;
     node.path = try self.allocator.dupe(u8, path);
+    node.sync = false;
 }
 pub fn loadFromData(self: *Self, id: nux.ID, data: []const u8) !void {
     const node = try self.nodes.get(id);
@@ -100,10 +101,11 @@ pub fn loadFromData(self: *Self, id: nux.ID, data: []const u8) !void {
     try self.deinitNode(node);
     node.info.width = @intCast(img.width);
     node.info.height = @intCast(img.height);
+    node.sync = false;
 }
 pub fn syncGPU(self: *Self) !void {
     for (self.nodes.data.items) |*texture| {
-        if (texture.sync) {
+        if (!texture.sync) {
             // Check gpu allocation
             if (texture.handle == null) {
                 texture.handle = try self.platform.vtable.create_texture(self.platform.ptr, texture.info);

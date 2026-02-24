@@ -1,7 +1,7 @@
 const std = @import("std");
 const nux = @import("nux");
-const api = @import("api.zig");
 const Window = @import("Window.zig");
+const GPU = @import("GPU.zig");
 
 pub fn parseArgs(args: std.process.ArgIterator, allocator: std.mem.Allocator) !nux.Platform.Config {
     var cfg = nux.Platform.Config{};
@@ -49,6 +49,10 @@ pub fn main() !void {
     var window: Window = .init();
     defer window.deinit();
 
+    // Init renderer
+    var gpu: GPU = .init(allocator);
+    defer gpu.deinit();
+
     // Parse arguments
     var args = try std.process.argsWithAllocator(allocator);
     defer args.deinit();
@@ -59,6 +63,7 @@ pub fn main() !void {
         .allocator = allocator,
         .config = config,
         .window = window.platform(),
+        .gpu = gpu.platform(),
     };
 
     // Init core

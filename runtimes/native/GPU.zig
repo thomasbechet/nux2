@@ -5,11 +5,17 @@ const gl = @import("gl");
 const Self = @This();
 
 const Platform = nux.Platform.GPU;
+
 const TextureHandle = struct {
     handle: gl.uint = 0,
     internal_format: gl.int,
     format: gl.uint,
     filtering: gl.int,
+};
+
+const BufferHandle = struct {
+    handle: gl.uint = 0,
+    type: gl.uint,
 };
 
 allocator: std.mem.Allocator,
@@ -85,5 +91,27 @@ pub fn platform(self: *Self) nux.Platform.GPU {
     return .{ .ptr = self, .vtable = &.{
         .create_texture = createTexture,
         .delete_texture = deleteTexture,
+        .update_texture = updateTexture,
+        .create_buffer = createBuffer,
+        .delete_buffer = deleteBuffer,
+        .update_buffer = updateBuffer,
     } };
 }
+
+fn createBuffer(ctx: *anyopaque, typ: Platform.BufferType, size: u64) anyerror!Platform.Handle {
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    const buffer = try self.allocator.create(BufferHandle);
+    buffer.type = typ;
+
+    buffer.type = switch (buffer.type) {
+        .uniform => gl.UNIFORM_BUFFER,
+        .storage => gl.SHADER_STORAGE_BUFFER,
+    };
+
+    gl.GenBuffers(1, &buffer.handle);
+    gl.BindBuffer(buffer.type, buffer.handle);
+    gl.BufferData(buffer.type, size, null, gl.DYNAMIC_DRAW);
+    gl.BindBuffer(buffer.type, 0);
+}
+fn deleteBuffer(ctx: *anyopaque, handle: Platform.Handle) anyerror!void {}
+fn updateBuffer(ctx: *anyopaque, handle: Platform.Handle, offset: u64, size: u64, data: []const f32) anyerror!void {}

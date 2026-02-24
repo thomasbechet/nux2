@@ -8,6 +8,6 @@ end
 
 function M:onUpdate()
     self.value = self.value + 1
-    print("value: "..self.value)
+    -- print("value: "..self.value)
 end
 

@@ -20,7 +20,7 @@ const KeyContext = struct {
     }
 };
 
-const default_ini = @embedFile("../default.ini");
+const default_ini = @embedFile("../conf.ini");
 
 fn parse(self: *Self, text: []const u8) !void {
     var current_section: []const u8 = "";

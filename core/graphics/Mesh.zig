@@ -5,10 +5,10 @@ const zgltf = @import("zgltf");
 const Self = @This();
 const Node = struct {
     span: ?nux.SpanAllocator.Span = null,
-    sync: bool = true,
     vertices: std.ArrayList(f32) = .empty,
     layout: nux.Vertex.Layout = .make(.{}),
     primitive: nux.Vertex.Primitive = .triangles,
+    sync: bool = false,
 
     fn initCapacity(allocator: std.mem.Allocator, capa: usize, primitive: nux.Vertex.Primitive, attributes: nux.Vertex.Attributes) !@This() {
         var node = Node{
@@ -23,9 +23,11 @@ const Node = struct {
 allocator: std.mem.Allocator,
 nodes: nux.NodePool(Node),
 graphics: *nux.Graphics,
+platform: nux.Platform.GPU,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
+    self.platform = core.platform.gpu;
 }
 pub fn newCapacity(self: *Self, parent: nux.ID, capa: u32, primitive: nux.Vertex.Primitive, attributes: nux.Vertex.Attributes) !nux.ID {
     return try self.nodes.new(parent, try .initCapacity(self.allocator, capa, primitive, attributes));
@@ -44,6 +46,7 @@ pub fn resize(self: *Self, id: nux.ID, size: u32) !void {
     if (size > old_size) {
         @memset(node.vertices.items[old_size..], 0);
     }
+    node.sync = false;
 }
 pub fn shortDescription(self: *Self, id: nux.ID, w: *std.Io.Writer) !void {
     const node = try self.nodes.get(id);
@@ -143,14 +146,14 @@ pub fn loadGltfPrimitive(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, p
 }
 pub fn syncGPU(self: *Self) !void {
     for (self.nodes.data.items) |*mesh| {
-        if (mesh.sync) {
+        if (!mesh.sync) {
             // Check gpu span allocation
             if (mesh.span == null or mesh.span.?.length < mesh.vertices.items.len) {
                 mesh.span = self.graphics.vertex_span_allocator.alloc(mesh.vertices.items.len) orelse return error.OutOfVertices;
             }
             // Upload data
             // Reset sync flag
-            mesh.sync = false;
+            mesh.sync = true;
         }
     }
 }

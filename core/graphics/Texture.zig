@@ -31,7 +31,7 @@ fn deinitNode(self: *Self, node: *Node) !void {
         self.allocator.free(path);
     }
     if (node.handle) |handle| {
-        try self.platform.vtable.delete_texture(self.platform.ptr, handle);
+        self.platform.vtable.delete_texture(self.platform.ptr, handle);
     }
     node.* = .{};
 }
@@ -45,7 +45,6 @@ pub fn save(self: *Self, id: nux.ID, writer: *nux.Writer) !void {
         try writer.write(node.path);
     } else if (node.data != null) {
         try writer.write(node.data);
-        try writer.write(node.info);
     }
 }
 pub fn load(self: *Self, id: nux.ID, reader: *nux.Reader) !void {

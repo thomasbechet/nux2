@@ -25,41 +25,29 @@ pub fn init(allocator: std.mem.Allocator) Self {
         .allocator = allocator,
     };
 }
-pub fn deinit(self: *Self) void {
-    _ = self;
-}
 
 fn createTexture(ctx: *anyopaque, info: Platform.TextureInfo) anyerror!Platform.Handle {
     const self: *Self = @ptrCast(@alignCast(ctx));
-    //         switch (info->type)
-    // {
-    //     case NUX_TEXTURE_IMAGE_RGBA:
-    //         tex->internal_format = GL_RGBA8;
-    //         tex->format          = GL_RGBA;
-    //         break;
-    //     case NUX_TEXTURE_IMAGE_INDEX:
-    //         tex->internal_format = GL_R8UI;
-    //         tex->format          = GL_RED_INTEGER;
-    //         break;
-    //     case NUX_TEXTURE_RENDER_TARGET:
-    //         tex->internal_format = GL_RGBA8;
-    //         tex->format          = GL_RGB;
-    // }
-    //
-    // switch (info->filter)
-    // {
-    //     case NUX_GPU_TEXTURE_FILTER_LINEAR:
-    //         tex->filtering = GL_LINEAR;
-    //         break;
-    //     case NUX_GPU_TEXTURE_FILTER_NEAREST:
-    //         tex->filtering = GL_NEAREST;
-    //         break;
-    // }
-
     const texture = try self.allocator.create(TextureHandle);
-    texture.internal_format = gl.RGBA8;
-    texture.format = gl.RGBA;
-    texture.filtering = gl.NEAREST;
+
+    switch (info.type) {
+        .image_rgba => {
+            texture.internal_format = gl.RGBA8;
+            texture.format = gl.RGBA;
+        },
+        .image_indexed => {
+            texture.internal_format = gl.R8UI;
+            texture.format = gl.RED_INTEGER;
+        },
+        .render_target => {
+            texture.internal_format = gl.RGBA8;
+            texture.format = gl.RGB;
+        },
+    }
+    texture.filtering = switch (info.filter) {
+        .linear => gl.LINEAR,
+        .nearest => gl.NEAREST,
+    };
     gl.GenTextures(1, @ptrCast(&texture.handle));
     gl.BindTexture(gl.TEXTURE_2D, texture.handle);
     gl.TexImage2D(
@@ -79,13 +67,58 @@ fn createTexture(ctx: *anyopaque, info: Platform.TextureInfo) anyerror!Platform.
 
     return texture;
 }
-fn deleteTexture(ctx: *anyopaque, handle: Platform.Handle) anyerror!void {
+fn deleteTexture(ctx: *anyopaque, handle: Platform.Handle) void {
     const self: *Self = @ptrCast(@alignCast(ctx));
     const texture: *TextureHandle = @ptrCast(@alignCast(handle));
     gl.DeleteTextures(1, @ptrCast(&texture.handle));
     self.allocator.destroy(texture);
 }
-fn updateTexture(_: *anyopaque, _: Platform.Handle, _: u32, _: u32, _: u32, _: u32, _: []const u8) anyerror!void {}
+fn updateTexture(_: *anyopaque, handle: Platform.Handle, x: u32, y: u32, w: u32, h: u32, data: []const u8) anyerror!void {
+    const texture: *TextureHandle = @ptrCast(@alignCast(handle));
+    gl.BindTexture(gl.TEXTURE_2D, texture.handle);
+    gl.TexSubImage2D(
+        gl.TEXTURE_2D,
+        0,
+        @intCast(x),
+        @intCast(y),
+        @intCast(w),
+        @intCast(h),
+        texture.format,
+        gl.UNSIGNED_BYTE,
+        data.ptr,
+    );
+    gl.BindTexture(gl.TEXTURE_2D, 0);
+}
+
+fn createBuffer(ctx: *anyopaque, typ: Platform.BufferType, size: u64) anyerror!Platform.Handle {
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    const buffer = try self.allocator.create(BufferHandle);
+
+    buffer.type = switch (typ) {
+        .uniform => gl.UNIFORM_BUFFER,
+        .storage => gl.SHADER_STORAGE_BUFFER,
+    };
+
+    gl.GenBuffers(1, @ptrCast(&buffer.handle));
+    gl.BindBuffer(buffer.type, buffer.handle);
+    gl.BufferData(buffer.type, @intCast(size), null, gl.DYNAMIC_DRAW);
+    gl.BindBuffer(buffer.type, 0);
+
+    return buffer;
+}
+fn deleteBuffer(ctx: *anyopaque, handle: Platform.Handle) void {
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    const buffer: *BufferHandle = @ptrCast(@alignCast(handle));
+    gl.DeleteBuffers(1, @ptrCast(&buffer.handle));
+    self.allocator.destroy(buffer);
+}
+fn updateBuffer(_: *anyopaque, handle: Platform.Handle, offset: u64, size: u64, data: []const f32) anyerror!void {
+    const buffer: *BufferHandle = @ptrCast(@alignCast(handle));
+
+    gl.BindBuffer(buffer.type, buffer.handle);
+    gl.BufferSubData(buffer.type, @intCast(offset), @intCast(size), data.ptr);
+    gl.BindBuffer(buffer.type, 0);
+}
 
 pub fn platform(self: *Self) nux.Platform.GPU {
     return .{ .ptr = self, .vtable = &.{
@@ -97,21 +130,3 @@ pub fn platform(self: *Self) nux.Platform.GPU {
         .update_buffer = updateBuffer,
     } };
 }
-
-fn createBuffer(ctx: *anyopaque, typ: Platform.BufferType, size: u64) anyerror!Platform.Handle {
-    const self: *Self = @ptrCast(@alignCast(ctx));
-    const buffer = try self.allocator.create(BufferHandle);
-    buffer.type = typ;
-
-    buffer.type = switch (buffer.type) {
-        .uniform => gl.UNIFORM_BUFFER,
-        .storage => gl.SHADER_STORAGE_BUFFER,
-    };
-
-    gl.GenBuffers(1, &buffer.handle);
-    gl.BindBuffer(buffer.type, buffer.handle);
-    gl.BufferData(buffer.type, size, null, gl.DYNAMIC_DRAW);
-    gl.BindBuffer(buffer.type, 0);
-}
-fn deleteBuffer(ctx: *anyopaque, handle: Platform.Handle) anyerror!void {}
-fn updateBuffer(ctx: *anyopaque, handle: Platform.Handle, offset: u64, size: u64, data: []const f32) anyerror!void {}

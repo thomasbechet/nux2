@@ -22,12 +22,28 @@ const Node = struct {
 
 allocator: std.mem.Allocator,
 nodes: nux.NodePool(Node),
-graphics: *nux.Graphics,
+config: *nux.Config,
 platform: nux.Platform.GPU,
+vertex_buffer: nux.Platform.GPU.Handle,
+vertex_span_allocator: nux.SpanAllocator,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.platform = core.platform.gpu;
+    self.vertex_span_allocator = try .init(
+        self.allocator,
+        try self.config.getInt(usize, "Graphics.defaultVertexBufferSize"),
+        try self.config.getInt(usize, "Graphics.defaultVertexBufferSpanCapacity"),
+    );
+    self.vertex_buffer = try self.platform.vtable.create_buffer(
+        self.platform.ptr,
+        .storage,
+        self.vertex_span_allocator.size,
+    );
+}
+pub fn deinit(self: *Self) void {
+    self.vertex_span_allocator.deinit();
+    self.platform.vtable.delete_buffer(self.platform.ptr, self.vertex_buffer);
 }
 pub fn newCapacity(self: *Self, parent: nux.ID, capa: u32, primitive: nux.Vertex.Primitive, attributes: nux.Vertex.Attributes) !nux.ID {
     return try self.nodes.new(parent, try .initCapacity(self.allocator, capa, primitive, attributes));
@@ -36,7 +52,7 @@ pub fn delete(self: *Self, id: nux.ID) !void {
     const node = try self.nodes.get(id);
     node.vertices.deinit(self.allocator);
     if (node.span) |span| {
-        try self.graphics.vertex_span_allocator.free(span);
+        try self.vertex_span_allocator.free(span);
     }
 }
 pub fn resize(self: *Self, id: nux.ID, size: u32) !void {
@@ -149,9 +165,18 @@ pub fn syncGPU(self: *Self) !void {
         if (!mesh.sync) {
             // Check gpu span allocation
             if (mesh.span == null or mesh.span.?.length < mesh.vertices.items.len) {
-                mesh.span = self.graphics.vertex_span_allocator.alloc(mesh.vertices.items.len) orelse return error.OutOfVertices;
+                mesh.span = self.vertex_span_allocator.alloc(mesh.vertices.items.len) orelse return error.OutOfVertices;
             }
             // Upload data
+            if (mesh.span) |span| {
+                try self.platform.vtable.update_buffer(
+                    self.platform.ptr,
+                    self.vertex_buffer,
+                    span.offset,
+                    span.length,
+                    mesh.vertices.items,
+                );
+            }
             // Reset sync flag
             mesh.sync = true;
         }

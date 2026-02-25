@@ -49,9 +49,8 @@ pub fn main() !void {
     var window: Window = .init();
     defer window.deinit();
 
-    // Init renderer
+    // Init GPU
     var gpu: GPU = .init(allocator);
-    defer gpu.deinit();
 
     // Parse arguments
     var args = try std.process.argsWithAllocator(allocator);

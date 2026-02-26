@@ -210,9 +210,12 @@ fn configNative(b: *std.Build, config: Config) void {
     // gdb
     const gdb = b.addSystemCommand(&.{
         "gdb",
-        "--",
+        "--args",
     });
     gdb.addArtifactArg(artifact);
+    if (b.args) |args| {
+        gdb.addArgs(args);
+    }
     const gdb_step = b.step("gdb", "Run the console under gdb");
     gdb_step.dependOn(&gdb.step);
 

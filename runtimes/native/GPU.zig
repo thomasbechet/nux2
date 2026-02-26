@@ -6,6 +6,22 @@ const Self = @This();
 
 const Platform = nux.Platform.GPU;
 
+const PipelineHandle = struct {
+    handle: gl.uint = 0,
+    type: Platform.PipelineType,
+    blend: gl.boolean,
+    depth_test: gl.boolean,
+    primitive: gl.uint,
+    program: gl.uint,
+    indices: [Platform.Descriptor.max]gl.uint,
+    locations: [Platform.Descriptor.max]gl.uint,
+    units: [Platform.Descriptor.max]gl.uint,
+};
+
+const FramebufferHandle = struct {
+    handle: gl.uint = 0,
+};
+
 const TextureHandle = struct {
     handle: gl.uint = 0,
     internal_format: gl.int,
@@ -25,6 +41,77 @@ pub fn init(allocator: std.mem.Allocator) Self {
         .allocator = allocator,
     };
 }
+
+fn compileShader(self: *Self, source: []const u8, shader_type: gl.uint) !gl.uint {
+    const handle = gl.CreateShader(shader_type);
+    errdefer gl.DeleteShader(handle);
+    gl.ShaderSource(handle, 1, &.{source.ptr}, &.{source.len});
+    gl.CompileShader(handle);
+    var success: gl.int = 0;
+    gl.GetShaderiv(handle, gl.COMPILE_STATUS, &success);
+    if (success == gl.FALSE) {
+        var max_length: gl.int = 0;
+        gl.GetShaderiv(handle, gl.INFO_LOG_LENGTH, &max_length);
+        const log = self.allocator.alloc(gl.char, max_length);
+        defer self.allocator.free(log);
+        gl.GetShaderInfoLog(handle, max_length, &max_length, log);
+        std.log.err("failed to compile shader {s}", .{log});
+        return error.ShaderCompilation;
+    }
+    return handle;
+}
+fn compileProgram(self: *Self, vertex: []const u8, fragment: []const u8) !gl.uint {
+    const vertex_shader = try self.compileShader(vertex, gl.VERTEX_SHADER);
+    defer gl.DeleteShader(vertex_shader);
+    const fragment_shader = try self.compileShader(fragment, gl.FRAGMENT_SHADER);
+    defer gl.DeleteShader(fragment_shader);
+
+    const handle = gl.CreateProgram();
+    errdefer gl.DeleteProgram(handle);
+    gl.AttachShader(handle, vertex_shader);
+    gl.AttachShader(handle, fragment_shader);
+    gl.LinkProgram(handle);
+    var success: gl.int = 0;
+    gl.GetProgramiv(handle, gl.LINK_STATUS, &success);
+    if (success == gl.FALSE) {
+        var max_length: gl.int = 0;
+        gl.GetProgramiv(handle, gl.INFO_LOG_LENGTH, &max_length);
+        const log = self.allocator.alloc(gl.char, max_length);
+        defer self.allocator.free(log);
+        gl.GetProgramInfoLog(handle, max_length, &max_length, log);
+        std.log.err("failed to link program {s}", .{log});
+        return error.ProgramLink;
+    }
+    return handle;
+}
+
+fn createPipeline(ctx: *anyopaque, info: Platform.PipelineInfo) anyerror!Platform.Handle {
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    const pipeline = try self.allocator.create(PipelineHandle);
+    pipeline.type = info.type;
+    pipeline.blend = if (info.blend) gl.TRUE else gl.FALSE;
+    pipeline.depth_test = if (info.depth_test) gl.TRUE else gl.FALSE;
+    pipeline.primitive = switch(info.primitive) {
+        .triangles => gl.TRIANGLES,
+        .lines => gl.LINES,
+        .points => gl.POINTS,
+    };
+    return pipeline;
+}
+fn deletePipeline(ctx: *anyopaque, handle: Platform.Handle) void {
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    const pipeline: *PipelineHandle = @ptrCast(@alignCast(handle));
+    gl.DeleteProgram(pipeline.handle);
+    self.allocator.destroy(pipeline);
+}
+
+fn createFramebuffer(ctx: *anyopaque, texture: Platform.Handle) anyerror!Platform.Handle {
+    _ = ctx;
+    _ = texture;
+    // const self: *Self = @ptrCast(@alignCast(ctx));
+    // const framebuffer = try self.allocator.create(FramebufferHandle);
+}
+fn deleteFramebuffer(_: *anyopaque, _: Platform.Handle) void {}
 
 fn createTexture(ctx: *anyopaque, info: Platform.TextureInfo) anyerror!Platform.Handle {
     const self: *Self = @ptrCast(@alignCast(ctx));

@@ -95,9 +95,10 @@ pub fn loadFromData(self: *Self, id: nux.ID, data: []const u8) !void {
     // Load image
     var img = try zigimg.Image.fromMemory(self.allocator, data);
     defer img.deinit(self.allocator);
-    node.data = try self.allocator.dupe(u8, img.rawBytes());
+    try img.convert(self.allocator, .rgba32);
     // Deinit node
     try self.deinitNode(node);
+    node.data = try self.allocator.dupe(u8, img.rawBytes());
     node.info.width = @intCast(img.width);
     node.info.height = @intCast(img.height);
     node.sync = false;

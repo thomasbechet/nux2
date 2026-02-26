@@ -38,7 +38,8 @@ pub const Descriptor = enum(u32) {
     texture = 6,
     texture_width = 7,
     texture_height = 8,
-    max = 9,
+
+    pub const max: usize = 9;
 };
 
 pub const PipelineInfo = struct {

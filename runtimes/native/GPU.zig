@@ -7,7 +7,6 @@ const Self = @This();
 const Platform = nux.Platform.GPU;
 
 const PipelineHandle = struct {
-    handle: gl.uint = 0,
     type: Platform.PipelineType,
     blend: gl.boolean,
     depth_test: gl.boolean,
@@ -34,6 +33,13 @@ const BufferHandle = struct {
     type: gl.uint,
 };
 
+const shader_uber_vertex = @embedFile("shaders/uber.vert");
+const shader_uber_fragment = @embedFile("shaders/uber.frag");
+const shader_canvas_vertex = @embedFile("shaders/canvas.vert");
+const shader_canvas_fragment = @embedFile("shaders/canvas.frag");
+const shader_blit_vertex = @embedFile("shaders/blit.vert");
+const shader_blit_fragment = @embedFile("shaders/blit.frag");
+
 allocator: std.mem.Allocator,
 
 pub fn init(allocator: std.mem.Allocator) Self {
@@ -45,16 +51,16 @@ pub fn init(allocator: std.mem.Allocator) Self {
 fn compileShader(self: *Self, source: []const u8, shader_type: gl.uint) !gl.uint {
     const handle = gl.CreateShader(shader_type);
     errdefer gl.DeleteShader(handle);
-    gl.ShaderSource(handle, 1, &.{source.ptr}, &.{source.len});
+    gl.ShaderSource(handle, 1, &.{source.ptr}, &.{@intCast(source.len)});
     gl.CompileShader(handle);
     var success: gl.int = 0;
-    gl.GetShaderiv(handle, gl.COMPILE_STATUS, &success);
+    gl.GetShaderiv(handle, gl.COMPILE_STATUS, @ptrCast(&success));
     if (success == gl.FALSE) {
         var max_length: gl.int = 0;
-        gl.GetShaderiv(handle, gl.INFO_LOG_LENGTH, &max_length);
-        const log = self.allocator.alloc(gl.char, max_length);
+        gl.GetShaderiv(handle, gl.INFO_LOG_LENGTH, @ptrCast(&max_length));
+        const log = try self.allocator.alloc(gl.char, @intCast(max_length));
         defer self.allocator.free(log);
-        gl.GetShaderInfoLog(handle, max_length, &max_length, log);
+        gl.GetShaderInfoLog(handle, max_length, &max_length, @ptrCast(log.ptr));
         std.log.err("failed to compile shader {s}", .{log});
         return error.ShaderCompilation;
     }
@@ -72,13 +78,13 @@ fn compileProgram(self: *Self, vertex: []const u8, fragment: []const u8) !gl.uin
     gl.AttachShader(handle, fragment_shader);
     gl.LinkProgram(handle);
     var success: gl.int = 0;
-    gl.GetProgramiv(handle, gl.LINK_STATUS, &success);
+    gl.GetProgramiv(handle, gl.LINK_STATUS, @ptrCast(&success));
     if (success == gl.FALSE) {
         var max_length: gl.int = 0;
-        gl.GetProgramiv(handle, gl.INFO_LOG_LENGTH, &max_length);
-        const log = self.allocator.alloc(gl.char, max_length);
+        gl.GetProgramiv(handle, gl.INFO_LOG_LENGTH, @ptrCast(&max_length));
+        const log = try self.allocator.alloc(gl.char, @intCast(max_length));
         defer self.allocator.free(log);
-        gl.GetProgramInfoLog(handle, max_length, &max_length, log);
+        gl.GetProgramInfoLog(handle, max_length, &max_length, @ptrCast(log.ptr));
         std.log.err("failed to link program {s}", .{log});
         return error.ProgramLink;
     }
@@ -91,27 +97,86 @@ fn createPipeline(ctx: *anyopaque, info: Platform.PipelineInfo) anyerror!Platfor
     pipeline.type = info.type;
     pipeline.blend = if (info.blend) gl.TRUE else gl.FALSE;
     pipeline.depth_test = if (info.depth_test) gl.TRUE else gl.FALSE;
-    pipeline.primitive = switch(info.primitive) {
+    pipeline.primitive = switch (info.primitive) {
         .triangles => gl.TRIANGLES,
         .lines => gl.LINES,
         .points => gl.POINTS,
     };
+    switch (info.type) {
+        .uber => {
+            pipeline.program = try self.compileProgram(shader_uber_vertex, shader_uber_fragment);
+
+            var index: gl.uint = 0;
+            index = gl.GetProgramResourceIndex(pipeline.program, gl.UNIFORM_BLOCK, "ConstantBlock");
+            gl.UniformBlockBinding(pipeline.program, index, 1);
+            index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "BatchBlock");
+            gl.UniformBlockBinding(pipeline.program, index, 2);
+            index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "VertexBlock");
+            gl.UniformBlockBinding(pipeline.program, index, 3);
+            index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "TransformBlock");
+            gl.UniformBlockBinding(pipeline.program, index, 4);
+
+            pipeline.indices[Platform.Descriptor.constants_buffer] = 1;
+            pipeline.indices[Platform.Descriptor.batches_buffer] = 2;
+            pipeline.indices[Platform.Descriptor.vertices_buffer] = 3;
+            pipeline.indices[Platform.Descriptor.transforms_buffer] = 4;
+
+            pipeline.locations[Platform.Descriptor.texture] = gl.GetUniformLocation(pipeline.program, "texture0");
+            pipeline.locations[Platform.Descriptor.batch_index] = gl.GetUniformLocation(pipeline.program, "batchIndex");
+
+            pipeline.units[Platform.Descriptor.texture] = 0;
+        },
+        .canvas => {
+            pipeline.program = try self.compileProgram(shader_canvas_vertex, shader_canvas_fragment);
+
+            var index = 0;
+            index = gl.GetProgramResourceIndex(pipeline.program, gl.UNIFORM_BLOCK, "ConstantBlock");
+            gl.UniformBlockBinding(pipeline.program, index, 1);
+            index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "BatchBlock");
+            gl.UniformBlockBinding(pipeline.program, index, 2);
+            index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "QuadBlock");
+            gl.UniformBlockBinding(pipeline.program, index, 3);
+
+            pipeline.indices[Platform.Descriptor.constants_buffer] = 1;
+            pipeline.indices[Platform.Descriptor.batches_buffer] = 2;
+            pipeline.indices[Platform.Descriptor.quads_buffer] = 3;
+
+            pipeline.locations[Platform.Descriptor.texture] = gl.GetUniformLocation(pipeline.program, "texture0");
+            pipeline.locations[Platform.Descriptor.batch_index] = gl.GetUniformLocation(pipeline.program, "batchIndex");
+
+            pipeline.units[Platform.Descriptor.texture] = 0;
+        },
+        .blit => {
+            pipeline.program = try self.compileProgram(shader_blit_vertex, shader_blit_fragment);
+
+            pipeline.locations[Platform.Descriptor.texture] = gl.GetUniformLocation(pipeline.program, "texture0");
+            pipeline.locations[Platform.Descriptor.texture_width] = gl.GetUniformLocation(pipeline.program, "textureWidth");
+            pipeline.locations[Platform.Descriptor.texture_height] = gl.GetUniformLocation(pipeline.program, "textureHeight");
+
+            pipeline.units[Platform.Descriptor.texture] = 0;
+        },
+    }
+    std.log.info("CREATED", .{});
     return pipeline;
 }
 fn deletePipeline(ctx: *anyopaque, handle: Platform.Handle) void {
     const self: *Self = @ptrCast(@alignCast(ctx));
     const pipeline: *PipelineHandle = @ptrCast(@alignCast(handle));
-    gl.DeleteProgram(pipeline.handle);
+    gl.DeleteProgram(pipeline.program);
     self.allocator.destroy(pipeline);
 }
 
 fn createFramebuffer(ctx: *anyopaque, texture: Platform.Handle) anyerror!Platform.Handle {
-    _ = ctx;
     _ = texture;
-    // const self: *Self = @ptrCast(@alignCast(ctx));
-    // const framebuffer = try self.allocator.create(FramebufferHandle);
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    const framebuffer = try self.allocator.create(FramebufferHandle);
+    return framebuffer;
 }
-fn deleteFramebuffer(_: *anyopaque, _: Platform.Handle) void {}
+fn deleteFramebuffer(ctx: *anyopaque, handle: Platform.Handle) void {
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    const framebuffer: *FramebufferHandle = @ptrCast(@alignCast(handle));
+    self.allocator.destroy(framebuffer.handle);
+}
 
 fn createTexture(ctx: *anyopaque, info: Platform.TextureInfo) anyerror!Platform.Handle {
     const self: *Self = @ptrCast(@alignCast(ctx));
@@ -209,6 +274,10 @@ fn updateBuffer(_: *anyopaque, handle: Platform.Handle, offset: u64, size: u64, 
 
 pub fn platform(self: *Self) nux.Platform.GPU {
     return .{ .ptr = self, .vtable = &.{
+        .create_pipeline = createPipeline,
+        .delete_pipeline = deletePipeline,
+        .create_framebuffer = createFramebuffer,
+        .delete_framebuffer = deleteFramebuffer,
         .create_texture = createTexture,
         .delete_texture = deleteTexture,
         .update_texture = updateTexture,

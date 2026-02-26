@@ -12,9 +12,9 @@ const PipelineHandle = struct {
     depth_test: gl.boolean,
     primitive: gl.uint,
     program: gl.uint,
-    indices: [Platform.Descriptor.max]gl.uint,
-    locations: [Platform.Descriptor.max]gl.uint,
-    units: [Platform.Descriptor.max]gl.uint,
+    indices: [Platform.Descriptor.max]gl.int,
+    locations: [Platform.Descriptor.max]gl.int,
+    units: [Platform.Descriptor.max]gl.int,
 };
 
 const FramebufferHandle = struct {
@@ -116,20 +116,20 @@ fn createPipeline(ctx: *anyopaque, info: Platform.PipelineInfo) anyerror!Platfor
             index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "TransformBlock");
             gl.UniformBlockBinding(pipeline.program, index, 4);
 
-            pipeline.indices[Platform.Descriptor.constants_buffer] = 1;
-            pipeline.indices[Platform.Descriptor.batches_buffer] = 2;
-            pipeline.indices[Platform.Descriptor.vertices_buffer] = 3;
-            pipeline.indices[Platform.Descriptor.transforms_buffer] = 4;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.constants_buffer)] = 1;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.batches_buffer)] = 2;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.vertices_buffer)] = 3;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.transforms_buffer)] = 4;
 
-            pipeline.locations[Platform.Descriptor.texture] = gl.GetUniformLocation(pipeline.program, "texture0");
-            pipeline.locations[Platform.Descriptor.batch_index] = gl.GetUniformLocation(pipeline.program, "batchIndex");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.batch_index)] = gl.GetUniformLocation(pipeline.program, "batchIndex");
 
-            pipeline.units[Platform.Descriptor.texture] = 0;
+            pipeline.units[@intFromEnum(Platform.Descriptor.texture)] = 0;
         },
         .canvas => {
             pipeline.program = try self.compileProgram(shader_canvas_vertex, shader_canvas_fragment);
 
-            var index = 0;
+            var index: gl.uint = 0;
             index = gl.GetProgramResourceIndex(pipeline.program, gl.UNIFORM_BLOCK, "ConstantBlock");
             gl.UniformBlockBinding(pipeline.program, index, 1);
             index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "BatchBlock");
@@ -137,26 +137,25 @@ fn createPipeline(ctx: *anyopaque, info: Platform.PipelineInfo) anyerror!Platfor
             index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "QuadBlock");
             gl.UniformBlockBinding(pipeline.program, index, 3);
 
-            pipeline.indices[Platform.Descriptor.constants_buffer] = 1;
-            pipeline.indices[Platform.Descriptor.batches_buffer] = 2;
-            pipeline.indices[Platform.Descriptor.quads_buffer] = 3;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.constants_buffer)] = 1;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.batches_buffer)] = 2;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.quads_buffer)] = 3;
 
-            pipeline.locations[Platform.Descriptor.texture] = gl.GetUniformLocation(pipeline.program, "texture0");
-            pipeline.locations[Platform.Descriptor.batch_index] = gl.GetUniformLocation(pipeline.program, "batchIndex");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.batch_index)] = gl.GetUniformLocation(pipeline.program, "batchIndex");
 
-            pipeline.units[Platform.Descriptor.texture] = 0;
+            pipeline.units[@intFromEnum(Platform.Descriptor.texture)] = 0;
         },
         .blit => {
             pipeline.program = try self.compileProgram(shader_blit_vertex, shader_blit_fragment);
 
-            pipeline.locations[Platform.Descriptor.texture] = gl.GetUniformLocation(pipeline.program, "texture0");
-            pipeline.locations[Platform.Descriptor.texture_width] = gl.GetUniformLocation(pipeline.program, "textureWidth");
-            pipeline.locations[Platform.Descriptor.texture_height] = gl.GetUniformLocation(pipeline.program, "textureHeight");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.texture_width)] = gl.GetUniformLocation(pipeline.program, "textureWidth");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.texture_height)] = gl.GetUniformLocation(pipeline.program, "textureHeight");
 
-            pipeline.units[Platform.Descriptor.texture] = 0;
+            pipeline.units[@intFromEnum(Platform.Descriptor.texture)] = 0;
         },
     }
-    std.log.info("CREATED", .{});
     return pipeline;
 }
 fn deletePipeline(ctx: *anyopaque, handle: Platform.Handle) void {
@@ -175,7 +174,7 @@ fn createFramebuffer(ctx: *anyopaque, texture: Platform.Handle) anyerror!Platfor
 fn deleteFramebuffer(ctx: *anyopaque, handle: Platform.Handle) void {
     const self: *Self = @ptrCast(@alignCast(ctx));
     const framebuffer: *FramebufferHandle = @ptrCast(@alignCast(handle));
-    self.allocator.destroy(framebuffer.handle);
+    self.allocator.destroy(framebuffer);
 }
 
 fn createTexture(ctx: *anyopaque, info: Platform.TextureInfo) anyerror!Platform.Handle {

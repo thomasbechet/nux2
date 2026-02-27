@@ -23,8 +23,8 @@ pub const VTable = struct {
     read: *const fn (*anyopaque, handle: Handle, data: []u8) anyerror!void = Default.read,
     write: *const fn (*anyopaque, handle: Handle, data: []const u8) anyerror!void = Default.write,
     stat: *const fn (*anyopaque, path: []const u8) anyerror!Stat = Default.stat,
-    openDir: *const fn (*anyopaque, path: []const u8) anyerror!Handle = Default.openDir,
-    closeDir: *const fn (*anyopaque, handle: Handle) void = Default.closeDir,
+    open_dir: *const fn (*anyopaque, path: []const u8) anyerror!Handle = Default.openDir,
+    close_dir: *const fn (*anyopaque, handle: Handle) void = Default.closeDir,
     next: *const fn (*anyopaque, handle: Handle, name: []u8) anyerror!?usize = Default.next,
 };
 

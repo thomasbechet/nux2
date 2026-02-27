@@ -41,8 +41,8 @@ const NativeFileSystem = struct {
     fn list(self: *const @This(), fileList: *nux.File.FileList) !void {
         var buf: [256]u8 = undefined;
         const final_path = try self.compuleNativePath(".", &buf);
-        const handle = try self.platform.vtable.openDir(self.platform.ptr, final_path);
-        defer self.platform.vtable.closeDir(self.platform.ptr, handle);
+        const handle = try self.platform.vtable.open_dir(self.platform.ptr, final_path);
+        defer self.platform.vtable.close_dir(self.platform.ptr, handle);
         while (try self.platform.vtable.next(self.platform.ptr, handle, &buf)) |size| {
             const name = buf[0..size];
             try fileList.add(name);

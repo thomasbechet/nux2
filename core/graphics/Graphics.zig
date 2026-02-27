@@ -4,6 +4,12 @@ const Gltf = @import("zgltf").Gltf;
 
 const Self = @This();
 
+const GltfContext = struct {
+    gltf: *const Gltf,
+    meshes: nux.ID,
+    textures: nux.ID,
+};
+
 config: *nux.Config,
 node: *nux.Node,
 transform: *nux.Transform,
@@ -21,12 +27,6 @@ pipelines: struct {
     canvas: nux.Platform.GPU.Handle,
     blit: nux.Platform.GPU.Handle,
 },
-
-const GltfContext = struct {
-    gltf: *const Gltf,
-    meshes: nux.ID,
-    textures: nux.ID,
-};
 
 fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize) !nux.ID {
     // Get root node
@@ -83,6 +83,9 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.platform = core.platform.gpu;
 
+    // Create device
+    try self.platform.vtable.create_device(self.platform.ptr);
+
     // Create pipelines
     self.pipelines.uber_opaque = try self.platform.vtable.create_pipeline(self.platform.ptr, .{
         .type = .uber,
@@ -118,6 +121,7 @@ pub fn deinit(self: *Self) void {
     self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.uber_line);
     self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.canvas);
     self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.blit);
+    self.platform.vtable.delete_device(self.platform.ptr);
 }
 pub fn onPostUpdate(self: *Self) !void {
     try self.mesh.syncGPU();

@@ -8,7 +8,7 @@ const Node = struct {
     data: ?[]u8 = null,
     path: ?[]const u8 = null, // Nonnull if loaded from file
     sync: bool = false,
-    info: nux.Platform.GPU.TextureInfo = .{},
+    info: nux.GPU.TextureInfo = .{},
     handle: ?nux.Platform.GPU.Handle = null,
 };
 

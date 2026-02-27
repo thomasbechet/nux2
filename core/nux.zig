@@ -20,6 +20,7 @@ pub const Camera = @import("graphics/Camera.zig");
 pub const GUI = @import("gui/GUI.zig");
 pub const Window = @import("graphics/Window.zig");
 pub const Vertex = @import("graphics/Vertex.zig");
+pub const GPU = @import("graphics/GPU.zig");
 
 pub const ID = Node.ID;
 pub const PropertyValue = Node.PropertyValue;

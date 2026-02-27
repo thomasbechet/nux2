@@ -51,6 +51,7 @@ pub fn main() !void {
 
     // Init GPU
     var gpu: GPU = .init(allocator);
+    defer gpu.deinit();
 
     // Parse arguments
     var args = try std.process.argsWithAllocator(allocator);

@@ -58,7 +58,7 @@ pub const TextureInfo = struct {
 
 pub const Command = union(enum) {
     bind_framebuffer: struct {
-        framebuffer: Handle,
+        framebuffer: ?Handle, // null for default framebuffer
     },
     bind_pipeline: struct {
         pipeline: Handle,
@@ -87,7 +87,10 @@ pub const Command = union(enum) {
     },
     clear_depth,
     viewport: struct {
-        extent: [4]f32,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
     },
 };
 

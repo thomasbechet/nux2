@@ -8,13 +8,13 @@ const Platform = nux.Platform.GPU;
 
 const PipelineHandle = struct {
     type: Platform.PipelineType,
-    blend: gl.boolean,
-    depth_test: gl.boolean,
+    blend: bool,
+    depth_test: bool,
     primitive: gl.uint,
     program: gl.uint,
-    indices: [Platform.Descriptor.max]gl.int,
+    indices: [Platform.Descriptor.max]gl.uint,
     locations: [Platform.Descriptor.max]gl.int,
-    units: [Platform.Descriptor.max]gl.int,
+    units: [Platform.Descriptor.max]gl.uint,
 };
 
 const FramebufferHandle = struct {
@@ -41,11 +41,20 @@ const shader_blit_vertex = @embedFile("shaders/blit.vert");
 const shader_blit_fragment = @embedFile("shaders/blit.frag");
 
 allocator: std.mem.Allocator,
+active_pipeline: ?*PipelineHandle,
+empty_vao: gl.uint,
 
 pub fn init(allocator: std.mem.Allocator) Self {
+    var empty_vao: gl.uint = undefined;
+    gl.GenVertexArrays(1, @ptrCast(&empty_vao));
     return .{
         .allocator = allocator,
+        .active_pipeline = null,
+        .empty_vao = empty_vao,
     };
+}
+pub fn deinit(self: *Self) void {
+    gl.DeleteVertexArrays(1, @ptrCast(&self.empty_vao));
 }
 
 fn compileShader(self: *Self, source: []const u8, shader_type: gl.uint) !gl.uint {
@@ -95,8 +104,8 @@ fn createPipeline(ctx: *anyopaque, info: Platform.PipelineInfo) anyerror!Platfor
     const self: *Self = @ptrCast(@alignCast(ctx));
     const pipeline = try self.allocator.create(PipelineHandle);
     pipeline.type = info.type;
-    pipeline.blend = if (info.blend) gl.TRUE else gl.FALSE;
-    pipeline.depth_test = if (info.depth_test) gl.TRUE else gl.FALSE;
+    pipeline.blend = info.blend;
+    pipeline.depth_test = info.depth_test;
     pipeline.primitive = switch (info.primitive) {
         .triangles => gl.TRIANGLES,
         .lines => gl.LINES,
@@ -271,6 +280,84 @@ fn updateBuffer(_: *anyopaque, handle: Platform.Handle, offset: u64, size: u64, 
     gl.BindBuffer(buffer.type, 0);
 }
 
+fn submitCommands(ctx: *anyopaque, commands: []const Platform.Command) anyerror!void {
+    const self: *Self = @ptrCast(@alignCast(ctx));
+    for (commands) |command| {
+        switch (command) {
+            .bind_framebuffer => |cmd| {
+                if (cmd.framebuffer) |handle| {
+                    const framebuffer: *FramebufferHandle = @ptrCast(@alignCast(handle));
+                    gl.BindFramebuffer(gl.FRAMEBUFFER, framebuffer.handle);
+                } else {
+                    gl.BindFramebuffer(gl.FRAMEBUFFER, 0);
+                }
+            },
+            .bind_pipeline => |cmd| {
+                const pipeline: *PipelineHandle = @ptrCast(@alignCast(cmd.pipeline));
+                gl.UseProgram(pipeline.program);
+                if (pipeline.depth_test) {
+                    gl.Enable(gl.DEPTH_TEST);
+                } else {
+                    gl.Disable(gl.DEPTH_TEST);
+                }
+                if (pipeline.blend) {
+                    gl.Enable(gl.BLEND);
+                    gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+                } else {
+                    gl.Disable(gl.BLEND);
+                }
+                if (pipeline.type == .uber) {
+                    gl.Enable(gl.MULTISAMPLE);
+                }
+                self.active_pipeline = pipeline;
+            },
+            .bind_buffer => |cmd| {
+                const buffer: *BufferHandle = @ptrCast(@alignCast(cmd.buffer));
+                const index = self.active_pipeline.?.indices[@intFromEnum(cmd.descriptor)];
+                gl.BindBufferBase(buffer.type, index, buffer.handle);
+            },
+            .bind_texture => |cmd| {
+                const texture: *TextureHandle = @ptrCast(@alignCast(cmd.texture));
+                const unit = self.active_pipeline.?.units[@intFromEnum(cmd.descriptor)];
+                const location = self.active_pipeline.?.locations[@intFromEnum(cmd.descriptor)];
+                gl.ActiveTexture(gl.TEXTURE0 + unit);
+                gl.BindTexture(gl.TEXTURE_2D, texture.handle);
+                gl.Uniform1i(location, @intCast(unit));
+            },
+            .push_u32 => |cmd| {
+                const location = self.active_pipeline.?.locations[@intFromEnum(cmd.descriptor)];
+                gl.Uniform1ui(location, cmd.value);
+            },
+            .push_f32 => |cmd| {
+                const location = self.active_pipeline.?.locations[@intFromEnum(cmd.descriptor)];
+                gl.Uniform1f(location, cmd.value);
+            },
+            .draw => |cmd| {
+                gl.BindVertexArray(self.empty_vao);
+                gl.DrawArrays(self.active_pipeline.?.primitive, 0, @intCast(cmd.count));
+                gl.BindVertexArray(0);
+            },
+            .clear_color => |cmd| {
+                // nux_f32_t clear[4];
+                // hex_to_linear(cmd->clear_color.color, clear);
+                // const clear: [4]f32 = .{ cmd.color}
+                _ = cmd;
+                gl.ClearColor(0, 0, 0, 1);
+                gl.Clear(gl.COLOR_BUFFER_BIT);
+            },
+            .clear_depth => {
+                gl.Clear(gl.DEPTH_BUFFER_BIT);
+            },
+            .viewport => |cmd| {
+                const y = @as(i32, @intCast(cmd.height)) - (cmd.y + @as(i32, @intCast(cmd.height)));
+                gl.Viewport(cmd.x, y, @intCast(cmd.width), @intCast(cmd.height));
+                gl.Enable(gl.SCISSOR_TEST);
+                gl.Scissor(cmd.x, y, @intCast(cmd.width), @intCast(cmd.height));
+            },
+        }
+    }
+}
+
 pub fn platform(self: *Self) nux.Platform.GPU {
     return .{ .ptr = self, .vtable = &.{
         .create_pipeline = createPipeline,
@@ -283,5 +370,6 @@ pub fn platform(self: *Self) nux.Platform.GPU {
         .create_buffer = createBuffer,
         .delete_buffer = deleteBuffer,
         .update_buffer = updateBuffer,
+        .submit_commands = submitCommands,
     } };
 }

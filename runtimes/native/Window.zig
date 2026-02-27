@@ -11,7 +11,7 @@ var key_map: [c.GLFW_KEY_LAST + 1]?nux.Input.Key = undefined;
 const Self = @This();
 
 window: ?*c.GLFWwindow = null,
-core: *nux.Core = undefined,
+core: *nux.Core = undefined, // Keep temporary reference during callbacks
 
 fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     var self: *Self = @ptrCast(@alignCast(ctx));

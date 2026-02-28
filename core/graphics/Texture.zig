@@ -3,6 +3,17 @@ const nux = @import("../nux.zig");
 const zigimg = @import("zigimg");
 const zgltf = @import("zgltf");
 
+pub const Filtering = enum(u32) {
+    nearest = 0,
+    linear = 1,
+};
+
+pub const Type = enum(u32) {
+    image_rgba = 0,
+    image_indexed = 1,
+    render_target = 2,
+};
+
 const Self = @This();
 const Node = struct {
     data: ?[]u8 = null,

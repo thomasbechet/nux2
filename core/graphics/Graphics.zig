@@ -17,11 +17,12 @@ gpu: *nux.GPU,
 transform: *nux.Transform,
 logger: *nux.Logger,
 file: *nux.File,
-allocator: std.mem.Allocator,
 mesh: *nux.Mesh,
 texture: *nux.Texture,
 material: *nux.Material,
 staticmesh: *nux.StaticMesh,
+
+allocator: std.mem.Allocator,
 pipelines: struct {
     uber_opaque: GPU.Pipeline,
     uber_line: GPU.Pipeline,

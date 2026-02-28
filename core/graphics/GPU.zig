@@ -4,12 +4,6 @@ const nux = @import("../nux.zig");
 const Self = @This();
 const Platform = nux.Platform.GPU;
 
-pub const TextureType = enum(u32) {
-    image_rgba = 0,
-    image_indexed = 1,
-    render_target = 2,
-};
-
 pub const BufferType = enum(u32) {
     uniform = 0,
     storage = 1,
@@ -19,11 +13,6 @@ pub const PipelineType = enum(u32) {
     uber = 0,
     canvas = 1,
     blit = 2,
-};
-
-pub const TextureFiltering = enum(u32) {
-    nearest = 0,
-    linear = 1,
 };
 
 pub const Descriptor = enum(u32) {
@@ -50,8 +39,8 @@ pub const PipelineInfo = struct {
 pub const TextureInfo = struct {
     width: u32 = 0,
     height: u32 = 0,
-    filter: TextureFiltering = .nearest,
-    type: TextureType = .image_rgba,
+    filter: nux.Texture.Filtering = .nearest,
+    type: nux.Texture.Type = .image_rgba,
 };
 
 pub const Framebuffer = struct {
@@ -110,7 +99,7 @@ pub const Buffer = struct {
     }
 };
 
-const Encoder = struct {
+pub const Encoder = struct {
     gpu: *Self,
     allocator: std.mem.Allocator,
     commands: std.ArrayList(Platform.Command),

@@ -56,6 +56,7 @@ pub const TextureInfo = struct {
 
 pub const Framebuffer = struct {
     handle: Platform.Handle,
+    gpu: *Self,
 };
 
 pub const Pipeline = struct {
@@ -76,10 +77,37 @@ pub const Pipeline = struct {
 pub const Texture = struct {
     handle: Platform.Handle,
     gpu: *Self,
+
+    pub fn init(gpu: *Self, info: TextureInfo) !Texture {
+        return .{
+            .handle = try gpu.platform.vtable.create_texture(gpu.platform.ptr, info),
+            .gpu = gpu,
+        };
+    }
+    pub fn deinit(self: *Texture) void {
+        self.gpu.platform.vtable.delete_texture(self.gpu.platform.ptr, self.handle);
+    }
+    pub fn update(self: *Texture, x: u32, y: u32, w: u32, h: u32, data: []const u8) !void {
+        try self.gpu.platform.vtable.update_texture(self.gpu.platform.ptr, self.handle, x, y, w, h, data);
+    }
 };
 
 pub const Buffer = struct {
     handle: Platform.Handle,
+    gpu: *Self,
+
+    pub fn init(gpu: *Self, typ: BufferType, size: u64) !Buffer {
+        return .{
+            .gpu = gpu,
+            .handle = try gpu.platform.vtable.create_buffer(gpu.platform.ptr, typ, size),
+        };
+    }
+    pub fn deinit(self: *Buffer) void {
+        self.gpu.platform.vtable.delete_buffer(self.gpu.platform.ptr, self.handle);
+    }
+    pub fn update(self: *Buffer, offset: u64, size: u64, data: []const f32) !void {
+        try self.gpu.platform.vtable.update_buffer(self.gpu.platform.ptr, self.handle, offset, size, data);
+    }
 };
 
 const Encoder = struct {

@@ -23,27 +23,22 @@ const Node = struct {
 allocator: std.mem.Allocator,
 nodes: nux.NodePool(Node),
 config: *nux.Config,
-platform: nux.Platform.GPU,
-vertex_buffer: nux.Platform.GPU.Handle,
+gpu: *nux.GPU,
+vertex_buffer: nux.GPU.Buffer,
 vertex_span_allocator: nux.SpanAllocator,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.platform = core.platform.gpu;
     self.vertex_span_allocator = try .init(
         self.allocator,
         try self.config.getInt(usize, "Graphics.defaultVertexBufferSize"),
         try self.config.getInt(usize, "Graphics.defaultVertexBufferSpanCapacity"),
     );
-    self.vertex_buffer = try self.platform.vtable.create_buffer(
-        self.platform.ptr,
-        .storage,
-        self.vertex_span_allocator.size,
-    );
+    self.vertex_buffer = try .init(self.gpu, .storage, self.vertex_span_allocator.size);
 }
 pub fn deinit(self: *Self) void {
     self.vertex_span_allocator.deinit();
-    self.platform.vtable.delete_buffer(self.platform.ptr, self.vertex_buffer);
+    self.vertex_buffer.deinit();
 }
 pub fn newCapacity(self: *Self, parent: nux.ID, capa: u32, primitive: nux.Vertex.Primitive, attributes: nux.Vertex.Attributes) !nux.ID {
     return try self.nodes.new(parent, try .initCapacity(self.allocator, capa, primitive, attributes));
@@ -169,9 +164,7 @@ pub fn syncGPU(self: *Self) !void {
             }
             // Upload data
             if (mesh.span) |span| {
-                try self.platform.vtable.update_buffer(
-                    self.platform.ptr,
-                    self.vertex_buffer,
+                try self.vertex_buffer.update(
                     span.offset,
                     span.length,
                     mesh.vertices.items,

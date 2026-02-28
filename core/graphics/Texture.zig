@@ -9,19 +9,18 @@ const Node = struct {
     path: ?[]const u8 = null, // Nonnull if loaded from file
     sync: bool = false,
     info: nux.GPU.TextureInfo = .{},
-    handle: ?nux.Platform.GPU.Handle = null,
+    handle: ?nux.GPU.Texture = null,
 };
 
 nodes: nux.NodePool(Node),
 node: *nux.Node,
 logger: *nux.Logger,
 file: *nux.File,
+gpu: *nux.GPU,
 allocator: std.mem.Allocator,
-platform: nux.Platform.GPU,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.platform = core.platform.gpu;
 }
 fn deinitNode(self: *Self, node: *Node) !void {
     if (node.data) |data| {
@@ -30,8 +29,8 @@ fn deinitNode(self: *Self, node: *Node) !void {
     if (node.path) |path| {
         self.allocator.free(path);
     }
-    if (node.handle) |handle| {
-        self.platform.vtable.delete_texture(self.platform.ptr, handle);
+    if (node.handle) |*handle| {
+        handle.deinit();
     }
     node.* = .{};
 }
@@ -108,11 +107,11 @@ pub fn syncGPU(self: *Self) !void {
         if (!texture.sync) {
             // Check gpu allocation
             if (texture.handle == null) {
-                texture.handle = try self.platform.vtable.create_texture(self.platform.ptr, texture.info);
+                texture.handle = try .init(self.gpu, texture.info);
             }
             // Upload data
             if (texture.data != null) {
-                try self.platform.vtable.update_texture(self.platform.ptr, texture.handle.?, 0, 0, texture.info.width, texture.info.height, texture.data.?);
+                try texture.handle.?.update(0, 0, texture.info.width, texture.info.height, texture.data.?);
             }
             // Reset sync flag
             texture.sync = true;

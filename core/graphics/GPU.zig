@@ -62,6 +62,12 @@ pub const Pipeline = struct {
     handle: Platform.Handle,
     gpu: *Self,
 
+    pub fn init(gpu: *Self, info: PipelineInfo) !Pipeline {
+        return .{
+            .handle = try gpu.platform.vtable.create_pipeline(gpu.platform.ptr, info),
+            .gpu = gpu,
+        };
+    }
     pub fn deinit(self: *Pipeline) void {
         self.gpu.platform.vtable.delete_pipeline(self.gpu.platform.ptr, self.handle);
     }
@@ -77,17 +83,23 @@ pub const Buffer = struct {
 };
 
 const Encoder = struct {
-    commands: std.ArrayList(Platform.Command),
+    gpu: *Self,
     allocator: std.mem.Allocator,
+    commands: std.ArrayList(Platform.Command),
 
-    pub fn init(allocator: std.mem.Allocator) Encoder {
+    pub fn init(gpu: *Self) Encoder {
         return .{
-            .allocator = allocator,
+            .gpu = gpu,
+            .allocator = gpu.allocator,
             .commands = .empty,
         };
     }
     pub fn deinit(self: *Encoder) void {
-        self.commands.deinit(self.allocator);
+        self.commands.deinit(self.gpu.allocator);
+    }
+    pub fn submit(self: *Encoder) !void {
+        try self.gpu.platform.vtable.submit_commands(self.gpu.platform.ptr, self.commands.items);
+        self.commands.clearRetainingCapacity();
     }
 
     pub fn bindFramebuffer(self: *Encoder, framebuffer: *const Framebuffer) !void {
@@ -100,22 +112,22 @@ const Encoder = struct {
             .bind_pipeline = .{ .pipeline = pipeline.handle },
         });
     }
-    pub fn bindTexture(self: *Encoder, descriptor: Platform.Descriptor, texture: *const Texture) !void {
+    pub fn bindTexture(self: *Encoder, descriptor: Descriptor, texture: *const Texture) !void {
         try self.commands.append(self.allocator, .{
             .bind_texture = .{ .texture = texture.handle, .descriptor = descriptor },
         });
     }
-    pub fn bindBuffer(self: *Encoder, descriptor: Platform.Descriptor, buffer: *const Buffer) !void {
+    pub fn bindBuffer(self: *Encoder, descriptor: Descriptor, buffer: *const Buffer) !void {
         try self.commands.append(self.allocator, .{
             .bind_buffer = .{ .buffer = buffer.handle, .descriptor = descriptor },
         });
     }
-    pub fn pushU32(self: *Encoder, descriptor: Platform.Descriptor, value: u32) !void {
+    pub fn pushU32(self: *Encoder, descriptor: Descriptor, value: u32) !void {
         try self.commands.append(self.allocator, .{
             .push_u32 = .{ .value = value, .descriptor = descriptor },
         });
     }
-    pub fn pushF32(self: *Encoder, descriptor: Platform.Descriptor, value: f32) !void {
+    pub fn pushF32(self: *Encoder, descriptor: Descriptor, value: f32) !void {
         try self.commands.append(self.allocator, .{
             .push_f32 = .{ .value = value, .descriptor = descriptor },
         });
@@ -137,17 +149,13 @@ const Encoder = struct {
 };
 
 platform: Platform,
+allocator: std.mem.Allocator,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.platform = core.platform.gpu;
+    self.allocator = core.platform.allocator;
+    try self.platform.vtable.create_device(self.platform.ptr);
 }
-
-pub fn createPipeline(self: *Self, info: Platform.PipelineInfo) !Pipeline {
-    return .{
-        .handle = try self.platform.vtable.create_pipeline(self.platform.ptr, info),
-    };
-}
-pub fn submitCommands(self: *Self, encoder: *Encoder) !void {
-    try self.platform.vtable.submit_commands(self.platform.ptr, encoder.commands.items);
-    encoder.commands.clearRetainingCapacity();
+pub fn deinit(self: *Self) void {
+    self.platform.vtable.delete_device(self.platform.ptr);
 }

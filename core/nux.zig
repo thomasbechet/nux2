@@ -259,6 +259,7 @@ pub const Core = struct {
             Transform,
             InputMap,
             SourceFile,
+            GPU,
             Graphics,
             Texture,
             Mesh,

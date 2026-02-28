@@ -3,6 +3,7 @@ const nux = @import("../nux.zig");
 const Gltf = @import("zgltf").Gltf;
 
 const Self = @This();
+const GPU = nux.GPU;
 
 const GltfContext = struct {
     gltf: *const Gltf,
@@ -12,6 +13,7 @@ const GltfContext = struct {
 
 config: *nux.Config,
 node: *nux.Node,
+gpu: *nux.GPU,
 transform: *nux.Transform,
 logger: *nux.Logger,
 file: *nux.File,
@@ -20,12 +22,11 @@ mesh: *nux.Mesh,
 texture: *nux.Texture,
 material: *nux.Material,
 staticmesh: *nux.StaticMesh,
-platform: nux.Platform.GPU,
 pipelines: struct {
-    uber_opaque: nux.Platform.GPU.Handle,
-    uber_line: nux.Platform.GPU.Handle,
-    canvas: nux.Platform.GPU.Handle,
-    blit: nux.Platform.GPU.Handle,
+    uber_opaque: GPU.Pipeline,
+    uber_line: GPU.Pipeline,
+    canvas: GPU.Pipeline,
+    blit: GPU.Pipeline,
 },
 
 fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize) !nux.ID {
@@ -81,47 +82,42 @@ fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.platform = core.platform.gpu;
-
-    // Create device
-    try self.platform.vtable.create_device(self.platform.ptr);
 
     // Create pipelines
-    self.pipelines.uber_opaque = try self.platform.vtable.create_pipeline(self.platform.ptr, .{
+    self.pipelines.uber_opaque = try .init(self.gpu, .{
         .type = .uber,
         .primitive = .triangles,
         .blend = false,
         .depth_test = true,
     });
-    errdefer self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.uber_opaque);
-    self.pipelines.uber_line = try self.platform.vtable.create_pipeline(self.platform.ptr, .{
+    errdefer self.pipelines.uber_opaque.deinit();
+    self.pipelines.uber_line = try .init(self.gpu, .{
         .type = .uber,
         .primitive = .lines,
         .blend = false,
         .depth_test = true,
     });
-    errdefer self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.uber_line);
-    self.pipelines.canvas = try self.platform.vtable.create_pipeline(self.platform.ptr, .{
+    errdefer self.pipelines.uber_line.deinit();
+    self.pipelines.canvas = try .init(self.gpu, .{
         .type = .canvas,
         .primitive = .triangles,
         .blend = true,
         .depth_test = false,
     });
-    errdefer self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.canvas);
-    self.pipelines.blit = try self.platform.vtable.create_pipeline(self.platform.ptr, .{
+    errdefer self.pipelines.canvas.deinit();
+    self.pipelines.blit = try .init(self.gpu, .{
         .type = .blit,
         .primitive = .triangles,
         .blend = true,
         .depth_test = false,
     });
-    errdefer self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.blit);
+    errdefer self.pipelines.blit.deinit();
 }
 pub fn deinit(self: *Self) void {
-    self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.uber_opaque);
-    self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.uber_line);
-    self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.canvas);
-    self.platform.vtable.delete_pipeline(self.platform.ptr, self.pipelines.blit);
-    self.platform.vtable.delete_device(self.platform.ptr);
+    self.pipelines.uber_opaque.deinit();
+    self.pipelines.uber_line.deinit();
+    self.pipelines.canvas.deinit();
+    self.pipelines.blit.deinit();
 }
 pub fn onPostUpdate(self: *Self) !void {
     try self.mesh.syncGPU();

@@ -163,6 +163,14 @@ pub const Encoder = struct {
     pub fn clearDepth(self: *Encoder) !void {
         try self.commands.append(self.allocator, .{.clear_depth});
     }
+    pub fn viewport(self: *Encoder, x: i32, y: i32, w: u32, h: u32) !void {
+        try self.commands.append(self.allocator, .{ .viewport = .{
+            .x = x,
+            .y = y,
+            .w = w,
+            .h = h,
+        } });
+    }
 };
 
 platform: Platform,

@@ -129,3 +129,10 @@ pub fn syncGPU(self: *Self) !void {
         }
     }
 }
+pub fn blit(self: *Self, id: nux.ID) !void {
+    const node = try self.nodes.get(id);
+    var encoder = nux.GPU.Encoder.init(self.gpu);
+    try encoder.viewport(0, 0, node.info.width, node.info.height);
+
+    try encoder.submit();
+}

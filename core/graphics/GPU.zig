@@ -119,9 +119,13 @@ pub const Encoder = struct {
         self.commands.clearRetainingCapacity();
     }
 
-    pub fn bindFramebuffer(self: *Encoder, framebuffer: *const Framebuffer) !void {
+    pub fn bindFramebuffer(self: *Encoder, framebuffer: ?*const Framebuffer) !void {
+        var handle: ?Platform.Handle = null;
+        if (framebuffer) |fb| {
+            handle = fb.handle;
+        }
         try self.commands.append(self.allocator, .{
-            .bind_framebuffer = .{ .framebuffer = framebuffer.handle },
+            .bind_framebuffer = .{ .framebuffer = handle },
         });
     }
     pub fn bindPipeline(self: *Encoder, pipeline: *const Pipeline) !void {
@@ -167,8 +171,8 @@ pub const Encoder = struct {
         try self.commands.append(self.allocator, .{ .viewport = .{
             .x = x,
             .y = y,
-            .w = w,
-            .h = h,
+            .width = w,
+            .height = h,
         } });
     }
 };

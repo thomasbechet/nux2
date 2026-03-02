@@ -27,6 +27,7 @@ nodes: nux.NodePool(Node),
 node: *nux.Node,
 logger: *nux.Logger,
 file: *nux.File,
+graphics: *nux.Graphics,
 gpu: *nux.GPU,
 allocator: std.mem.Allocator,
 
@@ -132,7 +133,16 @@ pub fn syncGPU(self: *Self) !void {
 pub fn blit(self: *Self, id: nux.ID) !void {
     const node = try self.nodes.get(id);
     var encoder = nux.GPU.Encoder.init(self.gpu);
+    defer encoder.deinit();
+    try encoder.bindFramebuffer(null);
     try encoder.viewport(0, 0, node.info.width, node.info.height);
-
+    try encoder.bindPipeline(&self.graphics.pipelines.blit);
+    if (node.handle == null) {
+        node.handle = try .init(self.gpu, node.info);
+    }
+    try encoder.bindTexture(.texture, &node.handle.?);
+    try encoder.pushU32(.texture_width, node.info.width);
+    try encoder.pushU32(.texture_height, node.info.height);
+    try encoder.drawFullQuad();
     try encoder.submit();
 }

@@ -2,7 +2,7 @@ local mymodule = require("mymodule")
 
 File.logGlob("*")
 Graphics.loadGltf(Node.getRoot(), "industrial.glb")
-Node.dump("Scene")
+Node.dump(Node.getRoot())
 
 function M:onInit()
     print("hello")
@@ -13,4 +13,5 @@ function M:onDeinit()
 end
 
 function M:onUpdate()
+    Texture.blit("Textures/Building_1")
 end

@@ -60,6 +60,9 @@
             "path": "graphics/Graphics.zig"
         },
         {
+            "path": "graphics/Canvas.zig"
+        },
+        {
             "path": "graphics/Texture.zig",
             "ignore": [
                 "loadGltfImage"

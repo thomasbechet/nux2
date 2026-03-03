@@ -56,3 +56,8 @@ pub fn new(self: *Self, parent: nux.ID) !nux.ID {
         .active_batch = undefined,
     });
 }
+pub fn delete(self: *Self, id: nux.ID) !void {
+    const node = try self.nodes.get(id);
+    node.quads.deinit(self.allocator);
+    node.batches.deinit(self.allocator);
+}

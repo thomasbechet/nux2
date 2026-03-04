@@ -130,12 +130,12 @@ pub fn syncGPU(self: *Self) !void {
         }
     }
 }
-pub fn blit(self: *Self, id: nux.ID) !void {
+pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2) !void {
     const node = try self.nodes.get(id);
     var encoder = nux.GPU.Encoder.init(self.gpu);
     defer encoder.deinit();
     try encoder.bindFramebuffer(null);
-    try encoder.viewport(0, 0, node.info.width, node.info.height);
+    try encoder.viewport(@intFromFloat(pos.data[0]), @intFromFloat(pos.data[1]), node.info.width, node.info.height);
     try encoder.bindPipeline(&self.graphics.pipelines.blit);
     if (node.handle == null) {
         node.handle = try .init(self.gpu, node.info);

@@ -4,3 +4,4 @@
 [ ] wasm core build
 [ ] font binary generator
 [ ] cartridge loading
+

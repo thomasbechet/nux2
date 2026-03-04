@@ -60,6 +60,9 @@
             "path": "graphics/Graphics.zig"
         },
         {
+            "path": "gui/Button.zig"
+        },
+        {
             "path": "graphics/Canvas.zig"
         },
         {

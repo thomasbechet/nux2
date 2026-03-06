@@ -26,6 +26,7 @@ pub const Canvas = @import("graphics/Canvas.zig");
 pub const ID = Node.ID;
 pub const PropertyValue = Node.PropertyValue;
 pub const NodePool = Node.NodePool;
+pub const Components = Node.Components;
 pub const Writer = Node.Writer;
 pub const Reader = Node.Reader;
 pub const vec = @import("math/vec.zig");
@@ -104,6 +105,7 @@ pub const Module = struct {
                 if (T != Node) { // Node will register itself as node module
                     if (core.findModule(Node)) |node| {
                         try node.registerNodeModule(self);
+                        try node.registerComponentModule(self);
                     }
                 }
                 // Register callbacks

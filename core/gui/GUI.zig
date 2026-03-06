@@ -6,6 +6,8 @@ const Self = @This();
 
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
+node: *nux.Node,
+transform: *nux.Transform,
 
 pub fn measureText(clay_text: []const u8, config: *clay.TextElementConfig, user_data: void) clay.Dimensions {
     _ = config;
@@ -28,6 +30,11 @@ fn sidebarItemComponent(index: u32) void {
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
+
+    try self.node.add(self.node.getRoot(), self.transform);
+    self.logger.info("{}", .{self.node.has(self.node.getRoot(), self.transform)});
+    self.node.remove(self.node.getRoot(), self.transform);
+    self.logger.info("{}", .{self.node.has(self.node.getRoot(), self.transform)});
 
     // Initialize clay
     const min_memory_size: u32 = clay.minMemorySize();

@@ -16,7 +16,21 @@ const Node = struct {
     parent: nux.ID = .null,
 };
 
+const Component = struct {
+    position: nux.Vec3 = .zero(),
+    scale: nux.Vec3 = .scalar(1),
+    rotation: nux.Quat = .identity(),
+    parent: nux.ID = .null,
+
+    pub fn init(_: *Self) !Component {
+        return .{};
+    }
+    pub fn deinit(_: *Self, _: *Component) void {}
+};
+
 nodes: nux.NodePool(Node),
+
+components: nux.Components(Component),
 
 pub fn new(self: *Self, parent: nux.ID) !nux.ID {
     return try self.nodes.new(parent, .{});

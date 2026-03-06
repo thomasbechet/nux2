@@ -7,6 +7,87 @@ pub const Version = u8;
 pub const EntryIndex = u24;
 pub const PoolIndex = u32;
 pub const TypeIndex = u32;
+pub const ComponentIndex = u32;
+pub const ComponentTypeIndex = u8;
+
+pub const max_component = 128;
+
+pub const ComponentType = struct {
+    name: []const u8,
+    v_ptr: *anyopaque,
+    v_deinit: *const fn (*anyopaque) void,
+    v_add: *const fn (*anyopaque, id: nux.ID) anyerror!void,
+    v_remove: *const fn (*anyopaque, id: nux.ID) void,
+    v_has: *const fn (*anyopaque, id: nux.ID) bool,
+};
+
+pub fn Components(T: type) type {
+    return struct {
+        allocator: std.mem.Allocator,
+        type_index: ComponentTypeIndex,
+        components: std.ArrayList(union {
+            used: struct {
+                data: T,
+                id: nux.ID,
+            },
+            free: ?ComponentIndex,
+        }) = .empty,
+        bitset: std.DynamicBitSet,
+        free_index: ?ComponentIndex = null,
+        node: *Self,
+
+        pub fn init(allocator: std.mem.Allocator, node: *Self, type_index: ComponentTypeIndex) !@This() {
+            return .{
+                .allocator = allocator,
+                .node = node,
+                .components = .empty,
+                .bitset = try .initEmpty(allocator, 128),
+                .type_index = type_index,
+            };
+        }
+        pub fn deinit(self: *@This()) void {
+            self.components.deinit(self.allocator);
+            self.bitset.deinit();
+        }
+        pub fn add(self: *@This(), id: nux.ID) !ComponentIndex {
+            // Find free index
+            var index: ComponentIndex = @intCast(self.components.items.len);
+            if (self.free_index) |free| {
+                index = free;
+                self.free_index = self.components.items[@intCast(free)].free;
+            } else {
+                _ = try self.components.addOne(self.allocator);
+            }
+            // Create component
+            const data = try T.init(@fieldParentPtr("components", self));
+            self.components.items[@intCast(index)] = .{ .used = .{
+                .data = data,
+                .id = id,
+            } };
+            self.bitset.set(@intCast(index));
+            return index;
+        }
+        pub fn remove(self: *@This(), index: ComponentIndex) void {
+            // Deinit component
+            const data = &self.components.items[@intCast(index)].used.data;
+            T.deinit(@fieldParentPtr("components", self), data);
+            // Remove from pool
+            self.components.items[@intCast(index)] = .{ .free = self.free_index };
+            self.free_index = index;
+            self.bitset.unset(@intCast(index));
+        }
+        fn getFromIndex(self: *@This(), index: ComponentIndex) !*T {
+            return &self.components.items[index];
+        }
+        pub fn getOptional(self: *@This(), id: nux.ID) ?*T {
+            const index = self.node.getComponentIndex(id, self.type_index) orelse return null;
+            return self.getFromIndex(index);
+        }
+        pub fn get(self: *@This(), id: nux.ID) !*T {
+            return self.getOptional(id) orelse return error.ComponentNotFound;
+        }
+    };
+}
 
 pub const PropertyValue = union(enum) {
     id: nux.ID,
@@ -49,6 +130,7 @@ const NodeEntry = struct {
     last_child: EntryIndex = 0,
     name: [max_name]u8 = undefined,
     name_len: usize = 0,
+    components: [max_component]?ComponentIndex = .{null} ** max_component,
 
     fn getName(self: *@This()) []const u8 {
         return self.name[0..self.name_len];
@@ -378,6 +460,7 @@ pub fn collect(self: *Self, allocator: std.mem.Allocator, id: ID) !std.ArrayList
 
 allocator: std.mem.Allocator,
 types: std.ArrayList(NodeType),
+component_types: std.ArrayList(ComponentType),
 entries: std.ArrayList(NodeEntry),
 free: std.ArrayList(EntryIndex),
 nodes: NodePool(EmptyNode),
@@ -388,6 +471,7 @@ logger: *nux.Logger,
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.types = try .initCapacity(self.allocator, 64);
+    self.component_types = try .initCapacity(self.allocator, 64);
     self.entries = try .initCapacity(self.allocator, 1024);
     self.free = try .initCapacity(self.allocator, 1024);
     // Reserve index 0 for null id.
@@ -411,6 +495,10 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn deinit(self: *Self) void {
     self.entries.deinit(self.allocator);
     self.free.deinit(self.allocator);
+    for (self.component_types.items) |typ| {
+        typ.v_deinit(typ.v_ptr);
+    }
+    self.component_types.deinit(self.allocator);
     for (self.types.items) |typ| {
         typ.v_deinit(typ.v_ptr);
     }
@@ -504,6 +592,26 @@ fn getEntry(self: *Self, id: ID) !*NodeEntry {
     return node;
 }
 
+fn getComponentIndex(self: *Self, id: nux.ID, type_index: ComponentTypeIndex) ?ComponentIndex {
+    const entry = self.getEntry(id) catch return null;
+    return entry.components[@intCast(type_index)];
+}
+pub fn add(self: *Self, id: nux.ID, component: anytype) !void {
+    if (self.has(id, component)) return;
+    const entry = self.getEntry(id) catch return;
+    const index = try component.components.add(id);
+    entry.components[@intCast(component.components.type_index)] = index;
+}
+pub fn remove(self: *Self, id: nux.ID, component: anytype) void {
+    const entry = self.getEntry(id) catch return;
+    if (self.getComponentIndex(id, component.components.type_index)) |index| {
+        component.components.remove(index);
+        entry.components[@intCast(component.components.type_index)] = null;
+    }
+}
+pub fn has(self: *Self, id: nux.ID, component: anytype) bool {
+    return self.getComponentIndex(id, component.components.type_index) != null;
+}
 pub fn getRoot(self: *Self) ID {
     return self.root;
 }
@@ -587,6 +695,48 @@ pub fn registerNodeModule(self: *Self, module: anytype) !void {
             .v_get_property = gen.getProperty,
             .v_set_property = gen.setProperty,
             .v_short_description = gen.shortDescription,
+        };
+    }
+}
+pub fn registerComponentModule(self: *Self, module: anytype) !void {
+    const field_name = "components";
+    const T = @typeInfo(@TypeOf(module)).pointer.child;
+    if (@hasField(T, field_name)) {
+
+        // Init pool
+        const type_index: ComponentTypeIndex = @intCast(self.types.items.len);
+        @field(module, field_name) = try .init(self.allocator, self, type_index);
+
+        // Create vtable
+        const gen = struct {
+            fn deinit(pointer: *anyopaque) void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                @field(mod, field_name).deinit();
+            }
+            fn add(pointer: *anyopaque, id: nux.ID) !void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                try @field(mod, field_name).node.add(id, mod);
+            }
+            fn remove(pointer: *anyopaque, id: nux.ID) void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                @field(mod, field_name).node.remove(id, mod);
+            }
+            fn has(pointer: *anyopaque, id: nux.ID) bool {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                return @field(mod, field_name).node.has(id, mod);
+            }
+        };
+
+        // Register type
+        var it = std.mem.splitBackwardsScalar(u8, @typeName(T), '.');
+        const name = it.first();
+        (try self.component_types.addOne(self.allocator)).* = .{
+            .name = name,
+            .v_ptr = module,
+            .v_deinit = gen.deinit,
+            .v_add = gen.add,
+            .v_remove = gen.remove,
+            .v_has = gen.has,
         };
     }
 }

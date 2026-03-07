@@ -10,7 +10,6 @@ pub const Transform = @import("base/Transform.zig");
 pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
 pub const Lua = @import("lua/Lua.zig");
-pub const SourceFile = @import("base/SourceFile.zig");
 pub const Graphics = @import("graphics/Graphics.zig");
 pub const Texture = @import("graphics/Texture.zig");
 pub const Mesh = @import("graphics/Mesh.zig");
@@ -25,7 +24,6 @@ pub const Canvas = @import("graphics/Canvas.zig");
 
 pub const ID = Node.ID;
 pub const PropertyValue = Node.PropertyValue;
-pub const NodePool = Node.NodePool;
 pub const Components = Node.Components;
 pub const Writer = Node.Writer;
 pub const Reader = Node.Reader;
@@ -101,12 +99,9 @@ pub const Module = struct {
                         else => {},
                     }
                 }
-                // Nodes initialization
-                if (T != Node) { // Node will register itself as node module
-                    if (core.findModule(Node)) |node| {
-                        try node.registerNodeModule(self);
-                        try node.registerComponentModule(self);
-                    }
+                // Components initialization
+                if (core.findModule(Node)) |node| {
+                    try node.registerComponentModule(self);
                 }
                 // Register callbacks
                 if (@hasDecl(T, "onPreUpdate")) {
@@ -261,7 +256,6 @@ pub const Core = struct {
             Input,
             Transform,
             InputMap,
-            SourceFile,
             GPU,
             Graphics,
             Texture,

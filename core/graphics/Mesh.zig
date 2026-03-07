@@ -3,25 +3,37 @@ const nux = @import("../nux.zig");
 const zgltf = @import("zgltf");
 
 const Self = @This();
-const Node = struct {
+
+allocator: std.mem.Allocator,
+components: nux.Components(struct {
     span: ?nux.SpanAllocator.Span = null,
     vertices: std.ArrayList(f32) = .empty,
     layout: nux.Vertex.Layout = .make(.{}),
     primitive: nux.Vertex.Primitive = .triangles,
     sync: bool = false,
 
+    pub fn deinit(self: *Self, component: *@This()) void {
+        component.vertices.deinit(self.allocator);
+        if (component.span) |span| {
+            try self.vertex_span_allocator.free(span);
+        }
+    }
+    pub fn shortDescription(_: *Self, component: *const @This(), w: *std.Io.Writer) !void {
+        try w.print("{d} vertices ", .{component.vertices.items.len});
+        if (component.span) |span| {
+            try w.print("[{d}-{d}]", .{ span.offset, span.offset + span.length });
+        }
+    }
+
     fn initCapacity(allocator: std.mem.Allocator, capa: usize, primitive: nux.Vertex.Primitive, attributes: nux.Vertex.Attributes) !@This() {
-        var node = Node{
+        var node = @This(){
             .primitive = primitive,
             .layout = .make(attributes),
         };
         try node.vertices.ensureTotalCapacity(allocator, node.layout.stride * capa);
         return node;
     }
-};
-
-allocator: std.mem.Allocator,
-nodes: nux.NodePool(Node),
+}),
 config: *nux.Config,
 gpu: *nux.GPU,
 vertex_buffer: nux.GPU.Buffer,
@@ -41,32 +53,19 @@ pub fn deinit(self: *Self) void {
     self.vertex_buffer.deinit();
 }
 pub fn newCapacity(self: *Self, parent: nux.ID, capa: u32, primitive: nux.Vertex.Primitive, attributes: nux.Vertex.Attributes) !nux.ID {
-    return try self.nodes.new(parent, try .initCapacity(self.allocator, capa, primitive, attributes));
-}
-pub fn delete(self: *Self, id: nux.ID) !void {
-    const node = try self.nodes.get(id);
-    node.vertices.deinit(self.allocator);
-    if (node.span) |span| {
-        try self.vertex_span_allocator.free(span);
-    }
+    return try self.components.new(parent, try .initCapacity(self.allocator, capa, primitive, attributes));
 }
 pub fn resize(self: *Self, id: nux.ID, size: u32) !void {
-    const node = try self.nodes.get(id);
-    const old_size = node.vertices.items.len;
-    try node.vertices.resize(self.allocator, old_size * node.layout.stride);
+    const component = try self.components.get(id);
+    const old_size = component.vertices.items.len;
+    try component.vertices.resize(self.allocator, old_size * component.layout.stride);
     if (size > old_size) {
-        @memset(node.vertices.items[old_size..], 0);
+        @memset(component.vertices.items[old_size..], 0);
     }
-    node.sync = false;
+    component.sync = false;
 }
-pub fn shortDescription(self: *Self, id: nux.ID, w: *std.Io.Writer) !void {
-    const node = try self.nodes.get(id);
-    try w.print("{d} vertices ", .{node.vertices.items.len});
-    if (node.span) |span| {
-        try w.print("[{d}-{d}]", .{ span.offset, span.offset + span.length });
-    }
-}
-pub fn loadGltfPrimitive(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, primitive: *const zgltf.Gltf.Primitive) !nux.ID {
+pub fn loadGltfPrimitive(self: *Self, id: nux.ID, gltf: *const zgltf.Gltf, primitive: *const zgltf.Gltf.Primitive) !void {
+    const component = try self.components.get(id);
     // Create layout
     var attributes = nux.Vertex.Attributes{};
     var vertexCount: ?usize = null;
@@ -93,19 +92,19 @@ pub fn loadGltfPrimitive(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, p
         else => return error.UnsupportedPrimitive,
     };
     // Create mesh
-    var node = try Node.initCapacity(self.allocator, vertexCount.?, vertex_primitive, attributes);
+    try component.initCapacity(self.allocator, vertexCount.?, vertex_primitive, attributes);
     // Resize mesh
-    try node.vertices.resize(self.allocator, vertexCount.? * node.layout.stride);
+    try component.vertices.resize(self.allocator, vertexCount.? * component.layout.stride);
     // Read values
     for (primitive.attributes) |attribute| {
         switch (attribute) {
             .position => |idx| {
-                if (node.layout.position) |position| {
+                if (component.layout.position) |position| {
                     const accessor = gltf.data.accessors[idx];
                     var it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
                     var i: usize = 0;
                     while (it.next()) |v| : (i += 1) {
-                        var buf = node.vertices.items[node.layout.stride * i + position ..];
+                        var buf = component.vertices.items[component.layout.stride * i + position ..];
                         buf[0] = v[0];
                         buf[1] = v[1];
                         buf[2] = v[2];
@@ -113,24 +112,24 @@ pub fn loadGltfPrimitive(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, p
                 }
             },
             .texcoord => |idx| {
-                if (node.layout.texcoord) |texcoord| {
+                if (component.layout.texcoord) |texcoord| {
                     const accessor = gltf.data.accessors[idx];
                     var it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
                     var i: u32 = 0;
                     while (it.next()) |v| : (i += 1) {
-                        var buf = node.vertices.items[node.layout.stride * i + texcoord ..];
+                        var buf = component.vertices.items[component.layout.stride * i + texcoord ..];
                         buf[0] = v[0];
                         buf[1] = v[1];
                     }
                 }
             },
             .color => |idx| {
-                if (node.layout.color) |color| {
+                if (component.layout.color) |color| {
                     const accessor = gltf.data.accessors[idx];
                     var it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
                     var i: u32 = 0;
                     while (it.next()) |v| : (i += 1) {
-                        var buf = node.vertices.items[node.layout.stride * i + color ..];
+                        var buf = component.vertices.items[component.layout.stride * i + color ..];
                         buf[0] = v[0];
                         buf[1] = v[1];
                         buf[2] = v[2];
@@ -138,12 +137,12 @@ pub fn loadGltfPrimitive(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, p
                 }
             },
             .normal => |idx| {
-                if (node.layout.normal) |normal| {
+                if (component.layout.normal) |normal| {
                     const accessor = gltf.data.accessors[idx];
                     var it = accessor.iterator(f32, gltf, gltf.glb_binary.?);
                     var i: u32 = 0;
                     while (it.next()) |v| : (i += 1) {
-                        var buf = node.vertices.items[node.layout.stride * i + normal ..];
+                        var buf = component.vertices.items[component.layout.stride * i + normal ..];
                         buf[0] = v[0];
                         buf[1] = v[1];
                         buf[2] = v[2];
@@ -153,10 +152,9 @@ pub fn loadGltfPrimitive(self: *Self, parent: nux.ID, gltf: *const zgltf.Gltf, p
             else => {},
         }
     }
-    return self.nodes.new(parent, node);
 }
 pub fn syncGPU(self: *Self) !void {
-    for (self.nodes.data.items) |*mesh| {
+    for (self.components.data.items) |*mesh| {
         if (!mesh.sync) {
             // Check gpu span allocation
             if (mesh.span == null or mesh.span.?.length < mesh.vertices.items.len) {

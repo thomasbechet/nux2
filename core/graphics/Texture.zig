@@ -15,15 +15,52 @@ pub const Type = enum(u32) {
 };
 
 const Self = @This();
-const Node = struct {
+const Component = struct {
     data: ?[]u8 = null,
     path: ?[]const u8 = null, // Nonnull if loaded from file
     sync: bool = false,
     info: nux.GPU.TextureInfo = .{},
     handle: ?nux.GPU.Texture = null,
+
+    pub fn deinit(self: *Self, component: *Component) void {
+        if (component.data) |data| {
+            self.allocator.free(data);
+        }
+        if (component.path) |path| {
+            self.allocator.free(path);
+        }
+        if (component.handle) |*handle| {
+            handle.deinit();
+        }
+        component.* = .{};
+    }
+    pub fn save(self: *Self, id: nux.ID, writer: *nux.Writer) !void {
+        const node = try self.components.get(id);
+        if (node.path != null) {
+            try writer.write(node.path);
+        } else if (node.data != null) {
+            try writer.write(node.data);
+        }
+    }
+    pub fn load(self: *Self, id: nux.ID, reader: *nux.Reader) !void {
+        const node = try self.components.get(id);
+        if (try reader.takeOptionalBytes()) |path| { // File source
+            node.path = try self.allocator.dupe(u8, path);
+            try self.loadFromPath(id, path);
+        } else if (try reader.takeOptionalBytes()) |data| { // Data source
+            try self.loadFromData(id, data);
+        }
+    }
+    pub fn shortDescription(self: *Self, id: nux.ID, w: *std.Io.Writer) !void {
+        const node = try self.components.get(id);
+        try w.print("{d}x{d} ", .{ node.info.width, node.info.height });
+        if (node.path) |path| {
+            try w.print("{s}", .{path});
+        }
+    }
 };
 
-nodes: nux.NodePool(Node),
+components: nux.Components(Component),
 node: *nux.Node,
 logger: *nux.Logger,
 file: *nux.File,
@@ -34,60 +71,25 @@ allocator: std.mem.Allocator,
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
-fn deinitNode(self: *Self, node: *Node) !void {
-    if (node.data) |data| {
+fn deinitNode(self: *Self, component: *Component) !void {
+    if (component.data) |data| {
         self.allocator.free(data);
     }
-    if (node.path) |path| {
+    if (component.path) |path| {
         self.allocator.free(path);
     }
-    if (node.handle) |*handle| {
+    if (component.handle) |*handle| {
         handle.deinit();
     }
-    node.* = .{};
+    component.* = .{};
 }
-pub fn delete(self: *Self, id: nux.ID) !void {
-    const node = try self.nodes.get(id);
-    try self.deinitNode(node);
-}
-pub fn save(self: *Self, id: nux.ID, writer: *nux.Writer) !void {
-    const node = try self.nodes.get(id);
-    if (node.path != null) {
-        try writer.write(node.path);
-    } else if (node.data != null) {
-        try writer.write(node.data);
-    }
-}
-pub fn load(self: *Self, id: nux.ID, reader: *nux.Reader) !void {
-    const node = try self.nodes.get(id);
-    if (try reader.takeOptionalBytes()) |path| { // File source
-        node.path = try self.allocator.dupe(u8, path);
-        try self.loadFromPath(id, path);
-    } else if (try reader.takeOptionalBytes()) |data| { // Data source
-        try self.loadFromData(id, data);
-    }
-}
-pub fn shortDescription(self: *Self, id: nux.ID, w: *std.Io.Writer) !void {
-    const node = try self.nodes.get(id);
-    try w.print("{d}x{d} ", .{ node.info.width, node.info.height });
-    if (node.path) |path| {
-        try w.print("{s}", .{path});
-    }
-}
-pub fn loadGltfImage(self: *Self, parent: nux.ID, image: *const zgltf.Gltf.Image) !nux.ID {
-    const id = try self.nodes.new(parent, .{});
+pub fn loadGltfImage(self: *Self, id: nux.ID, image: *const zgltf.Gltf.Image) !void {
     if (image.data) |data| {
         try self.loadFromData(id, data);
     }
-    return id;
-}
-pub fn newFromPath(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
-    const id = try self.nodes.new(parent, .{});
-    try self.loadFromPath(id, path);
-    return id;
 }
 pub fn loadFromPath(self: *Self, id: nux.ID, path: []const u8) !void {
-    const node = try self.nodes.get(id);
+    const component = try self.components.add(id);
     // Read file
     const data = try self.file.read(path, self.allocator);
     errdefer self.allocator.free(data);
@@ -95,27 +97,27 @@ pub fn loadFromPath(self: *Self, id: nux.ID, path: []const u8) !void {
     var image = try zigimg.Image.fromMemory(self.allocator, data);
     defer image.deinit(self.allocator);
     // Deinit node
-    try self.deinitNode(node);
+    try self.deinitNode(component);
     // Set as source
-    node.data = data;
-    node.path = try self.allocator.dupe(u8, path);
-    node.sync = false;
+    component.data = data;
+    component.path = try self.allocator.dupe(u8, path);
+    component.sync = false;
 }
 pub fn loadFromData(self: *Self, id: nux.ID, data: []const u8) !void {
-    const node = try self.nodes.get(id);
+    const component = try self.components.add(id);
     // Load image
     var img = try zigimg.Image.fromMemory(self.allocator, data);
     defer img.deinit(self.allocator);
     try img.convert(self.allocator, .rgba32);
     // Deinit node
-    try self.deinitNode(node);
-    node.data = try self.allocator.dupe(u8, img.rawBytes());
-    node.info.width = @intCast(img.width);
-    node.info.height = @intCast(img.height);
-    node.sync = false;
+    try self.deinitNode(component);
+    component.data = try self.allocator.dupe(u8, img.rawBytes());
+    component.info.width = @intCast(img.width);
+    component.info.height = @intCast(img.height);
+    component.sync = false;
 }
 pub fn syncGPU(self: *Self) !void {
-    for (self.nodes.data.items) |*texture| {
+    for (self.components.data.items) |*texture| {
         if (!texture.sync) {
             // Check gpu allocation
             if (texture.handle == null) {
@@ -131,7 +133,7 @@ pub fn syncGPU(self: *Self) !void {
     }
 }
 pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2) !void {
-    const node = try self.nodes.get(id);
+    const node = try self.components.get(id);
     var encoder = nux.GPU.Encoder.init(self.gpu);
     defer encoder.deinit();
     try encoder.bindFramebuffer(null);

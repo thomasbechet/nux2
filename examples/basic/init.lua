@@ -4,6 +4,14 @@ function M:onInit()
     File.logGlob("*")
     Graphics.loadGltf(Node.getRoot(), "industrial.glb")
     Node.dump(Node.getRoot())
+
+    local tex = Node.newNamed(Node.root(), "MyTexture")
+    Texture.loadFromFile(tex, "mytexture.png")
+
+    local t = Node.create()
+    Transform.add(t)
+    StaticMesh.add(t)
+    Node.delete(t)
 end
 
 function M:onDeinit()

@@ -3,8 +3,8 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
-const Node = struct {
-    callables: std.ArrayList(nux.Callable),
+const Component = struct {
+    callables: std.ArrayList(nux.Callable) = .empty,
 };
 
 const SignalEvent = struct {
@@ -17,7 +17,7 @@ const ActiveSignal = struct {
     index: usize,
 };
 
-nodes: nux.NodePool(Node),
+components: nux.Components(Component),
 allocator: nux.Platform.Allocator,
 signal_queue: nux.Deque(SignalEvent),
 active_signal: ?*ActiveSignal,
@@ -56,24 +56,19 @@ pub fn onPostUpdate(self: *Self) !void {
     }
 }
 
-pub fn new(self: *Self, parent: nux.ID) !nux.ID {
-    return try self.nodes.new(parent, .{
-        .callables = .empty,
-    });
-}
 pub fn emit(self: *Self, id: nux.ID, source: nux.ID) !void {
-    _ = try self.nodes.get(id);
+    _ = try self.components.get(id);
     try self.signal_queue.pushBack(self.allocator, .{ .signal = id, .source = source });
 }
 pub fn connect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
-    const node = try self.nodes.get(id);
-    try node.callables.append(self.allocator, callable);
+    const component = try self.components.get(id);
+    try component.callables.append(self.allocator, callable);
 }
 pub fn disconnect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
-    const node = try self.nodes.get(id);
+    const component = try self.components.get(id);
     // Find callback index
     var index: ?usize = null;
-    for (node.callables.items, 0..) |item, idx| {
+    for (component.callables.items, 0..) |item, idx| {
         if (item.obj == callable.obj and item.callback == callable.callback) {
             index = idx;
             break;

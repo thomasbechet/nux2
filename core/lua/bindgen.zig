@@ -120,16 +120,10 @@ const AstIter = struct {
         for ([_][]const u8{
             "init",
             "deinit",
-            "delete",
-            "load",
-            "save",
             "onEvent",
             "onPreUpdate",
             "onUpdate",
             "onPostUpdate",
-            "setProperty",
-            "getProperty",
-            "shortDescription",
         }) |keyword| {
             if (std.mem.eql(u8, name, keyword)) {
                 ignore = true;
@@ -332,6 +326,7 @@ const Module = struct {
     ast: Ast,
     functions: std.StringHashMap(AstIter.Function),
     enums: std.StringHashMap(AstIter.Enum),
+    is_component_module: bool,
 
     fn deinit(self: *Module, alloc: Allocator) void {
         var function_it = self.functions.valueIterator();
@@ -445,6 +440,10 @@ const Modules = struct {
                 }
             }
 
+            // Detect component module
+            const is_component_module =
+                std.mem.containsAtLeast(u8, source, 1, "components: nux.Components(");
+
             // Add new module
             try modules.append(alloc, .{
                 .source = sourceZ,
@@ -453,6 +452,7 @@ const Modules = struct {
                 .enums = enums,
                 .path = try alloc.dupe(u8, module.path),
                 .name = std.fs.path.stem(module.path),
+                .is_component_module = is_component_module,
             });
         }
 
@@ -493,7 +493,11 @@ const Modules = struct {
 
     fn print(self: *const Modules) !void {
         for (self.modules.items) |*module| {
-            std.log.info("{s}:", .{module.name});
+            if (module.is_component_module) {
+                std.log.info("{s} (Component):", .{module.name});
+            } else {
+                std.log.info("{s}:", .{module.name});
+            }
             var function_it = module.functions.iterator();
             while (function_it.next()) |*entry| {
                 const function = entry.value_ptr;

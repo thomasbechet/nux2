@@ -4,11 +4,11 @@
         {
             "path": "base/Node.zig",
             "ignore": [
-                "NodePool",
+                "Components",
+                "ComponentType",
                 "ID",
                 "NodeEntry",
-                "NodeType",
-                "registerNodeModule",
+                "registerComponentModule",
                 "getType",
                 "findType",
                 "iterChildren",
@@ -16,7 +16,10 @@
                 "collect",
                 "setNameFormat",
                 "Reader",
-                "Writer"
+                "Writer",
+                "add",
+                "remove",
+                "has"
             ]
         },
         {
@@ -52,9 +55,6 @@
         },
         {
             "path": "input/InputMap.zig"
-        },
-        {
-            "path": "base/SourceFile.zig"
         },
         {
             "path": "graphics/Graphics.zig"

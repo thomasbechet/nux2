@@ -2,7 +2,7 @@ local mymodule = require("mymodule")
 
 function M:onInit()
     File.logGlob("*")
-    Graphics.loadGltf(Node.getRoot(), "industrial.glb")
+    Gltf.loadGltf(Node.getRoot(), "industrial.glb")
     Node.dump(Node.getRoot())
 end
 

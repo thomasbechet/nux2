@@ -160,14 +160,14 @@ pub fn syncGPU(self: *Self) !void {
         if (!mesh.sync) {
             // Check gpu span allocation
             if (mesh.span == null or mesh.span.?.length < mesh.vertices.items.len) {
-                mesh.span = self.vertex_span_allocator.alloc(mesh.vertices.items.len) orelse return error.OutOfVertices;
+                mesh.span = self.vertex_span_allocator.alloc(mesh.vertices.items.len * @sizeOf(f32)) orelse return error.OutOfVertices;
             }
             // Upload data
             if (mesh.span) |span| {
                 try self.vertex_buffer.update(
-                    span.offset,
-                    span.length,
-                    mesh.vertices.items,
+                    span.offset * @sizeOf(f32),
+                    span.length * @sizeOf(f32),
+                    @ptrCast(&mesh.vertices.items),
                 );
             }
             // Reset sync flag

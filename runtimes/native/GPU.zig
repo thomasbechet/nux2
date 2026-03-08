@@ -7,14 +7,14 @@ const Self = @This();
 const Platform = nux.Platform.GPU;
 
 const PipelineHandle = struct {
-    type: nux.GPU.PipelineType,
+    type: Platform.PipelineType,
     blend: bool,
     depth_test: bool,
     primitive: gl.uint,
     program: gl.uint,
-    indices: [nux.GPU.Descriptor.max]gl.uint,
-    locations: [nux.GPU.Descriptor.max]gl.int,
-    units: [nux.GPU.Descriptor.max]gl.uint,
+    indices: [Platform.Descriptor.max]gl.uint,
+    locations: [Platform.Descriptor.max]gl.int,
+    units: [Platform.Descriptor.max]gl.uint,
 };
 
 const FramebufferHandle = struct {
@@ -103,7 +103,7 @@ fn deleteDevice(ctx: *anyopaque) void {
     gl.DeleteVertexArrays(1, @ptrCast(&self.empty_vao));
 }
 
-fn createPipeline(ctx: *anyopaque, info: nux.GPU.PipelineInfo) anyerror!Platform.Handle {
+fn createPipeline(ctx: *anyopaque, info: Platform.PipelineInfo) anyerror!Platform.Handle {
     const self: *Self = @ptrCast(@alignCast(ctx));
     const pipeline = try self.allocator.create(PipelineHandle);
     pipeline.type = info.type;
@@ -128,15 +128,15 @@ fn createPipeline(ctx: *anyopaque, info: nux.GPU.PipelineInfo) anyerror!Platform
             index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "TransformBlock");
             gl.UniformBlockBinding(pipeline.program, index, 4);
 
-            pipeline.indices[@intFromEnum(nux.GPU.Descriptor.constants_buffer)] = 1;
-            pipeline.indices[@intFromEnum(nux.GPU.Descriptor.batches_buffer)] = 2;
-            pipeline.indices[@intFromEnum(nux.GPU.Descriptor.vertices_buffer)] = 3;
-            pipeline.indices[@intFromEnum(nux.GPU.Descriptor.transforms_buffer)] = 4;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.constants_buffer)] = 1;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.batches_buffer)] = 2;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.vertices_buffer)] = 3;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.transforms_buffer)] = 4;
 
-            pipeline.locations[@intFromEnum(nux.GPU.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
-            pipeline.locations[@intFromEnum(nux.GPU.Descriptor.batch_index)] = gl.GetUniformLocation(pipeline.program, "batchIndex");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.batch_index)] = gl.GetUniformLocation(pipeline.program, "batchIndex");
 
-            pipeline.units[@intFromEnum(nux.GPU.Descriptor.texture)] = 0;
+            pipeline.units[@intFromEnum(Platform.Descriptor.texture)] = 0;
         },
         .canvas => {
             pipeline.program = try self.compileProgram(shader_canvas_vertex, shader_canvas_fragment);
@@ -149,23 +149,23 @@ fn createPipeline(ctx: *anyopaque, info: nux.GPU.PipelineInfo) anyerror!Platform
             index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "QuadBlock");
             gl.UniformBlockBinding(pipeline.program, index, 3);
 
-            pipeline.indices[@intFromEnum(nux.GPU.Descriptor.constants_buffer)] = 1;
-            pipeline.indices[@intFromEnum(nux.GPU.Descriptor.batches_buffer)] = 2;
-            pipeline.indices[@intFromEnum(nux.GPU.Descriptor.quads_buffer)] = 3;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.constants_buffer)] = 1;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.batches_buffer)] = 2;
+            pipeline.indices[@intFromEnum(Platform.Descriptor.quads_buffer)] = 3;
 
-            pipeline.locations[@intFromEnum(nux.GPU.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
-            pipeline.locations[@intFromEnum(nux.GPU.Descriptor.batch_index)] = gl.GetUniformLocation(pipeline.program, "batchIndex");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.batch_index)] = gl.GetUniformLocation(pipeline.program, "batchIndex");
 
-            pipeline.units[@intFromEnum(nux.GPU.Descriptor.texture)] = 0;
+            pipeline.units[@intFromEnum(Platform.Descriptor.texture)] = 0;
         },
         .blit => {
             pipeline.program = try self.compileProgram(shader_blit_vertex, shader_blit_fragment);
 
-            pipeline.locations[@intFromEnum(nux.GPU.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
-            pipeline.locations[@intFromEnum(nux.GPU.Descriptor.texture_width)] = gl.GetUniformLocation(pipeline.program, "textureWidth");
-            pipeline.locations[@intFromEnum(nux.GPU.Descriptor.texture_height)] = gl.GetUniformLocation(pipeline.program, "textureHeight");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.texture_width)] = gl.GetUniformLocation(pipeline.program, "textureWidth");
+            pipeline.locations[@intFromEnum(Platform.Descriptor.texture_height)] = gl.GetUniformLocation(pipeline.program, "textureHeight");
 
-            pipeline.units[@intFromEnum(nux.GPU.Descriptor.texture)] = 0;
+            pipeline.units[@intFromEnum(Platform.Descriptor.texture)] = 0;
         },
     }
     return pipeline;
@@ -189,7 +189,7 @@ fn deleteFramebuffer(ctx: *anyopaque, handle: Platform.Handle) void {
     self.allocator.destroy(framebuffer);
 }
 
-fn createTexture(ctx: *anyopaque, info: nux.GPU.TextureInfo) anyerror!Platform.Handle {
+fn createTexture(ctx: *anyopaque, info: Platform.TextureInfo) anyerror!Platform.Handle {
     const self: *Self = @ptrCast(@alignCast(ctx));
     const texture = try self.allocator.create(TextureHandle);
 
@@ -253,7 +253,7 @@ fn updateTexture(_: *anyopaque, handle: Platform.Handle, x: u32, y: u32, w: u32,
     gl.BindTexture(gl.TEXTURE_2D, 0);
 }
 
-fn createBuffer(ctx: *anyopaque, typ: nux.GPU.BufferType, size: u64) anyerror!Platform.Handle {
+fn createBuffer(ctx: *anyopaque, typ: Platform.BufferType, size: u64) anyerror!Platform.Handle {
     const self: *Self = @ptrCast(@alignCast(ctx));
     const buffer = try self.allocator.create(BufferHandle);
 
@@ -275,7 +275,7 @@ fn deleteBuffer(ctx: *anyopaque, handle: Platform.Handle) void {
     gl.DeleteBuffers(1, @ptrCast(&buffer.handle));
     self.allocator.destroy(buffer);
 }
-fn updateBuffer(_: *anyopaque, handle: Platform.Handle, offset: u64, size: u64, data: []const f32) anyerror!void {
+fn updateBuffer(_: *anyopaque, handle: Platform.Handle, offset: u64, size: u64, data: []const u8) anyerror!void {
     const buffer: *BufferHandle = @ptrCast(@alignCast(handle));
 
     gl.BindBuffer(buffer.type, buffer.handle);

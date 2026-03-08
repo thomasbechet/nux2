@@ -38,7 +38,7 @@ pub fn Components(T: type) type {
         free_index: ?ComponentIndex = null,
         node: *Self,
 
-        pub const ComponentIterator = struct {
+        pub const Iterator = struct {
             components: *Components(T),
             iterator: std.DynamicBitSet.Iterator(.{}),
             fn init(components: *Components(T)) @This() {
@@ -54,6 +54,19 @@ pub fn Components(T: type) type {
                     .data = &entry.data,
                     .id = entry.id,
                 };
+            }
+        };
+
+        pub const ValuesIterator = struct {
+            iterator: Iterator,
+            fn init(components: *Components(T)) @This() {
+                return .{
+                    .iterator = .init(components),
+                };
+            }
+            pub fn next(self: *@This()) ?*T {
+                const entry = self.iterator.next() orelse return null;
+                return entry.data;
             }
         };
 
@@ -129,7 +142,10 @@ pub fn Components(T: type) type {
         fn getFromIndex(self: *@This(), index: ComponentIndex) !*T {
             return &self.data.items[index].used.data;
         }
-        pub fn values(self: *@This()) ComponentIterator {
+        pub fn iterator(self: *@This()) Iterator {
+            return .init(self);
+        }
+        pub fn values(self: *@This()) ValuesIterator {
             return .init(self);
         }
         pub fn getOptional(self: *@This(), id: nux.ID) ?*T {

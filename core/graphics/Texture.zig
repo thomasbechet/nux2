@@ -19,7 +19,7 @@ const Component = struct {
     data: ?[]u8 = null,
     path: ?[]const u8 = null, // Nonnull if loaded from file
     sync: bool = false,
-    info: nux.GPU.TextureInfo = .{},
+    info: nux.Platform.GPU.TextureInfo = .{},
     handle: ?nux.GPU.Texture = null,
 
     pub fn deinit(self: *Self, comp: *Component) void {

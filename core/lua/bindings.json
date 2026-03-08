@@ -81,6 +81,9 @@
             ]
         },
         {
+            "path": "graphics/Gltf.zig"
+        },
+        {
             "path": "graphics/Vertex.zig",
             "ignore": [
                 "Layout"

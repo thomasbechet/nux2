@@ -4,45 +4,6 @@ const nux = @import("../nux.zig");
 const Self = @This();
 const Platform = nux.Platform.GPU;
 
-pub const BufferType = enum(u32) {
-    uniform = 0,
-    storage = 1,
-};
-
-pub const PipelineType = enum(u32) {
-    uber = 0,
-    canvas = 1,
-    blit = 2,
-};
-
-pub const Descriptor = enum(u32) {
-    constants_buffer = 0,
-    batches_buffer = 1,
-    transforms_buffer = 2,
-    vertices_buffer = 3,
-    quads_buffer = 4,
-    batch_index = 5,
-    texture = 6,
-    texture_width = 7,
-    texture_height = 8,
-
-    pub const max: usize = 9;
-};
-
-pub const PipelineInfo = struct {
-    type: PipelineType,
-    primitive: nux.Vertex.Primitive = .triangles,
-    blend: bool = false,
-    depth_test: bool = true,
-};
-
-pub const TextureInfo = struct {
-    width: u32 = 0,
-    height: u32 = 0,
-    filter: nux.Texture.Filtering = .nearest,
-    type: nux.Texture.Type = .image_rgba,
-};
-
 pub const Framebuffer = struct {
     handle: Platform.Handle,
     gpu: *Self,
@@ -52,7 +13,7 @@ pub const Pipeline = struct {
     handle: Platform.Handle,
     gpu: *Self,
 
-    pub fn init(gpu: *Self, info: PipelineInfo) !Pipeline {
+    pub fn init(gpu: *Self, info: Platform.PipelineInfo) !Pipeline {
         return .{
             .handle = try gpu.platform.vtable.create_pipeline(gpu.platform.ptr, info),
             .gpu = gpu,
@@ -67,7 +28,7 @@ pub const Texture = struct {
     handle: Platform.Handle,
     gpu: *Self,
 
-    pub fn init(gpu: *Self, info: TextureInfo) !Texture {
+    pub fn init(gpu: *Self, info: Platform.TextureInfo) !Texture {
         return .{
             .handle = try gpu.platform.vtable.create_texture(gpu.platform.ptr, info),
             .gpu = gpu,
@@ -85,7 +46,7 @@ pub const Buffer = struct {
     handle: Platform.Handle,
     gpu: *Self,
 
-    pub fn init(gpu: *Self, typ: BufferType, size: u64) !Buffer {
+    pub fn init(gpu: *Self, typ: Platform.BufferType, size: u64) !Buffer {
         return .{
             .gpu = gpu,
             .handle = try gpu.platform.vtable.create_buffer(gpu.platform.ptr, typ, size),
@@ -94,7 +55,7 @@ pub const Buffer = struct {
     pub fn deinit(self: *Buffer) void {
         self.gpu.platform.vtable.delete_buffer(self.gpu.platform.ptr, self.handle);
     }
-    pub fn update(self: *Buffer, offset: u64, size: u64, data: []const f32) !void {
+    pub fn update(self: *Buffer, offset: u64, size: u64, data: []const u8) !void {
         try self.gpu.platform.vtable.update_buffer(self.gpu.platform.ptr, self.handle, offset, size, data);
     }
 };
@@ -133,22 +94,22 @@ pub const Encoder = struct {
             .bind_pipeline = .{ .pipeline = pipeline.handle },
         });
     }
-    pub fn bindTexture(self: *Encoder, descriptor: Descriptor, texture: *const Texture) !void {
+    pub fn bindTexture(self: *Encoder, descriptor: Platform.Descriptor, texture: *const Texture) !void {
         try self.commands.append(self.allocator, .{
             .bind_texture = .{ .texture = texture.handle, .descriptor = descriptor },
         });
     }
-    pub fn bindBuffer(self: *Encoder, descriptor: Descriptor, buffer: *const Buffer) !void {
+    pub fn bindBuffer(self: *Encoder, descriptor: Platform.Descriptor, buffer: *const Buffer) !void {
         try self.commands.append(self.allocator, .{
             .bind_buffer = .{ .buffer = buffer.handle, .descriptor = descriptor },
         });
     }
-    pub fn pushU32(self: *Encoder, descriptor: Descriptor, value: u32) !void {
+    pub fn pushU32(self: *Encoder, descriptor: Platform.Descriptor, value: u32) !void {
         try self.commands.append(self.allocator, .{
             .push_u32 = .{ .value = value, .descriptor = descriptor },
         });
     }
-    pub fn pushF32(self: *Encoder, descriptor: Descriptor, value: f32) !void {
+    pub fn pushF32(self: *Encoder, descriptor: Platform.Descriptor, value: f32) !void {
         try self.commands.append(self.allocator, .{
             .push_f32 = .{ .value = value, .descriptor = descriptor },
         });

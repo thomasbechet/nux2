@@ -6,6 +6,69 @@ vtable: *const VTable = &.{},
 
 pub const Handle = *anyopaque;
 
+pub const Constants = extern struct {
+    view: [16]f32,
+    proj: [16]f32,
+    screen_size: [2]u32,
+    time: f32,
+    _pad: [3]u32 = undefined,
+};
+
+pub const Quad = extern struct {
+    pos: u32,
+    tex: u32,
+    size: u32,
+};
+
+pub const Batch = extern struct {
+    mode: u32,
+    first: u32,
+    count: u32,
+    texture_width: u32,
+    texture_height: u32,
+    _pad: [3]u32,
+    color: [4]f32,
+};
+
+pub const BufferType = enum(u32) {
+    uniform = 0,
+    storage = 1,
+};
+
+pub const PipelineType = enum(u32) {
+    uber = 0,
+    canvas = 1,
+    blit = 2,
+};
+
+pub const Descriptor = enum(u32) {
+    constants_buffer = 0,
+    batches_buffer = 1,
+    transforms_buffer = 2,
+    vertices_buffer = 3,
+    quads_buffer = 4,
+    batch_index = 5,
+    texture = 6,
+    texture_width = 7,
+    texture_height = 8,
+
+    pub const max: usize = 9;
+};
+
+pub const PipelineInfo = struct {
+    type: PipelineType,
+    primitive: nux.Vertex.Primitive = .triangles,
+    blend: bool = false,
+    depth_test: bool = true,
+};
+
+pub const TextureInfo = struct {
+    width: u32 = 0,
+    height: u32 = 0,
+    filter: nux.Texture.Filtering = .nearest,
+    type: nux.Texture.Type = .image_rgba,
+};
+
 pub const Command = union(enum) {
     bind_framebuffer: struct {
         framebuffer: ?Handle, // null for default framebuffer
@@ -15,19 +78,19 @@ pub const Command = union(enum) {
     },
     bind_buffer: struct {
         buffer: Handle,
-        descriptor: nux.GPU.Descriptor,
+        descriptor: Descriptor,
     },
     bind_texture: struct {
         texture: Handle,
-        descriptor: nux.GPU.Descriptor,
+        descriptor: Descriptor,
     },
     push_u32: struct {
         value: u32,
-        descriptor: nux.GPU.Descriptor,
+        descriptor: Descriptor,
     },
     push_f32: struct {
         value: f32,
-        descriptor: nux.GPU.Descriptor,
+        descriptor: Descriptor,
     },
     draw: struct {
         count: u32,
@@ -47,16 +110,16 @@ pub const Command = union(enum) {
 pub const VTable = struct {
     create_device: *const fn (*anyopaque) anyerror!void = Default.createDevice,
     delete_device: *const fn (*anyopaque) void = Default.deleteDevice,
-    create_pipeline: *const fn (*anyopaque, info: nux.GPU.PipelineInfo) anyerror!Handle = Default.createPipeline,
+    create_pipeline: *const fn (*anyopaque, info: PipelineInfo) anyerror!Handle = Default.createPipeline,
     delete_pipeline: *const fn (*anyopaque, handle: Handle) void = Default.deletePipeline,
     create_framebuffer: *const fn (*anyopaque, texture: Handle) anyerror!Handle = Default.createFramebuffer,
     delete_framebuffer: *const fn (*anyopaque, handle: Handle) void = Default.deleteFramebuffer,
-    create_texture: *const fn (*anyopaque, info: nux.GPU.TextureInfo) anyerror!Handle = Default.createTexture,
+    create_texture: *const fn (*anyopaque, info: TextureInfo) anyerror!Handle = Default.createTexture,
     delete_texture: *const fn (*anyopaque, handle: Handle) void = Default.deleteTexture,
     update_texture: *const fn (*anyopaque, handle: Handle, x: u32, y: u32, w: u32, h: u32, data: []const u8) anyerror!void = Default.updateTexture,
-    create_buffer: *const fn (*anyopaque, type: nux.GPU.BufferType, size: usize) anyerror!Handle = Default.createBuffer,
+    create_buffer: *const fn (*anyopaque, type: BufferType, size: usize) anyerror!Handle = Default.createBuffer,
     delete_buffer: *const fn (*anyopaque, handle: Handle) void = Default.deleteBuffer,
-    update_buffer: *const fn (*anyopaque, handle: Handle, offset: u64, size: u64, data: []const f32) anyerror!void = Default.updateBuffer,
+    update_buffer: *const fn (*anyopaque, handle: Handle, offset: u64, size: u64, data: []const u8) anyerror!void = Default.updateBuffer,
     submit_commands: *const fn (*anyopaque, commands: []const Command) anyerror!void = Default.submitCommands,
 };
 
@@ -64,7 +127,7 @@ const Default = struct {
     const GPUHandle = struct {};
     fn createDevice(_: *anyopaque) anyerror!void {}
     fn deleteDevice(_: *anyopaque) void {}
-    fn createPipeline(_: *anyopaque, _: nux.GPU.PipelineInfo) anyerror!Handle {
+    fn createPipeline(_: *anyopaque, _: PipelineInfo) anyerror!Handle {
         var handle = GPUHandle{};
         return &handle;
     }
@@ -74,17 +137,17 @@ const Default = struct {
         return &handle;
     }
     fn deleteFramebuffer(_: *anyopaque, _: Handle) void {}
-    fn createTexture(_: *anyopaque, _: nux.GPU.TextureInfo) anyerror!Handle {
+    fn createTexture(_: *anyopaque, _: TextureInfo) anyerror!Handle {
         var handle = GPUHandle{};
         return &handle;
     }
     fn deleteTexture(_: *anyopaque, _: Handle) void {}
     fn updateTexture(_: *anyopaque, _: Handle, _: u32, _: u32, _: u32, _: u32, _: []const u8) anyerror!void {}
-    fn createBuffer(_: *anyopaque, _: nux.GPU.BufferType, _: u64) anyerror!Handle {
+    fn createBuffer(_: *anyopaque, _: BufferType, _: u64) anyerror!Handle {
         var handle = GPUHandle{};
         return &handle;
     }
     fn deleteBuffer(_: *anyopaque, _: Handle) void {}
-    fn updateBuffer(_: *anyopaque, _: Handle, _: u64, _: u64, _: []const f32) anyerror!void {}
+    fn updateBuffer(_: *anyopaque, _: Handle, _: u64, _: u64, _: []const u8) anyerror!void {}
     fn submitCommands(_: *anyopaque, _: []const Command) anyerror!void {}
 };

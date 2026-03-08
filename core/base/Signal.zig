@@ -41,7 +41,7 @@ pub fn onPostUpdate(self: *Self) !void {
         self.active_signal = &active_signal;
         // Iterate callbacks
         while (true) {
-            const signal = self.nodes.get(active_signal.signal) catch break;
+            const signal = self.components.get(active_signal.signal) catch break;
             // Check end
             if (active_signal.index >= signal.callables.items.len) {
                 break;

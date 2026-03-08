@@ -486,9 +486,7 @@ pub fn logModules(self: *Self) !void {
 pub fn loadModule(self: *Self, path: []const u8) !*Module {
     // Setup module
     const module = try self.allocator.create(Module);
-    errdefer self.allocator.destroy(module);
     module.path = try self.allocator.dupe(u8, path);
-    errdefer self.allocator.free(module.path);
     try self.modules.put(module.path, module);
     module.ref = 0;
     module.signals = .empty;

@@ -68,7 +68,7 @@
         {
             "path": "graphics/Texture.zig",
             "ignore": [
-                "loadGltfImage"
+                "addFromGltfImage"
             ]
         },
         {
@@ -77,7 +77,7 @@
         {
             "path": "graphics/Mesh.zig",
             "ignore": [
-                "loadGltfPrimitive"
+                "addFromGltfPrimitive"
             ]
         },
         {

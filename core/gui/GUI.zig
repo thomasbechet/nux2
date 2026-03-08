@@ -31,11 +31,6 @@ fn sidebarItemComponent(index: u32) void {
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 
-    try self.node.add(self.node.getRoot(), self.transform);
-    self.logger.info("{}", .{self.node.has(self.node.getRoot(), self.transform)});
-    self.node.remove(self.node.getRoot(), self.transform);
-    self.logger.info("{}", .{self.node.has(self.node.getRoot(), self.transform)});
-
     // Initialize clay
     const min_memory_size: u32 = clay.minMemorySize();
     const memory = try self.allocator.alloc(u8, min_memory_size);

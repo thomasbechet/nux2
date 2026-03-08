@@ -3,13 +3,6 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
-pub const Property = enum {
-    position,
-    rotation,
-    scale,
-    parent,
-};
-
 const Component = struct {
     position: nux.Vec3 = .zero(),
     scale: nux.Vec3 = .scalar(1),

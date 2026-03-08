@@ -232,7 +232,7 @@ pub fn readAligned(self: *Self, path: []const u8, allocator: std.mem.Allocator, 
             },
         }
     }
-    return error.entryNotFound;
+    return error.FileNotFound;
 }
 pub fn read(self: *Self, path: []const u8, allocator: std.mem.Allocator) ![]u8 {
     return self.readAligned(path, allocator, null);
@@ -251,7 +251,7 @@ pub fn stat(self: *Self, path: []const u8) !nux.Platform.File.Stat {
             },
         }
     }
-    return error.entryNotFound;
+    return error.FileNotFound;
 }
 pub fn glob(self: *Self, pattern: []const u8, allocator: std.mem.Allocator) !FileList {
     var fileList = try FileList.init(allocator, pattern);

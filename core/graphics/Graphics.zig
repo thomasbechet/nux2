@@ -35,12 +35,16 @@ fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize
     const gltf_node = ctx.gltf.data.nodes[index];
 
     // Create root node
-    const node = try self.transform.new(parent);
+    const node = try self.node.create(parent);
+    if (gltf_node.name) |name| {
+        try self.node.setName(node, name);
+    }
 
     // Set transform
     if (gltf_node.matrix) |matrix| {
         _ = matrix;
     } else {
+        try self.transform.components.add(node);
         try self.transform.setPosition(node, .init(gltf_node.translation));
         const rot = gltf_node.rotation;
         try self.transform.setRotation(node, .init(rot[0], rot[1], rot[2], rot[3]));
@@ -48,18 +52,12 @@ fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize
     }
     try self.transform.setParent(node, parent);
 
-    // Set name
-    if (gltf_node.name) |name| {
-        try self.node.setName(node, name);
-    }
-
     // Mesh
     if (gltf_node.mesh) |idx| {
-        const id = try self.staticmesh.new(node);
-        try self.node.setName(id, "Staticmesh");
+        try self.staticmesh.components.add(node);
         const mesh = &ctx.gltf.data.meshes[idx];
         if (mesh.name) |name| {
-            try self.staticmesh.setMesh(id, try self.node.findChild(ctx.meshes, name));
+            try self.staticmesh.setMesh(node, try self.node.findChild(ctx.meshes, name));
         }
     }
 
@@ -136,9 +134,9 @@ pub fn loadGltf(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
     try gltf.parse(buffer);
 
     // Create assets nodes
-    const meshes = try self.node.new(parent);
+    const meshes = try self.node.create(parent);
     try self.node.setName(meshes, "Meshes");
-    const textures = try self.node.new(parent);
+    const textures = try self.node.create(parent);
     try self.node.setName(textures, "Textures");
 
     // Create meshes
@@ -146,7 +144,8 @@ pub fn loadGltf(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
         for (mesh.primitives, 0..) |primitive, i| {
 
             // Create mesh
-            const node = try self.mesh.loadGltfPrimitive(meshes, &gltf, &primitive);
+            const node = try self.node.create(meshes);
+            try self.mesh.addFromGltfPrimitive(node, &gltf, &primitive);
 
             // Set name
             if (mesh.name) |name| {
@@ -163,7 +162,8 @@ pub fn loadGltf(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
     for (gltf.data.images) |image| {
 
         // Create texture
-        const node = try self.texture.loadGltfImage(textures, &image);
+        const node = try self.node.create(textures);
+        try self.texture.addFromGltfImage(node, &image);
         if (image.name) |name| {
             try self.node.setName(node, name);
         }
@@ -180,7 +180,8 @@ pub fn loadGltf(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
     for (gltf.data.scenes) |scene| {
 
         // Create scene node
-        const scene_node = try self.transform.new(parent);
+        const scene_node = try self.node.create(parent);
+        try self.transform.components.add(scene_node);
 
         // Set name
         if (scene.name) |name| {

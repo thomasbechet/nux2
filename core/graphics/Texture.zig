@@ -22,17 +22,17 @@ const Component = struct {
     info: nux.GPU.TextureInfo = .{},
     handle: ?nux.GPU.Texture = null,
 
-    pub fn deinit(self: *Self, component: *Component) void {
-        if (component.data) |data| {
+    pub fn deinit(self: *Self, comp: *Component) void {
+        if (comp.data) |data| {
             self.allocator.free(data);
         }
-        if (component.path) |path| {
+        if (comp.path) |path| {
             self.allocator.free(path);
         }
-        if (component.handle) |*handle| {
+        if (comp.handle) |*handle| {
             handle.deinit();
         }
-        component.* = .{};
+        comp.* = .{};
     }
     pub fn save(self: *Self, id: nux.ID, writer: *nux.Writer) !void {
         const node = try self.components.get(id);
@@ -46,9 +46,9 @@ const Component = struct {
         const node = try self.components.get(id);
         if (try reader.takeOptionalBytes()) |path| { // File source
             node.path = try self.allocator.dupe(u8, path);
-            try self.loadFromPath(id, path);
+            try self.addFromFile(id, path);
         } else if (try reader.takeOptionalBytes()) |data| { // Data source
-            try self.loadFromData(id, data);
+            try self.addFromData(id, data);
         }
     }
     pub fn shortDescription(self: *Self, id: nux.ID, w: *std.Io.Writer) !void {
@@ -71,53 +71,38 @@ allocator: std.mem.Allocator,
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
-fn deinitNode(self: *Self, component: *Component) !void {
-    if (component.data) |data| {
-        self.allocator.free(data);
-    }
-    if (component.path) |path| {
-        self.allocator.free(path);
-    }
-    if (component.handle) |*handle| {
-        handle.deinit();
-    }
-    component.* = .{};
-}
-pub fn loadGltfImage(self: *Self, id: nux.ID, image: *const zgltf.Gltf.Image) !void {
+pub fn addFromGltfImage(self: *Self, id: nux.ID, image: *const zgltf.Gltf.Image) !void {
     if (image.data) |data| {
-        try self.loadFromData(id, data);
+        try self.addFromData(id, data);
     }
 }
-pub fn loadFromPath(self: *Self, id: nux.ID, path: []const u8) !void {
-    const component = try self.components.add(id);
+pub fn addFromFile(self: *Self, id: nux.ID, path: []const u8) !void {
+    const component = try self.components.addPtr(id);
     // Read file
     const data = try self.file.read(path, self.allocator);
     errdefer self.allocator.free(data);
     // Load image
     var image = try zigimg.Image.fromMemory(self.allocator, data);
     defer image.deinit(self.allocator);
-    // Deinit node
-    try self.deinitNode(component);
     // Set as source
     component.data = data;
     component.path = try self.allocator.dupe(u8, path);
     component.sync = false;
 }
-pub fn loadFromData(self: *Self, id: nux.ID, data: []const u8) !void {
-    const component = try self.components.add(id);
+pub fn addFromData(self: *Self, id: nux.ID, data: []const u8) !void {
+    const component = try self.components.addPtr(id);
     // Load image
     var img = try zigimg.Image.fromMemory(self.allocator, data);
     defer img.deinit(self.allocator);
     try img.convert(self.allocator, .rgba32);
     // Deinit node
-    try self.deinitNode(component);
     component.data = try self.allocator.dupe(u8, img.rawBytes());
     component.info.width = @intCast(img.width);
     component.info.height = @intCast(img.height);
-    component.sync = false;
 }
 pub fn syncGPU(self: *Self) !void {
-    for (self.components.data.items) |*texture| {
+    var it = self.components.values();
+    while (it.next()) |texture| {
         if (!texture.sync) {
             // Check gpu allocation
             if (texture.handle == null) {

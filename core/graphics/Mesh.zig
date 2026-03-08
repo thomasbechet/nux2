@@ -4,23 +4,22 @@ const zgltf = @import("zgltf");
 
 const Self = @This();
 
-allocator: std.mem.Allocator,
-components: nux.Components(struct {
+const Component = struct {
     span: ?nux.SpanAllocator.Span = null,
     vertices: std.ArrayList(f32) = .empty,
     layout: nux.Vertex.Layout = .make(.{}),
     primitive: nux.Vertex.Primitive = .triangles,
     sync: bool = false,
 
-    pub fn deinit(self: *Self, component: *@This()) void {
-        component.vertices.deinit(self.allocator);
-        if (component.span) |span| {
-            try self.vertex_span_allocator.free(span);
+    pub fn deinit(self: *Self, comp: *Component) void {
+        comp.vertices.deinit(self.allocator);
+        if (comp.span) |span| {
+            self.vertex_span_allocator.free(span) catch {};
         }
     }
-    pub fn shortDescription(_: *Self, component: *const @This(), w: *std.Io.Writer) !void {
-        try w.print("{d} vertices ", .{component.vertices.items.len});
-        if (component.span) |span| {
+    pub fn description(self: *const @This(), _: *Self, w: *std.Io.Writer) !void {
+        try w.print("{d} vertices ", .{self.vertices.items.len});
+        if (self.span) |span| {
             try w.print("[{d}-{d}]", .{ span.offset, span.offset + span.length });
         }
     }
@@ -33,7 +32,10 @@ components: nux.Components(struct {
         try node.vertices.ensureTotalCapacity(allocator, node.layout.stride * capa);
         return node;
     }
-}),
+};
+
+allocator: std.mem.Allocator,
+components: nux.Components(Component),
 config: *nux.Config,
 gpu: *nux.GPU,
 vertex_buffer: nux.GPU.Buffer,
@@ -52,9 +54,6 @@ pub fn deinit(self: *Self) void {
     self.vertex_span_allocator.deinit();
     self.vertex_buffer.deinit();
 }
-pub fn newCapacity(self: *Self, parent: nux.ID, capa: u32, primitive: nux.Vertex.Primitive, attributes: nux.Vertex.Attributes) !nux.ID {
-    return try self.components.new(parent, try .initCapacity(self.allocator, capa, primitive, attributes));
-}
 pub fn resize(self: *Self, id: nux.ID, size: u32) !void {
     const component = try self.components.get(id);
     const old_size = component.vertices.items.len;
@@ -64,8 +63,9 @@ pub fn resize(self: *Self, id: nux.ID, size: u32) !void {
     }
     component.sync = false;
 }
-pub fn loadGltfPrimitive(self: *Self, id: nux.ID, gltf: *const zgltf.Gltf, primitive: *const zgltf.Gltf.Primitive) !void {
-    const component = try self.components.get(id);
+pub fn addFromGltfPrimitive(self: *Self, id: nux.ID, gltf: *const zgltf.Gltf, primitive: *const zgltf.Gltf.Primitive) !void {
+    const component = try self.components.addPtr(id);
+
     // Create layout
     var attributes = nux.Vertex.Attributes{};
     var vertexCount: ?usize = null;
@@ -84,17 +84,18 @@ pub fn loadGltfPrimitive(self: *Self, id: nux.ID, gltf: *const zgltf.Gltf, primi
     if (vertexCount == null) {
         return error.VertexCountNotFound;
     }
+
     // Find primitive
-    const vertex_primitive = switch (primitive.mode) {
+    component.primitive = switch (primitive.mode) {
         .triangles => nux.Vertex.Primitive.triangles,
         .lines => nux.Vertex.Primitive.lines,
         .points => nux.Vertex.Primitive.points,
         else => return error.UnsupportedPrimitive,
     };
-    // Create mesh
-    try component.initCapacity(self.allocator, vertexCount.?, vertex_primitive, attributes);
+
     // Resize mesh
     try component.vertices.resize(self.allocator, vertexCount.? * component.layout.stride);
+
     // Read values
     for (primitive.attributes) |attribute| {
         switch (attribute) {
@@ -154,7 +155,8 @@ pub fn loadGltfPrimitive(self: *Self, id: nux.ID, gltf: *const zgltf.Gltf, primi
     }
 }
 pub fn syncGPU(self: *Self) !void {
-    for (self.components.data.items) |*mesh| {
+    var it = self.components.values();
+    while (it.next()) |mesh| {
         if (!mesh.sync) {
             // Check gpu span allocation
             if (mesh.span == null or mesh.span.?.length < mesh.vertices.items.len) {

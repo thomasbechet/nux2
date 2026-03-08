@@ -9,6 +9,7 @@ pub const ComponentIndex = u32;
 pub const ComponentID = u8;
 
 pub const max_component = 128;
+pub const module_components_field = "components";
 
 pub const ComponentType = struct {
     name: []const u8,
@@ -46,9 +47,13 @@ pub fn Components(T: type) type {
                     .iterator = components.bitset.iterator(.{}),
                 };
             }
-            pub fn next(self: *@This()) ?*T {
+            pub fn next(self: *@This()) ?struct { data: *T, id: ID } {
                 const index = self.iterator.next() orelse return null;
-                return &self.components.data.items[index].used.data;
+                const entry = &self.components.data.items[index].used;
+                return .{
+                    .data = &entry.data,
+                    .id = entry.id,
+                };
             }
         };
 
@@ -78,7 +83,7 @@ pub fn Components(T: type) type {
                 // Deinit previous component
                 const data = &self.data.items[@intCast(index)].used.data;
                 if (@hasDecl(T, "deinit")) {
-                    T.deinit(@fieldParentPtr("components", self), data);
+                    T.deinit(@fieldParentPtr(module_components_field, self), data);
                 }
             } else {
                 // Create new index
@@ -93,7 +98,7 @@ pub fn Components(T: type) type {
             // Initialize component
             var data: T = undefined;
             if (@hasDecl(T, "init")) {
-                data = try T.init(@fieldParentPtr("components", self));
+                data = try T.init(@fieldParentPtr(module_components_field, self));
             } else {
                 data = .{};
             }
@@ -111,7 +116,7 @@ pub fn Components(T: type) type {
                 // Deinit component
                 const data = &self.data.items[@intCast(index)].used.data;
                 if (@hasDecl(T, "deinit")) {
-                    T.deinit(@fieldParentPtr("components", self), data);
+                    T.deinit(@fieldParentPtr(module_components_field, self), data);
                 }
                 // Remove from pool
                 self.data.items[@intCast(index)] = .{ .free = self.free_index };
@@ -570,31 +575,30 @@ pub fn getRoot(self: *Self) ID {
     return self.root;
 }
 pub fn registerComponentModule(self: *Self, module: anytype) !void {
-    const field_name = "components";
     const T = @typeInfo(@TypeOf(module)).pointer.child;
-    if (@hasField(T, field_name)) {
+    if (@hasField(T, module_components_field)) {
 
         // Init pool
         const component_id: ComponentID = @intCast(self.component_types.items.len);
-        @field(module, field_name) = try .init(self.allocator, self, component_id);
+        @field(module, module_components_field) = try .init(self.allocator, self, component_id);
 
         // Create vtable
         const gen = struct {
             fn deinit(pointer: *anyopaque) void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                @field(mod, field_name).deinit();
+                @field(mod, module_components_field).deinit();
             }
             fn add(pointer: *anyopaque, id: nux.ID) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                _ = try @field(mod, field_name).add(id);
+                _ = try @field(mod, module_components_field).add(id);
             }
             fn remove(pointer: *anyopaque, id: nux.ID) void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                @field(mod, field_name).remove(id);
+                @field(mod, module_components_field).remove(id);
             }
             fn has(pointer: *anyopaque, id: nux.ID) bool {
                 const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, field_name).has(id);
+                return @field(mod, module_components_field).has(id);
             }
             fn save(pointer: *anyopaque, id: ID, writer: *Writer) !void {
                 // const mod: *T = @ptrCast(@alignCast(pointer));
@@ -786,14 +790,17 @@ const Dumper = struct {
     }
 
     fn printComponents(self: *@This(), id: ID) !void {
-        // Print header
-        var buf: [256]u8 = undefined;
-        var w = std.Io.Writer.fixed(&buf);
-        try self.writeHeader(&w);
+
+        // Print components
         const entry = try self.node.getEntry(id);
         for (entry.components, 0..) |component, type_index| {
             if (component != null) {
                 const typ = self.node.component_types.items[type_index];
+
+                // Print header
+                var buf: [256]u8 = undefined;
+                var w = std.Io.Writer.fixed(&buf);
+                try self.writeHeader(&w);
 
                 // Write type
                 try w.print("\x1b[31m", .{}); // red
@@ -803,9 +810,10 @@ const Dumper = struct {
                 try w.print("\x1b[90m", .{}); // light gray
                 try typ.v_description(typ.v_ptr, id, &w);
                 try w.print("\x1b[37m", .{}); // white
+
+                self.node.logger.info("{s}", .{buf[0..w.end]});
             }
         }
-        self.node.logger.info("{s}", .{buf[0..w.end]});
     }
 
     fn onPreOrder(self: *@This(), id: ID) !void {
@@ -836,7 +844,7 @@ const Dumper = struct {
         try w.print("\x1b[37m", .{}); // white
 
         // Print components
-        try self.printComponents(id);
+        // try self.printComponents(id);
 
         // Print entry
         self.node.logger.info("{s}", .{buf[0..w.end]});

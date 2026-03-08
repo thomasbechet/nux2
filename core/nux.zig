@@ -69,7 +69,12 @@ pub const Platform = struct {
     config: Platform.Config = .{},
 };
 
-const Stage = enum { pre_update, update, post_update };
+const Stage = enum {
+    pre_update,
+    update,
+    post_update,
+    render,
+};
 
 pub const Module = struct {
     allocator: std.mem.Allocator,
@@ -112,6 +117,9 @@ pub const Module = struct {
                 }
                 if (@hasDecl(T, "onPostUpdate")) {
                     try core.registerStageCallback(.post_update, .wrap(T, T.onPostUpdate, self));
+                }
+                if (@hasDecl(T, "onRender")) {
+                    try core.registerStageCallback(.render, .wrap(T, T.onRender, self));
                 }
                 // Initialize
                 if (@hasDecl(T, "init")) {
@@ -303,6 +311,7 @@ pub const Core = struct {
             try self.callStage(.pre_update);
             try self.callStage(.update);
             try self.callStage(.post_update);
+            try self.callStage(.render);
         }
     }
 

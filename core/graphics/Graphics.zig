@@ -30,6 +30,55 @@ pipelines: struct {
     blit: GPU.Pipeline,
 },
 
+pub fn init(self: *Self, core: *const nux.Core) !void {
+    self.allocator = core.platform.allocator;
+
+    // Create pipelines
+    self.pipelines.uber_opaque = try .init(self.gpu, .{
+        .type = .uber,
+        .primitive = .triangles,
+        .blend = false,
+        .depth_test = true,
+    });
+    errdefer self.pipelines.uber_opaque.deinit();
+    self.pipelines.uber_line = try .init(self.gpu, .{
+        .type = .uber,
+        .primitive = .lines,
+        .blend = false,
+        .depth_test = true,
+    });
+    errdefer self.pipelines.uber_line.deinit();
+    self.pipelines.canvas = try .init(self.gpu, .{
+        .type = .canvas,
+        .primitive = .triangles,
+        .blend = true,
+        .depth_test = false,
+    });
+    errdefer self.pipelines.canvas.deinit();
+    self.pipelines.blit = try .init(self.gpu, .{
+        .type = .blit,
+        .primitive = .triangles,
+        .blend = true,
+        .depth_test = false,
+    });
+    errdefer self.pipelines.blit.deinit();
+}
+pub fn deinit(self: *Self) void {
+    self.pipelines.uber_opaque.deinit();
+    self.pipelines.uber_line.deinit();
+    self.pipelines.canvas.deinit();
+    self.pipelines.blit.deinit();
+}
+pub fn onPostUpdate(self: *Self) !void {
+    try self.mesh.syncGPU();
+    try self.texture.syncGPU();
+}
+pub fn onRender(self: *Self) !void {
+    _ = self;
+    // var it = self.staticmesh.components.values();
+    // while (it.next()) |entry| {}
+}
+
 fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize) !nux.ID {
     // Get root node
     const gltf_node = ctx.gltf.data.nodes[index];
@@ -78,51 +127,6 @@ fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize
 
     return node;
 }
-
-pub fn init(self: *Self, core: *const nux.Core) !void {
-    self.allocator = core.platform.allocator;
-
-    // Create pipelines
-    self.pipelines.uber_opaque = try .init(self.gpu, .{
-        .type = .uber,
-        .primitive = .triangles,
-        .blend = false,
-        .depth_test = true,
-    });
-    errdefer self.pipelines.uber_opaque.deinit();
-    self.pipelines.uber_line = try .init(self.gpu, .{
-        .type = .uber,
-        .primitive = .lines,
-        .blend = false,
-        .depth_test = true,
-    });
-    errdefer self.pipelines.uber_line.deinit();
-    self.pipelines.canvas = try .init(self.gpu, .{
-        .type = .canvas,
-        .primitive = .triangles,
-        .blend = true,
-        .depth_test = false,
-    });
-    errdefer self.pipelines.canvas.deinit();
-    self.pipelines.blit = try .init(self.gpu, .{
-        .type = .blit,
-        .primitive = .triangles,
-        .blend = true,
-        .depth_test = false,
-    });
-    errdefer self.pipelines.blit.deinit();
-}
-pub fn deinit(self: *Self) void {
-    self.pipelines.uber_opaque.deinit();
-    self.pipelines.uber_line.deinit();
-    self.pipelines.canvas.deinit();
-    self.pipelines.blit.deinit();
-}
-pub fn onPostUpdate(self: *Self) !void {
-    try self.mesh.syncGPU();
-    try self.texture.syncGPU();
-}
-
 pub fn loadGltf(self: *Self, parent: nux.ID, path: []const u8) !nux.ID {
     // Read buffer aligned
     const buffer: []align(std.mem.Alignment.@"4".toByteUnits()) u8 = @alignCast(try self.file.readAligned(path, self.allocator, std.mem.Alignment.@"4"));

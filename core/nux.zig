@@ -261,6 +261,7 @@ pub const Core = struct {
             Texture,
             Mesh,
             StaticMesh,
+            Camera,
             Lua,
             Canvas,
             GUI,

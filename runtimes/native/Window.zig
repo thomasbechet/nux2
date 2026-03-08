@@ -12,6 +12,16 @@ const Self = @This();
 
 window: ?*c.GLFWwindow = null,
 core: *nux.Core = undefined, // Keep temporary reference during callbacks
+switch_fullscreen: bool = false,
+fullscreen: bool = false,
+prev_position: struct {
+    x: gl.int,
+    y: gl.int,
+} = undefined,
+prev_size: struct {
+    w: gl.int,
+    h: gl.int,
+} = undefined,
 
 fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     var self: *Self = @ptrCast(@alignCast(ctx));
@@ -193,7 +203,42 @@ pub fn pollEvents(self: *Self, core: *nux.Core) !void {
         }
     }
 }
+fn checkFullscreen(self: *Self) void {
+    if (self.switch_fullscreen) {
+        if (self.fullscreen) {
+            c.glfwSetWindowMonitor(
+                self.window,
+                null,
+                self.prev_position.x,
+                self.prev_position.y,
+                self.prev_size.w,
+                self.prev_size.h,
+                0,
+            );
+        } else {
+            const mon: ?*c.GLFWmonitor = c.glfwGetPrimaryMonitor();
+            const mode: ?*const c.GLFWvidmode = c.glfwGetVideoMode(c.glfwGetPrimaryMonitor());
+            c.glfwSetWindowMonitor(
+                self.window,
+                mon,
+                0,
+                0,
+                mode.?.width,
+                mode.?.height,
+                mode.?.refreshRate,
+            );
+            var xpos: gl.int = 0;
+            var ypos: gl.int = 0;
+            c.glfwGetWindowPos(self.window, &xpos, &ypos);
+            self.prev_position = .{ .x = xpos, .y = ypos };
+            self.prev_size = .{ .w = 500, .h = 500 };
+        }
+        self.switch_fullscreen = false;
+        self.fullscreen = !self.fullscreen;
+    }
+}
 pub fn swapBuffers(self: *Self) !void {
+    self.checkFullscreen();
     if (self.window) |window| {
         c.glfwSwapBuffers(window);
     }
@@ -206,6 +251,11 @@ fn keyCallback(win: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, 
     switch (key) {
         c.GLFW_KEY_ESCAPE => {
             self.core.pushEvent(.requestExit);
+        },
+        c.GLFW_KEY_F11 => {
+            if (action == c.GLFW_RELEASE) {
+                self.switch_fullscreen = true;
+            }
         },
         else => {},
     }

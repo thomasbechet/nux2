@@ -2,9 +2,8 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 
 const Self = @This();
-const Node = struct {};
 
-nodes: nux.NodePool(Node),
+components: nux.Components(struct {}),
 node: *nux.Node,
 allocator: std.mem.Allocator,
 

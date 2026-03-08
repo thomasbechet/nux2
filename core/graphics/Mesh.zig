@@ -48,7 +48,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
         try self.config.getInt(usize, "Graphics.defaultVertexBufferSize"),
         try self.config.getInt(usize, "Graphics.defaultVertexBufferSpanCapacity"),
     );
-    self.vertex_buffer = try .init(self.gpu, .storage, self.vertex_span_allocator.size);
+    self.vertex_buffer = try .init(self.gpu, .vertices, self.vertex_span_allocator.size);
 }
 pub fn deinit(self: *Self) void {
     self.vertex_span_allocator.deinit();

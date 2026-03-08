@@ -258,8 +258,8 @@ fn createBuffer(ctx: *anyopaque, typ: Platform.BufferType, size: u64) anyerror!P
     const buffer = try self.allocator.create(BufferHandle);
 
     buffer.type = switch (typ) {
-        .uniform => gl.UNIFORM_BUFFER,
-        .storage => gl.SHADER_STORAGE_BUFFER,
+        .constants => gl.UNIFORM_BUFFER,
+        .batches, .quads, .transforms, .vertices => gl.SHADER_STORAGE_BUFFER,
     };
 
     gl.GenBuffers(1, @ptrCast(&buffer.handle));

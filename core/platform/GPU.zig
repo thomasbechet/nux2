@@ -31,8 +31,11 @@ pub const Batch = extern struct {
 };
 
 pub const BufferType = enum(u32) {
-    uniform = 0,
-    storage = 1,
+    constants = 0,
+    batches = 1,
+    quads = 2,
+    transforms = 3,
+    vertices = 4,
 };
 
 pub const PipelineType = enum(u32) {

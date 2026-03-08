@@ -59,7 +59,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     errdefer self.pipelines.blit.deinit();
 
     // Create buffers
-    self.buffers.constants = try .init(self.gpu, .uniform, @sizeOf(Platform.Constants));
+    self.buffers.constants = try .init(self.gpu, .constants, @sizeOf(Platform.Constants));
     errdefer self.buffers.constants.deinit();
 }
 pub fn deinit(self: *Self) void {

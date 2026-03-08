@@ -18,11 +18,11 @@ components: nux.Components(struct {
     pub fn init(self: *Self) !@This() {
         return .{
             .encoder = .init(self.gpu),
-            .constants_buffer = try .init(self.gpu, .uniform, @sizeOf(Platform.Constants)),
+            .constants_buffer = try .init(self.gpu, .constants, @sizeOf(Platform.Constants)),
             .quads = try .initCapacity(self.allocator, 64),
-            .quads_buffer = try .init(self.gpu, .storage, @sizeOf(Platform.Quad) * 128),
+            .quads_buffer = try .init(self.gpu, .quads, @sizeOf(Platform.Quad) * 128),
             .batches = try .initCapacity(self.allocator, 64),
-            .batches_buffer = try .init(self.gpu, .storage, @sizeOf(Platform.Batch) * 128),
+            .batches_buffer = try .init(self.gpu, .batches, @sizeOf(Platform.Batch) * 128),
             .active_batch = undefined,
         };
     }

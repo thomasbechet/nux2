@@ -10,6 +10,7 @@ pub const ComponentID = u8;
 
 pub const max_component = 128;
 pub const module_components_field = "components";
+pub const path_separator = '/';
 
 pub const ComponentType = struct {
     name: []const u8,
@@ -18,8 +19,8 @@ pub const ComponentType = struct {
     v_add: *const fn (*anyopaque, id: nux.ID) anyerror!void,
     v_remove: *const fn (*anyopaque, id: nux.ID) void,
     v_has: *const fn (*anyopaque, id: nux.ID) bool,
-    v_save: *const fn (*anyopaque, id: nux.ID, writer: *Writer) anyerror!void,
     v_load: *const fn (*anyopaque, id: nux.ID, reader: *Reader) anyerror!void,
+    v_save: *const fn (*anyopaque, id: nux.ID, writer: *Writer) anyerror!void,
     v_description: *const fn (*anyopaque, id: ID, w: *std.Io.Writer) anyerror!void,
 };
 
@@ -83,64 +84,71 @@ pub fn Components(T: type) type {
             self.data.deinit(self.allocator);
             self.bitset.deinit();
         }
-        pub fn add(self: *@This(), id: nux.ID) !void {
-            _ = try self.addPtr(id);
+
+        fn initComponent(self: *@This(), data: *T) !void {
+            if (@hasDecl(T, "init")) {
+                data.* = try T.init(@fieldParentPtr(module_components_field, self));
+            } else {
+                data.* = .{};
+            }
         }
-        pub fn addPtr(self: *@This(), id: nux.ID) !*T {
+        fn deinitComponent(self: *@This(), data: *T) void {
+            if (@hasDecl(T, "deinit")) {
+                data.deinit(@fieldParentPtr(module_components_field, self));
+            }
+        }
+        fn addUninitialized(self: *@This(), id: ID) !*T {
             // Check node entry
             const entry = try self.node.getEntry(id);
             var index: ComponentIndex = undefined;
-            if (entry.components[self.id]) |previous_index| {
-                // Reuse index
+            if (entry.components[self.id]) |previous_index| { // Reuse index
                 index = previous_index;
                 // Deinit previous component
                 const data = &self.data.items[@intCast(index)].used.data;
-                if (@hasDecl(T, "deinit")) {
-                    T.deinit(@fieldParentPtr(module_components_field, self), data);
-                }
+                self.deinitComponent(data);
             } else {
-                // Create new index
-                index = @intCast(self.data.items.len);
-                if (self.free_index) |free| {
+                if (self.free_index) |free| { // Free index
                     index = free;
                     self.free_index = self.data.items[@intCast(free)].free;
-                } else {
-                    _ = try self.data.addOne(self.allocator);
+                } else { // New index
+                    index = @intCast(self.data.items.len);
+                    try self.data.append(self.allocator, .{ .used = .{
+                        .data = undefined,
+                        .id = id,
+                    } });
                 }
             }
-            // Initialize component
-            var data: T = undefined;
-            if (@hasDecl(T, "init")) {
-                data = try T.init(@fieldParentPtr(module_components_field, self));
-            } else {
-                data = .{};
-            }
-            self.data.items[@intCast(index)] = .{ .used = .{
-                .data = data,
-                .id = id,
-            } };
             self.bitset.set(@intCast(index));
             entry.components[@intCast(self.id)] = index;
             return &self.data.items[@intCast(index)].used.data;
         }
+
+        pub fn addPtr(self: *@This(), id: nux.ID) !*T {
+            const data = try self.addUninitialized(id);
+            try self.initComponent(data);
+            return data;
+        }
+        pub fn add(self: *@This(), id: ID) !void {
+            _ = try self.addPtr(id);
+        }
+        pub fn addWith(self: *@This(), id: ID, data: T) !void {
+            const component = try self.addUninitialized(id);
+            component.* = data;
+        }
         pub fn remove(self: *@This(), id: ID) void {
             const entry = self.node.getEntry(id) catch return;
-            if (entry.components[self.id]) |index| {
-                // Deinit component
-                const data = &self.data.items[@intCast(index)].used.data;
-                if (@hasDecl(T, "deinit")) {
-                    T.deinit(@fieldParentPtr(module_components_field, self), data);
-                }
-                // Remove from pool
-                self.data.items[@intCast(index)] = .{ .free = self.free_index };
-                self.free_index = index;
-                self.bitset.unset(@intCast(index));
-                // Unset index
-                entry.components[self.id] = null;
-            }
+            const index = entry.components[self.id] orelse return;
+            // Deinit component
+            const data = &self.data.items[@intCast(index)].used.data;
+            self.deinitComponent(data);
+            // Remove from pool
+            self.data.items[@intCast(index)] = .{ .free = self.free_index };
+            self.free_index = index;
+            self.bitset.unset(@intCast(index));
+            entry.components[self.id] = null;
         }
-        fn getFromIndex(self: *@This(), index: ComponentIndex) !*T {
-            return &self.data.items[index].used.data;
+        pub fn has(self: *@This(), id: nux.ID) bool {
+            return self.getOptional(id) != null;
         }
         pub fn iterator(self: *@This()) Iterator {
             return .init(self);
@@ -149,14 +157,30 @@ pub fn Components(T: type) type {
             return .init(self);
         }
         pub fn getOptional(self: *@This(), id: nux.ID) ?*T {
-            const index = self.node.getComponentIndex(id, self.id) orelse return null;
-            return try self.getFromIndex(index);
+            const entry = self.node.getEntry(id) catch return null;
+            const index = entry.components[@intCast(self.id)] orelse return null;
+            return &self.data.items[index].used.data;
         }
         pub fn get(self: *@This(), id: nux.ID) !*T {
             return self.getOptional(id) orelse return error.ComponentNotFound;
         }
-        pub fn has(self: *@This(), id: nux.ID) bool {
-            return self.getOptional(id) != null;
+        pub fn load(self: *@This(), id: ID, reader: *Reader) !void {
+            const data = try self.addUninitialized(id);
+            if (@hasDecl(T, "load")) {
+                data.* = try T.load(@fieldParentPtr(module_components_field, self), reader);
+            }
+        }
+        pub fn save(self: *@This(), id: ID, writer: *Writer) !void {
+            const data = try self.get(id);
+            if (@hasDecl(T, "save")) {
+                try data.save(@fieldParentPtr(module_components_field, self), writer);
+            }
+        }
+        pub fn description(self: *@This(), id: ID, writer: *std.Io.Writer) !void {
+            const data = try self.get(id);
+            if (@hasDecl(T, "description")) {
+                try data.description(@fieldParentPtr(module_components_field, self), writer);
+            }
         }
     };
 }
@@ -575,10 +599,6 @@ fn getEntry(self: *Self, id: ID) !*NodeEntry {
     return node;
 }
 
-fn getComponentIndex(self: *Self, id: nux.ID, type_index: ComponentID) ?ComponentIndex {
-    const entry = self.getEntry(id) catch return null;
-    return entry.components[@intCast(type_index)];
-}
 fn findComponentType(self: *Self, name: []const u8) !*ComponentType {
     for (self.component_types.items) |*typ| {
         if (std.mem.eql(u8, typ.name, name)) {
@@ -616,26 +636,17 @@ pub fn registerComponentModule(self: *Self, module: anytype) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
                 return @field(mod, module_components_field).has(id);
             }
-            fn save(pointer: *anyopaque, id: ID, writer: *Writer) !void {
-                // const mod: *T = @ptrCast(@alignCast(pointer));
-                // try @field(mod, field_name).save(id, writer);
-                _ = pointer;
-                _ = id;
-                _ = writer;
-            }
             fn load(pointer: *anyopaque, id: ID, reader: *Reader) !void {
-                // const mod: *T = @ptrCast(@alignCast(pointer));
-                // if (@hasDecl(T, "load")) {
-                //     try mod.load(id, reader);
-                // }
-                _ = pointer;
-                _ = id;
-                _ = reader;
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                try @field(mod, module_components_field).load(id, reader);
             }
-            fn shortDescription(pointer: *anyopaque, id: ID, writer: *std.Io.Writer) !void {
-                _ = pointer;
-                _ = id;
-                _ = writer;
+            fn save(pointer: *anyopaque, id: ID, writer: *Writer) !void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                try @field(mod, module_components_field).save(id, writer);
+            }
+            fn description(pointer: *anyopaque, id: ID, writer: *std.Io.Writer) !void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                try @field(mod, module_components_field).description(id, writer);
             }
         };
 
@@ -651,7 +662,7 @@ pub fn registerComponentModule(self: *Self, module: anytype) !void {
             .v_has = gen.has,
             .v_save = gen.save,
             .v_load = gen.load,
-            .v_description = gen.shortDescription,
+            .v_description = gen.description,
         };
     }
 }
@@ -665,7 +676,7 @@ pub fn createNamed(self: *Self, parent: ID, name: []const u8) !ID {
     return id;
 }
 pub fn createPath(self: *Self, base: ID, path: []const u8) !ID {
-    var it = std.mem.splitScalar(u8, path, '/');
+    var it = std.mem.splitScalar(u8, path, path_separator);
     var node = base;
     while (it.next()) |part| {
         if (self.findChild(node, part)) |child| {
@@ -710,7 +721,7 @@ pub fn getParent(self: *Self, id: ID) !ID {
 pub fn find(self: *Self, relativeTo: ID, path: []const u8) !ID {
     const entry = try self.getEntry(relativeTo);
     _ = entry;
-    var it = std.mem.splitScalar(u8, path, '/');
+    var it = std.mem.splitScalar(u8, path, path_separator);
     var ret = relativeTo;
     while (it.next()) |part| {
         if (part.len > 0) {
@@ -722,16 +733,6 @@ pub fn find(self: *Self, relativeTo: ID, path: []const u8) !ID {
 pub fn findGlobal(self: *Self, path: []const u8) !ID {
     return self.find(self.getRoot(), path);
 }
-// pub fn findFirstChildType(self: *Self, id: ID, typename: []const u8) !ID {
-//     var it = try self.iterChildren(id);
-//     while (it.next()) |child| {
-//         const typ = try self.getType(child);
-//         if (std.mem.eql(u8, typ.name, typename)) {
-//             return child;
-//         }
-//     }
-//     return error.ChildNotFound;
-// }
 pub fn findChild(self: *Self, id: ID, name: []const u8) !ID {
     var it = try self.iterChildren(id);
     while (it.next()) |child| {

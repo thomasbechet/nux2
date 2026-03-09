@@ -12,14 +12,14 @@ const Component = struct {
     entries: std.StringHashMap(Entry),
     sensivity: f32,
 
-    pub fn init(self: *Self) !Component {
+    pub fn init(mod: *Self) !Component {
         return .{
-            .entries = .init(self.allocator),
+            .entries = .init(mod.allocator),
             .sensivity = 1,
         };
     }
-    pub fn deinit(_: *Self, component: *Component) void {
-        component.entries.deinit();
+    pub fn deinit(self: *Component, _: *Self) void {
+        self.entries.deinit();
     }
 };
 

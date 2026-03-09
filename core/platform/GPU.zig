@@ -30,6 +30,14 @@ pub const Batch = extern struct {
     color: [4]f32,
 };
 
+pub const SceneBatch = extern struct {
+    vertex_offset: u32,
+    vertex_attributes: u32,
+    transform_offset: u32,
+    has_texture: u32,
+    color: [4]f32,
+};
+
 pub const BufferType = enum(u32) {
     constants = 0,
     batches = 1,

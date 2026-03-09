@@ -11,10 +11,10 @@ const Component = struct {
     primitive: nux.Vertex.Primitive = .triangles,
     sync: bool = false,
 
-    pub fn deinit(self: *Self, comp: *Component) void {
-        comp.vertices.deinit(self.allocator);
-        if (comp.span) |span| {
-            self.vertex_span_allocator.free(span) catch {};
+    pub fn deinit(self: *Component, mod: *Self) void {
+        self.vertices.deinit(mod.allocator);
+        if (self.span) |span| {
+            mod.vertex_span_allocator.free(span) catch {};
         }
     }
     pub fn description(self: *const @This(), _: *Self, w: *std.Io.Writer) !void {

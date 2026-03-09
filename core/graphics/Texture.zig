@@ -22,41 +22,66 @@ const Component = struct {
     info: nux.Platform.GPU.TextureInfo = .{},
     handle: ?nux.GPU.Texture = null,
 
-    pub fn deinit(self: *Self, comp: *Component) void {
-        if (comp.data) |data| {
-            self.allocator.free(data);
+    pub fn deinit(self: *Component, mod: *Self) void {
+        if (self.data) |data| {
+            mod.allocator.free(data);
         }
-        if (comp.path) |path| {
-            self.allocator.free(path);
+        if (self.path) |path| {
+            mod.allocator.free(path);
         }
-        if (comp.handle) |*handle| {
+        if (self.handle) |*handle| {
             handle.deinit();
         }
-        comp.* = .{};
+        self.* = .{};
     }
-    pub fn save(self: *Self, id: nux.ID, writer: *nux.Writer) !void {
-        const node = try self.components.get(id);
-        if (node.path != null) {
-            try writer.write(node.path);
-        } else if (node.data != null) {
-            try writer.write(node.data);
-        }
-    }
-    pub fn load(self: *Self, id: nux.ID, reader: *nux.Reader) !void {
-        const node = try self.components.get(id);
+    pub fn load(mod: *Self, reader: *nux.Reader) !Component {
         if (try reader.takeOptionalBytes()) |path| { // File source
-            node.path = try self.allocator.dupe(u8, path);
-            try self.addFromFile(id, path);
-        } else if (try reader.takeOptionalBytes()) |data| { // Data source
-            try self.addFromData(id, data);
+            return .initFromFile(mod, path);
+        } else { // Data source
+            const data = try reader.takeOptionalBytes() orelse return error.MissingTextureData;
+            return .initFromData(mod, data);
         }
     }
-    pub fn shortDescription(self: *Self, id: nux.ID, w: *std.Io.Writer) !void {
-        const node = try self.components.get(id);
-        try w.print("{d}x{d} ", .{ node.info.width, node.info.height });
-        if (node.path) |path| {
+    pub fn save(self: *Component, _: *Self, writer: *nux.Writer) !void {
+        if (self.path != null) {
+            try writer.write(self.path);
+        } else if (self.data != null) {
+            try writer.write(self.data);
+        }
+    }
+    pub fn description(self: *Component, _: *Self, w: *std.Io.Writer) !void {
+        try w.print("{d}x{d} ", .{ self.info.width, self.info.height });
+        if (self.path) |path| {
             try w.print("{s}", .{path});
         }
+    }
+
+    fn initFromFile(mod: *Self, path: []const u8) !Component {
+        // Read file
+        const data = try mod.file.read(path, mod.allocator);
+        errdefer mod.allocator.free(data);
+        // Load image
+        var image = try zigimg.Image.fromMemory(mod.allocator, data);
+        defer image.deinit(mod.allocator);
+        // Set as source
+        return .{
+            .data = data,
+            .path = try mod.allocator.dupe(u8, path),
+        };
+    }
+    fn initFromData(mod: *Self, data: []const u8) !Component {
+        // Load image
+        var img = try zigimg.Image.fromMemory(mod.allocator, data);
+        defer img.deinit(mod.allocator);
+        try img.convert(mod.allocator, .rgba32);
+        // Deinit node
+        return .{
+            .data = try mod.allocator.dupe(u8, img.rawBytes()),
+            .info = .{
+                .width = @intCast(img.width),
+                .height = @intCast(img.height),
+            },
+        };
     }
 };
 
@@ -77,28 +102,10 @@ pub fn addFromGltfImage(self: *Self, id: nux.ID, image: *const zgltf.Gltf.Image)
     }
 }
 pub fn addFromFile(self: *Self, id: nux.ID, path: []const u8) !void {
-    const component = try self.components.addPtr(id);
-    // Read file
-    const data = try self.file.read(path, self.allocator);
-    errdefer self.allocator.free(data);
-    // Load image
-    var image = try zigimg.Image.fromMemory(self.allocator, data);
-    defer image.deinit(self.allocator);
-    // Set as source
-    component.data = data;
-    component.path = try self.allocator.dupe(u8, path);
-    component.sync = false;
+    try self.components.addWith(id, try .initFromFile(self, path));
 }
 pub fn addFromData(self: *Self, id: nux.ID, data: []const u8) !void {
-    const component = try self.components.addPtr(id);
-    // Load image
-    var img = try zigimg.Image.fromMemory(self.allocator, data);
-    defer img.deinit(self.allocator);
-    try img.convert(self.allocator, .rgba32);
-    // Deinit node
-    component.data = try self.allocator.dupe(u8, img.rawBytes());
-    component.info.width = @intCast(img.width);
-    component.info.height = @intCast(img.height);
+    try self.components.addWith(id, try .initFromData(self, data));
 }
 pub fn syncGPU(self: *Self) !void {
     var it = self.components.values();

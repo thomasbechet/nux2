@@ -9,11 +9,11 @@ const Component = struct {
     rotation: nux.Quat = .identity(),
     parent: nux.ID = .null,
 
-    pub fn save(_: *Self, component: *const Component, writer: *nux.Writer) !void {
-        try writer.write(component);
+    pub fn load(_: *Self, reader: *nux.Reader) !Component {
+        return try reader.read(Component);
     }
-    pub fn load(_: *Self, component: *Component, reader: *nux.Reader) !void {
-        component.* = try reader.read(Component);
+    pub fn save(self: *const Component, _: *Self, writer: *nux.Writer) !void {
+        try writer.write(self);
     }
 };
 

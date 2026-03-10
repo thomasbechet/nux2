@@ -10,21 +10,26 @@ var key_map: [c.GLFW_KEY_LAST + 1]?nux.Input.Key = undefined;
 
 const Self = @This();
 
+const Size = struct {
+    w: gl.int = 0,
+    h: gl.int = 0,
+};
+
 window: ?*c.GLFWwindow = null,
 core: *nux.Core = undefined, // Keep temporary reference during callbacks
 switch_fullscreen: bool = false,
 fullscreen: bool = false,
 prev_position: struct {
-    x: gl.int,
-    y: gl.int,
-} = undefined,
-prev_size: struct {
-    w: gl.int,
-    h: gl.int,
-} = undefined,
+    x: c_int = 0,
+    y: c_int = 0,
+} = .{},
+prev_size: Size = .{},
+size: Size = .{},
 
 fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     var self: *Self = @ptrCast(@alignCast(ctx));
+
+    // Create window
     if (builtin.os.tag == .linux) { // Force X11 on linux
         c.glfwInitHint(c.GLFW_PLATFORM, c.GLFW_PLATFORM_X11);
     }
@@ -36,16 +41,17 @@ fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 3);
     c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
     c.glfwWindowHint(c.GLFW_SAMPLES, 0);
+    self.window = c.glfwCreateWindow(@intCast(w), @intCast(h), "nux", null, null);
+    c.glfwSetWindowSize(self.window, @intCast(w), @intCast(h));
+    c.glfwGetFramebufferSize(self.window, &self.size.w, &self.size.h);
 
-    const cw: c_int = @intCast(w);
-    const ch: c_int = @intCast(h);
-    self.window = c.glfwCreateWindow(cw, ch, "nux", null, null);
-    c.glfwSetWindowSize(self.window, cw, ch);
+    // Init opengl
     c.glfwMakeContextCurrent(self.window);
-
     gl.makeProcTableCurrent(&procs);
     if (!procs.init(c.glfwGetProcAddress)) return error.initFailed;
 
+    // Setup callbacks
+    _ = c.glfwSetFramebufferSizeCallback(self.window, resizeCallback);
     _ = c.glfwSetKeyCallback(self.window, keyCallback);
     c.glfwSetWindowUserPointer(self.window, @ptrCast(self));
 }
@@ -177,7 +183,6 @@ pub fn init() Self {
     key_map[c.GLFW_KEY_RIGHT_ALT] = .right_alt;
     key_map[c.GLFW_KEY_RIGHT_SUPER] = .right_super;
     key_map[c.GLFW_KEY_MENU] = .menu;
-
     return .{};
 }
 pub fn deinit(self: *Self) void {
@@ -244,6 +249,14 @@ pub fn swapBuffers(self: *Self) !void {
     }
 }
 
+fn resizeCallback(win: ?*c.GLFWwindow, w: c_int, h: c_int) callconv(.c) void {
+    const self: *Self = @ptrCast(@alignCast(c.glfwGetWindowUserPointer(win).?));
+    self.size.w = w;
+    self.size.h = h;
+    self.core.pushEvent(.{
+        .windowResized = .{ .height = @intCast(w), .width = @intCast(h) },
+    });
+}
 fn keyCallback(win: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
     _ = scancode;
     _ = mods;

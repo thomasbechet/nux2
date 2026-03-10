@@ -8,6 +8,7 @@ pub const NodeIndex = u24;
 pub const ComponentIndex = u32;
 pub const ComponentID = u8;
 
+pub const max_name: usize = 64;
 pub const max_component = 128;
 pub const module_components_field = "components";
 pub const path_separator = '/';
@@ -211,7 +212,6 @@ pub const ID = packed struct(u32) {
 };
 
 const NodeEntry = struct {
-    const max_name: usize = 64;
     version: Version = 1,
     parent: NodeIndex = 0,
     prev: NodeIndex = 0,
@@ -221,6 +221,9 @@ const NodeEntry = struct {
     name: [max_name]u8 = undefined,
     name_len: usize = 0,
     components: [max_component]?ComponentIndex = .{null} ** max_component,
+    instanced: bool = false,
+
+    // TODO: use actived deactived for side effects (in editor)
 
     fn getName(self: *@This()) []const u8 {
         return self.name[0..self.name_len];
@@ -748,7 +751,7 @@ pub fn setNameFormat(
     comptime format: []const u8,
     args: anytype,
 ) !void {
-    var buf: [NodeEntry.max_name]u8 = undefined;
+    var buf: [max_name]u8 = undefined;
     var w = std.Io.Writer.fixed(&buf);
     try w.print(format, args);
     try self.setName(id, buf[0..w.end]);

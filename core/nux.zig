@@ -319,11 +319,13 @@ pub const Core = struct {
 
     pub fn pushEvent(self: *Core, event: Platform.Event) void {
         const input = self.findModule(Input) orelse return;
+        const window = self.findModule(Window) orelse return;
         switch (event) {
             .requestExit => self.running = false,
             else => {},
         }
         input.onEvent(&event);
+        window.onEvent(&event);
     }
 
     pub fn registerModules(self: *Core, comptime mods: anytype) !void {

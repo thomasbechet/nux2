@@ -6,6 +6,7 @@ const GPU = nux.GPU;
 const Platform = nux.Platform.GPU;
 
 gpu: *nux.GPU,
+window: *nux.Window,
 mesh: *nux.Mesh,
 texture: *nux.Texture,
 material: *nux.Material,
@@ -87,6 +88,7 @@ pub fn onRender(self: *Self) !void {
     try self.buffers.constants.update(0, @sizeOf(Platform.Constants), @ptrCast(&constants));
 
     try encoder.bindFramebuffer(null);
+    try encoder.viewport(0, 0, self.window.width, self.window.height);
     try encoder.clearColor(0x0);
     try encoder.bindPipeline(&self.pipelines.uber_line);
     try encoder.bindBuffer(.constants_buffer, &self.buffers.constants);

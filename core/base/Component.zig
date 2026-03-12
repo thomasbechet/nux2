@@ -22,17 +22,15 @@ pub const ComponentType = struct {
 
 pub fn Components(T: type) type {
     return struct {
+        const Entry = struct {
+            data: T,
+            id: nux.ID,
+        };
+
         id: ID,
         allocator: std.mem.Allocator,
-        data: std.ArrayList(union {
-            used: struct {
-                data: T,
-                id: nux.ID,
-            },
-            free: ?Index,
-        }) = .empty,
+        data: nux.ObjectPool(Entry),
         bitset: std.DynamicBitSet,
-        free_index: ?Index = null,
         node: *nux.Node,
 
         pub const Iterator = struct {
@@ -46,7 +44,7 @@ pub fn Components(T: type) type {
             }
             pub fn next(self: *@This()) ?struct { data: *T, id: nux.ID } {
                 const index = self.iterator.next() orelse return null;
-                const entry = &self.components.data.items[index].used;
+                const entry = self.components.data.get(index);
                 return .{
                     .data = &entry.data,
                     .id = entry.id,
@@ -71,13 +69,13 @@ pub fn Components(T: type) type {
             return .{
                 .allocator = allocator,
                 .node = node,
-                .data = .empty,
+                .data = .init(allocator),
                 .bitset = try .initEmpty(allocator, 128),
                 .id = type_index,
             };
         }
         fn deinit(self: *@This()) void {
-            self.data.deinit(self.allocator);
+            self.data.deinit();
             self.bitset.deinit();
         }
 
@@ -99,24 +97,18 @@ pub fn Components(T: type) type {
             var index: Index = undefined;
             if (entry.components[self.id]) |previous_index| { // Reuse index
                 index = previous_index;
+                const data = &self.data.get(previous_index).data;
                 // Deinit previous component
-                const data = &self.data.items[@intCast(index)].used.data;
                 self.deinitComponent(data);
             } else {
-                if (self.free_index) |free| { // Free index
-                    index = free;
-                    self.free_index = self.data.items[@intCast(free)].free;
-                } else { // New index
-                    index = @intCast(self.data.items.len);
-                    try self.data.append(self.allocator, .{ .used = .{
-                        .data = undefined,
-                        .id = id,
-                    } });
-                }
+                index = @intCast(try self.data.add(.{
+                    .data = undefined,
+                    .id = id,
+                }));
             }
             self.bitset.set(@intCast(index));
             entry.components[@intCast(self.id)] = index;
-            return &self.data.items[@intCast(index)].used.data;
+            return &self.data.get(index).data;
         }
 
         pub fn addPtr(self: *@This(), id: nux.ID) !*T {
@@ -135,11 +127,10 @@ pub fn Components(T: type) type {
             const entry = self.node.getEntry(id) catch return;
             const index = entry.components[self.id] orelse return;
             // Deinit component
-            const data = &self.data.items[@intCast(index)].used.data;
+            const data = &self.data.get(index).data;
             self.deinitComponent(data);
             // Remove from pool
-            self.data.items[@intCast(index)] = .{ .free = self.free_index };
-            self.free_index = index;
+            self.data.remove(index);
             self.bitset.unset(@intCast(index));
             entry.components[self.id] = null;
         }
@@ -155,7 +146,7 @@ pub fn Components(T: type) type {
         pub fn getOptional(self: *@This(), id: nux.ID) ?*T {
             const entry = self.node.getEntry(id) catch return null;
             const index = entry.components[@intCast(self.id)] orelse return null;
-            return &self.data.items[index].used.data;
+            return &self.data.get(index).data;
         }
         pub fn get(self: *@This(), id: nux.ID) !*T {
             return self.getOptional(id) orelse return error.ComponentNotFound;

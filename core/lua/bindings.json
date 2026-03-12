@@ -17,8 +17,6 @@
                 "setNameFormat",
                 "Reader",
                 "Writer",
-                "add",
-                "remove",
                 "has"
             ]
         },

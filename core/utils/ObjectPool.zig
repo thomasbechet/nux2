@@ -1,11 +1,13 @@
 const std = @import("std");
 
+/// Simple object pool structure.
+/// Keep object valid when removed.
 pub fn ObjectPool(T: type) type {
     return struct {
         allocator: std.mem.Allocator,
         free: ?usize = null,
-        data: std.ArrayList(union {
-            used: T,
+        items: std.ArrayList(struct {
+            data: T,
             free: ?usize,
         }) = .empty,
 
@@ -15,25 +17,25 @@ pub fn ObjectPool(T: type) type {
             };
         }
         pub fn deinit(self: *@This()) void {
-            self.data.deinit(self.allocator);
+            self.items.deinit(self.allocator);
         }
         pub fn add(self: *@This(), data: T) !usize {
             if (self.free) |free| {
-                self.free = self.data.items[free].free;
-                self.data.items[free].used = data;
+                self.free = self.items.items[free].free;
+                self.items.items[free].data = data;
                 return free;
             } else {
-                const index: usize = @intCast(self.data.items.len);
-                try self.data.append(self.allocator, .{ .used = data });
+                const index: usize = @intCast(self.items.items.len);
+                try self.items.append(self.allocator, .{ .data = data, .free = null });
                 return index;
             }
         }
         pub fn remove(self: *@This(), index: usize) void {
-            self.data.items[index] = .{ .free = self.free };
+            self.items.items[index].free = self.free;
             self.free = index;
         }
         pub fn get(self: *@This(), index: usize) *T {
-            return &self.data.items[index].used;
+            return &self.items.items[index].data;
         }
     };
 }

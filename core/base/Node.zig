@@ -269,7 +269,7 @@ const ChildIterator = struct {
     fn next(it: *@This()) ?ID {
         const index = it.current;
         if (index == 0) return null;
-        const entry = it.self.entries.items[index];
+        const entry = it.self.entries.get(index);
         it.current = entry.next;
         return .{
             .index = index,
@@ -311,8 +311,7 @@ pub fn collect(self: *Self, allocator: std.mem.Allocator, id: ID) !std.ArrayList
 }
 
 allocator: std.mem.Allocator,
-entries: std.ArrayList(Entry),
-free: std.ArrayList(NodeIndex),
+entries: nux.ObjectPool(Entry),
 root: ID,
 component: *nux.Component,
 file: *nux.File,
@@ -320,23 +319,21 @@ logger: *nux.Logger,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.entries = try .initCapacity(self.allocator, 1024);
-    self.free = try .initCapacity(self.allocator, 1024);
+    self.entries = .init(self.allocator);
     // Reserve index 0 for null id.
-    try self.entries.append(self.allocator, .{});
+    _ = try self.entries.add(.{});
     // Create root node manually.
     self.root = ID{
         .index = 1,
         .version = 1,
     };
-    try self.entries.append(self.allocator, .{
+    _ = try self.entries.add(.{
         .version = self.root.version,
     });
     try self.setName(self.root, "root");
 }
 pub fn deinit(self: *Self) void {
-    self.entries.deinit(self.allocator);
-    self.free.deinit(self.allocator);
+    self.entries.deinit();
 }
 
 fn addEntry(self: *Self, parent: ID) !ID {
@@ -346,20 +343,11 @@ fn addEntry(self: *Self, parent: ID) !ID {
     }
 
     // Find free entry
-    var index: NodeIndex = undefined;
-    if (self.free.pop()) |idx| {
-        index = idx;
-    } else {
-        index = @intCast(self.entries.items.len);
-        const node = try self.entries.addOne(self.allocator);
-        node.version = 0;
-    }
+    const index: NodeIndex = @intCast(try self.entries.add(.{}));
 
-    // Initialize node
-    const node = &self.entries.items[index];
-    node.* = .{
-        .parent = parent.index,
-    };
+    // Init node
+    const node = self.entries.get(index);
+    node.parent = parent.index;
     const id = ID{
         .index = index,
         .version = node.version,
@@ -367,9 +355,9 @@ fn addEntry(self: *Self, parent: ID) !ID {
 
     // Update parent
     if (parent.index != 0) {
-        const p = &self.entries.items[parent.index];
+        const p = self.entries.get(parent.index);
         if (p.last_child != 0) {
-            self.entries.items[p.last_child].next = index;
+            self.entries.get(p.last_child).next = index;
             node.prev = p.last_child;
             p.last_child = index;
         } else {
@@ -386,10 +374,10 @@ fn addEntry(self: *Self, parent: ID) !ID {
     return id;
 }
 fn removeEntry(self: *Self, id: ID) !void {
-    var node = &self.entries.items[id.index];
+    var node = self.entries.get(id.index);
     // Remove from parent
     if (node.parent != 0) {
-        const p = &self.entries.items[node.parent];
+        const p = self.entries.get(node.parent);
         if (p.first_child == id.index) {
             p.first_child = node.next;
         }
@@ -397,24 +385,24 @@ fn removeEntry(self: *Self, id: ID) !void {
             p.last_child = node.prev;
         }
         if (node.next != 0) {
-            self.entries.items[node.next].prev = node.prev;
+            self.entries.get(node.next).prev = node.prev;
         }
         if (node.prev != 0) {
-            self.entries.items[node.prev].next = node.next;
+            self.entries.get(node.prev).next = node.next;
         }
     }
     // Update version and add to freelist
     node.version += 1;
-    (try self.free.addOne(self.allocator)).* = id.index;
+    self.entries.remove(id.index);
 }
 pub fn getEntry(self: *Self, id: ID) !*Entry {
     if (id.isNull()) {
         return error.NullId;
     }
-    if (id.index >= self.entries.items.len) {
+    if (id.index >= self.entries.items.items.len) {
         return error.InvalidIndex;
     }
-    const node = &self.entries.items[id.index];
+    const node = self.entries.get(id.index);
     if (node.version != id.version) {
         return error.InvalidVersion;
     }
@@ -447,20 +435,24 @@ pub fn createPath(self: *Self, base: ID, path: []const u8) !ID {
     return node;
 }
 pub fn delete(self: *Self, id: ID) !void {
+
     // Delete children
     var it = try self.iterChildren(id);
     while (it.next()) |child| {
         try self.delete(child);
     }
-    // Delete entry
-    const entry = try self.getEntry(id);
+
     // Remove components
+    const entry = try self.getEntry(id);
     for (entry.components, 0..) |component, type_index| {
         if (component != null) {
             const typ = try self.component.get(@intCast(type_index));
             typ.v_remove(typ.v_ptr, id);
         }
     }
+
+    // Delete entry
+    try self.removeEntry(id);
 }
 pub fn exists(self: *Self, id: ID) bool {
     _ = self.getEntry(id) catch return false;
@@ -471,10 +463,10 @@ pub fn getParent(self: *Self, id: ID) !ID {
     if (node.parent != 0) {
         return .{
             .index = node.parent,
-            .version = self.entries.items[node.parent].version,
+            .version = self.entries.get(node.parent).version,
         };
     }
-    return error.noParent;
+    return error.NoParent;
 }
 pub fn find(self: *Self, relativeTo: ID, path: []const u8) !ID {
     const entry = try self.getEntry(relativeTo);
@@ -534,7 +526,7 @@ fn writeEntryPath(self: *Self, entry: *Entry, writer: *std.Io.Writer) !void {
     if (entry.parent == 0) { // root node
         return;
     }
-    try self.writeEntryPath(&self.entries.items[entry.parent], writer);
+    try self.writeEntryPath(self.entries.get(entry.parent), writer);
     _ = try writer.write("/");
     _ = try writer.write(entry.getName());
 }

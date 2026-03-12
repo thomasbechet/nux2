@@ -409,14 +409,14 @@ fn removeEntry(self: *Self, id: ID) !void {
 }
 pub fn getEntry(self: *Self, id: ID) !*Entry {
     if (id.isNull()) {
-        return error.nullId;
+        return error.NullId;
     }
     if (id.index >= self.entries.items.len) {
-        return error.invalidIndex;
+        return error.InvalidIndex;
     }
     const node = &self.entries.items[id.index];
     if (node.version != id.version) {
-        return error.invalidVersion;
+        return error.InvalidVersion;
     }
     return node;
 }

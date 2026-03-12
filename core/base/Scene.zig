@@ -33,11 +33,17 @@ pub fn deinit(self: *Self) void {
     self.scenes.deinit();
 }
 
-// pub fn preload(self: *Self, path: []const u8) !void {
-//
-// }
+pub fn preload(self: *Self, path: []const u8) !void {
+    // Open file
+    var buf: [512]u8 = undefined;
+    var file_writer: nux.File.Writer = try .open(self.file, path, &buf);
+    defer file_writer.close();
+
+    // 
+}
 pub fn instantiate(self: *Self, path: []const u8, parent: nux.ID) !nux.ID {
     const scene = self.scenes.get(path) orelse return error.SceneNotFound;
+
     // Create nodes
     try self.ids.resize(self.allocator, scene.entries.items.len);
     for (scene.entries.items, 0..) |*entry, index| {
@@ -52,6 +58,7 @@ pub fn instantiate(self: *Self, path: []const u8, parent: nux.ID) !nux.ID {
             self.ids.items[index] = try self.node.create(node_parent);
         }
     }
+
     // Create components
     for (scene.entries.items, 0..) |*entry, index| {
         const id = self.ids.items[index];
@@ -66,6 +73,7 @@ pub fn instantiate(self: *Self, path: []const u8, parent: nux.ID) !nux.ID {
             try typ.v_load(typ.v_ptr, id, &reader);
         }
     }
+
     // Return root
     return self.ids.items[0];
 }

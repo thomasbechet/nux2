@@ -3,6 +3,7 @@ const std = @import("std");
 pub const Logger = @import("base/Logger.zig");
 pub const Config = @import("base/Config.zig");
 pub const Node = @import("base/Node.zig");
+pub const Component = @import("base/Component.zig");
 pub const Scene = @import("base/Scene.zig");
 pub const Signal = @import("base/Signal.zig");
 pub const File = @import("base/File.zig");
@@ -26,7 +27,7 @@ pub const Gltf = @import("graphics/Gltf.zig");
 
 pub const ID = Node.ID;
 pub const PropertyValue = Node.PropertyValue;
-pub const Components = Node.Components;
+pub const Components = Component.Components;
 pub const Writer = Node.Writer;
 pub const Reader = Node.Reader;
 pub const vec = @import("math/vec.zig");
@@ -107,8 +108,8 @@ pub const Module = struct {
                     }
                 }
                 // Components initialization
-                if (core.findModule(Node)) |node| {
-                    try node.registerComponentModule(self);
+                if (core.findModule(Component)) |component| {
+                    try component.registerModule(self);
                 }
                 // Register callbacks
                 if (@hasDecl(T, "onPreUpdate")) {
@@ -239,7 +240,7 @@ pub const Core = struct {
 
         // Register required modules
         try core.registerModules(.{Logger});
-        try core.registerModules(.{ File, Cart, Config, Node, Scene });
+        try core.registerModules(.{ File, Cart, Config, Node, Component, Scene });
         errdefer core.deinitNodes();
 
         // Mount base file system

@@ -2,24 +2,25 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 
 const Self = @This();
-const Node = nux.Node;
 
 const Entry = struct {
     parent: ?usize, // null if root node
     name: ?[]const u8,
-    components: []const nux.Node.ComponentID,
+    components: []const nux.Component.ID,
     data: []const u8,
 };
 const Scene = struct {
     entries: std.ArrayList(Entry),
     references: std.ArrayList([]const u8),
-    components: std.ArrayList(Node.ComponentID),
+    components: std.ArrayList(nux.Component.ID),
     data: []const u8,
 };
 
 allocator: std.mem.Allocator,
 scenes: std.StringHashMap(Scene),
 node: *nux.Node,
+file: *nux.File,
+component: *nux.Component,
 ids: std.ArrayList(nux.ID), // Temporary id pool for entry_index => id
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -61,7 +62,7 @@ pub fn instantiate(self: *Self, path: []const u8, parent: nux.ID) !nux.ID {
             .nodes = self.ids.items,
         };
         for (entry.components) |component_id| {
-            const typ = try self.node.getComponentType(component_id);
+            const typ = try self.component.get(component_id);
             try typ.v_load(typ.v_ptr, id, &reader);
         }
     }

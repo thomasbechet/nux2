@@ -3,6 +3,7 @@ const std = @import("std");
 pub const Logger = @import("base/Logger.zig");
 pub const Config = @import("base/Config.zig");
 pub const Node = @import("base/Node.zig");
+pub const Scene = @import("base/Scene.zig");
 pub const Signal = @import("base/Signal.zig");
 pub const File = @import("base/File.zig");
 pub const Cart = @import("base/Cart.zig");
@@ -238,7 +239,7 @@ pub const Core = struct {
 
         // Register required modules
         try core.registerModules(.{Logger});
-        try core.registerModules(.{ File, Cart, Config, Node });
+        try core.registerModules(.{ File, Cart, Config, Node, Scene });
         errdefer core.deinitNodes();
 
         // Mount base file system

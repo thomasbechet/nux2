@@ -23,6 +23,9 @@
             ]
         },
         {
+            "path": "base/Scene.zig"
+        },
+        {
             "path": "base/Signal.zig",
             "ignore": [
                 "connect", 

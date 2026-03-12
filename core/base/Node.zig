@@ -211,7 +211,7 @@ pub const ID = packed struct(u32) {
     index: NodeIndex,
 };
 
-const NodeEntry = struct {
+const Entry = struct {
     version: Version = 1,
     parent: NodeIndex = 0,
     prev: NodeIndex = 0,
@@ -221,7 +221,7 @@ const NodeEntry = struct {
     name: [max_name]u8 = undefined,
     name_len: usize = 0,
     components: [max_component]?ComponentIndex = .{null} ** max_component,
-    instanced: bool = false,
+    instanceof: ID = .null,
 
     // TODO: use actived deactived for side effects (in editor)
 
@@ -488,7 +488,7 @@ pub fn collect(self: *Self, allocator: std.mem.Allocator, id: ID) !std.ArrayList
 
 allocator: std.mem.Allocator,
 component_types: std.ArrayList(ComponentType),
-entries: std.ArrayList(NodeEntry),
+entries: std.ArrayList(Entry),
 free: std.ArrayList(NodeIndex),
 root: ID,
 file: *nux.File,
@@ -588,7 +588,7 @@ fn removeEntry(self: *Self, id: ID) !void {
     node.version += 1;
     (try self.free.addOne(self.allocator)).* = id.index;
 }
-fn getEntry(self: *Self, id: ID) !*NodeEntry {
+fn getEntry(self: *Self, id: ID) !*Entry {
     if (id.isNull()) {
         return error.nullId;
     }
@@ -602,13 +602,19 @@ fn getEntry(self: *Self, id: ID) !*NodeEntry {
     return node;
 }
 
-fn findComponentType(self: *Self, name: []const u8) !*ComponentType {
+pub fn findComponentType(self: *Self, name: []const u8) !*ComponentType {
     for (self.component_types.items) |*typ| {
         if (std.mem.eql(u8, typ.name, name)) {
             return typ;
         }
     }
     return error.ComponentTypeNotFound;
+}
+pub fn getComponentType(self: *Self, component: ComponentID) !*ComponentType {
+    if (component >= self.component_types.items.len) {
+        return error.InvalidComponentID;
+    }
+    return &self.component_types.items[component];
 }
 pub fn getRoot(self: *Self) ID {
     return self.root;
@@ -775,7 +781,7 @@ pub fn getName(self: *Self, id: ID) ![]const u8 {
     const entry = try self.getEntry(id);
     return entry.getName();
 }
-fn writeEntryPath(self: *Self, entry: *NodeEntry, writer: *std.Io.Writer) !void {
+fn writeEntryPath(self: *Self, entry: *Entry, writer: *std.Io.Writer) !void {
     if (entry.parent == 0) { // root node
         return;
     }
@@ -880,120 +886,3 @@ pub fn dump(self: *Self, id: ID) void {
     var dumper = Dumper{ .node = self };
     self.visit(id, &dumper) catch {};
 }
-
-// pub fn exportNode(self: *Self, id: ID, path: []const u8) !void {
-//     var buf: [512]u8 = undefined;
-//     var file_writer: nux.File.Writer = try .open(self.file, path, &buf);
-//     defer file_writer.close();
-//     // Collect nodes
-//     var nodes = try self.collect(self.allocator, id);
-//     defer nodes.deinit(self.allocator);
-//     // Collect types
-//     var types: std.ArrayList([]const u8) = try .initCapacity(self.allocator, 64);
-//     defer types.deinit(self.allocator);
-//     for (nodes.items) |node| {
-//         const typ = try self.getType(node);
-//         var found = false;
-//         for (types.items) |t| {
-//             if (std.mem.eql(u8, typ.name, t)) {
-//                 found = true;
-//                 break;
-//             }
-//         }
-//         if (!found) {
-//             try types.append(self.allocator, typ.name);
-//         }
-//     }
-//     // Initialize writer
-//     var writer: Writer = .{
-//         .node = self,
-//         .writer = &file_writer.interface,
-//         .nodes = nodes.items,
-//     };
-//     // Write type table
-//     try writer.write(@as(u32, @intCast(types.items.len)));
-//     for (types.items) |typ| {
-//         try writer.write(typ);
-//     }
-//     // Write node table
-//     try writer.write(@as(u32, @intCast(nodes.items.len)));
-//     for (nodes.items) |node| {
-//         // Find parent index
-//         // 0 => no local parent, only valid for root node
-//         var parent_index: u32 = 0;
-//         if (self.getParent(node)) |parent| {
-//             for (nodes.items, 0..) |item, index| {
-//                 if (item == parent) {
-//                     parent_index = @intCast(index + 1);
-//                     break;
-//                 }
-//             }
-//         } else |_| {}
-//         // Find type index
-//         const typ = try self.getType(node);
-//         var type_index: u32 = undefined;
-//         for (types.items, 0..) |t, index| {
-//             if (std.mem.eql(u8, t, typ.name)) {
-//                 type_index = @intCast(index);
-//             }
-//         }
-//         try writer.write(type_index);
-//         try writer.write(parent_index);
-//         try writer.write(try self.getName(node));
-//     }
-//     // Write nodes data
-//     for (nodes.items) |node| {
-//         const typ = try self.getType(node);
-//         try typ.v_save(typ.v_ptr, &writer, node);
-//     }
-// }
-// pub fn importNode(self: *Self, parent: ID, path: []const u8) !ID {
-//     // Read entry
-//     const data = try self.file.read(path, self.allocator);
-//     defer self.allocator.free(data);
-//     var data_reader = std.Io.Reader.fixed(data);
-//     var reader: Reader = .{
-//         .reader = &data_reader,
-//         .node = self,
-//         .nodes = &.{},
-//     };
-//     // Read component type table
-//     const type_table_len = try reader.read(u32);
-//     if (type_table_len == 0) return error.EmptyTypeTable;
-//     const type_table = try self.allocator.alloc(*const ComponentType, type_table_len);
-//     defer self.allocator.free(type_table);
-//     for (0..type_table_len) |index| {
-//         const typename = try reader.takeBytes();
-//         type_table[index] = self.findComponentType(typename) catch {
-//             return error.NodeTypeNotFound;
-//         };
-//     }
-//     // Read node table
-//     const node_count = try reader.read(u32);
-//     var nodes = try self.allocator.alloc(ID, node_count);
-//     defer self.allocator.free(nodes);
-//     reader.nodes = nodes;
-//     for (0..node_count) |index| {
-//         const type_index = try reader.read(u32);
-//         if (type_index > type_table_len) {
-//             return error.invalidTypeIndex;
-//         }
-//         const parent_index = try reader.read(u32);
-//         if (parent_index > nodes.len + 1) {
-//             return error.invalidParentIndex;
-//         }
-//         const name = try reader.takeBytes();
-//         const parent_node = if (parent_index != 0) nodes[parent_index - 1] else parent;
-//         const typ = type_table[type_index];
-//         nodes[index] = try typ.v_add(typ.v_ptr, parent_node);
-//         if (index != 0) { // Do not rename root node
-//             try self.setName(nodes[index], name);
-//         }
-//     }
-//     // Read node data
-//     for (nodes) |node| {
-//         const typ = try self.getType(node);
-//         try typ.v_load(typ.v_ptr, &reader, node);
-//     }
-//     return nodes[0];
-// }

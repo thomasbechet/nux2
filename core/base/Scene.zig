@@ -10,10 +10,16 @@ const Entry = struct {
     data: []const u8,
 };
 const Scene = struct {
+    path: []const u8,
     entries: std.ArrayList(Entry),
     references: std.ArrayList([]const u8),
     components: std.ArrayList(nux.Component.ID),
     data: []const u8,
+
+    fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+        _ = self;
+        _ = allocator;
+    }
 };
 
 allocator: std.mem.Allocator,
@@ -30,17 +36,54 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 }
 pub fn deinit(self: *Self) void {
     self.ids.deinit(self.allocator);
+    var it = self.scenes.iterator();
+    while (it.next()) |entry| {
+        self.allocator.free(entry.key_ptr.*);
+        entry.value_ptr.deinit(self.allocator);
+    }
     self.scenes.deinit();
 }
 
-pub fn preload(self: *Self, path: []const u8) !void {
-    // Open file
-    var buf: [512]u8 = undefined;
-    var file_writer: nux.File.Writer = try .open(self.file, path, &buf);
-    defer file_writer.close();
-
-    // 
+fn getScene(self: *Self, path: []const u8) !*Scene {
+    const found = try self.scenes.getOrPut(path);
+    if (!found.found_existing) {
+        found.key_ptr = try self.allocator.dupe(u8, path);
+    }
+    return found.value_ptr;
 }
+
+// pub fn exportNode(self: *Self, path: []const u8, id: nux.ID) !void {
+//     const scene = try self.getScene(path);
+//
+//     // Collect nodes
+//     var nodes = try self.node.collect(self.allocator, id);
+//     defer nodes.deinit(self.allocator);
+//
+//     // Collect components
+//     var types: std.ArrayList([]const u8) = try .initCapacity(self.allocator, 64);
+//     defer types.deinit(self.allocator);
+//     for (nodes.items) |node| {
+//         const typ = try self.getType(node);
+//         var found = false;
+//         for (types.items) |t| {
+//             if (std.mem.eql(u8, typ.name, t)) {
+//                 found = true;
+//                 break;
+//             }
+//         }
+//         if (!found) {
+//             try types.append(self.allocator, typ.name);
+//         }
+//     }
+// }
+// pub fn load(self: *Self, path: []const u8) !void {}
+// pub fn save(self: *Self, path: []const u8) !void {
+//
+//     // Open file
+//     var buf: [512]u8 = undefined;
+//     var file_writer: nux.File.Writer = try .open(self.file, path, &buf);
+//     defer file_writer.close();
+// }
 pub fn instantiate(self: *Self, path: []const u8, parent: nux.ID) !nux.ID {
     const scene = self.scenes.get(path) orelse return error.SceneNotFound;
 

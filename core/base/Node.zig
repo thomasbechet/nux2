@@ -277,7 +277,34 @@ const ChildIterator = struct {
         };
     }
 };
+
+const ComponentIterator = struct {
+    self: *Self,
+    entry: *Entry,
+    current: usize,
+    fn init(mod: *Self, id: ID) !@This() {
+        return .{
+            .self = mod,
+            .entry = (try mod.getEntry(id)),
+            .current = 0,
+        };
+    }
+    fn next(it: *@This()) ?nux.Component.ID {
+        while (it.current < it.entry.components.len) {
+            const index = it.current;
+            it.current += 1;
+            if (it.entry.components[index] != null) {
+                return @intCast(index);
+            }
+        }
+        return null;
+    }
+};
+
 pub fn iterChildren(self: *Self, id: ID) !ChildIterator {
+    return try .init(self, id);
+}
+pub fn iterComponents(self: *Self, id: ID) !ComponentIterator {
     return try .init(self, id);
 }
 pub fn visit(self: *Self, id: ID, visitor: anytype) !void {
@@ -443,12 +470,10 @@ pub fn delete(self: *Self, id: ID) !void {
     }
 
     // Remove components
-    const entry = try self.getEntry(id);
-    for (entry.components, 0..) |component, type_index| {
-        if (component != null) {
-            const typ = try self.component.get(@intCast(type_index));
-            typ.v_remove(typ.v_ptr, id);
-        }
+    var cit = try self.iterComponents(id);
+    while (cit.next()) |cid| {
+        const typ = try self.component.get(@intCast(cid));
+        typ.v_remove(typ.v_ptr, id);
     }
 
     // Delete entry
@@ -559,27 +584,25 @@ const Dumper = struct {
     fn printComponents(self: *@This(), id: ID) !void {
 
         // Print components
-        const entry = try self.node.getEntry(id);
-        for (entry.components, 0..) |component, type_index| {
-            if (component != null) {
-                const typ = self.node.component_types.items[type_index];
+        var it = try self.node.iterComponents(id);
+        while (it.next()) |cid| {
+            const typ = try self.node.component.get(cid);
 
-                // Print header
-                var buf: [256]u8 = undefined;
-                var w = std.Io.Writer.fixed(&buf);
-                try self.writeHeader(&w);
+            // Print header
+            var buf: [256]u8 = undefined;
+            var w = std.Io.Writer.fixed(&buf);
+            try self.writeHeader(&w);
 
-                // Write type
-                try w.print("\x1b[31m", .{}); // red
-                try w.print("{s} ", .{typ.name});
+            // Write type
+            try w.print("\x1b[31m", .{}); // red
+            try w.print("{s} ", .{typ.name});
 
-                // Write description
-                try w.print("\x1b[90m", .{}); // light gray
-                try typ.v_description(typ.v_ptr, id, &w);
-                try w.print("\x1b[37m", .{}); // white
+            // Write description
+            try w.print("\x1b[90m", .{}); // light gray
+            try typ.v_description(typ.v_ptr, id, &w);
+            try w.print("\x1b[37m", .{}); // white
 
-                self.node.logger.info("{s}", .{buf[0..w.end]});
-            }
+            self.node.logger.info("{s}", .{buf[0..w.end]});
         }
     }
 

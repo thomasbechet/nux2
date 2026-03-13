@@ -12,6 +12,7 @@
                 "getType",
                 "findType",
                 "iterChildren",
+                "iterComponents",
                 "visit",
                 "collect",
                 "setNameFormat",

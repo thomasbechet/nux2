@@ -5,20 +5,27 @@ const Self = @This();
 
 const Entry = struct {
     parent: ?usize, // null if root node
-    name: ?[]const u8,
-    components: []const nux.Component.ID,
-    data: []const u8,
+    name_start: usize,
+    name_end: usize,
+    component_indices_start: usize,
+    component_indices_end: usize,
+    component_data_start: usize,
+    component_data_end: usize,
 };
 const Scene = struct {
     path: []const u8,
     entries: std.ArrayList(Entry),
     references: std.ArrayList([]const u8),
-    components: std.ArrayList(nux.Component.ID),
-    data: []const u8,
+    component_ids: std.ArrayList(nux.Component.ID),
+    component_indices: std.ArrayList(usize),
+    data: std.ArrayList(u8),
 
     fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
-        _ = self;
-        _ = allocator;
+        self.entries.deinit(allocator);
+        self.references.deinit(allocator);
+        self.component_ids.deinit(allocator);
+        self.component_indices.deinit(allocator);
+        self.data.deinit(allocator);
     }
 };
 
@@ -52,30 +59,104 @@ fn getScene(self: *Self, path: []const u8) !*Scene {
     return found.value_ptr;
 }
 
-// pub fn exportNode(self: *Self, path: []const u8, id: nux.ID) !void {
-//     const scene = try self.getScene(path);
-//
-//     // Collect nodes
-//     var nodes = try self.node.collect(self.allocator, id);
-//     defer nodes.deinit(self.allocator);
-//
-//     // Collect components
-//     var types: std.ArrayList([]const u8) = try .initCapacity(self.allocator, 64);
-//     defer types.deinit(self.allocator);
-//     for (nodes.items) |node| {
-//         const typ = try self.getType(node);
-//         var found = false;
-//         for (types.items) |t| {
-//             if (std.mem.eql(u8, typ.name, t)) {
-//                 found = true;
-//                 break;
-//             }
-//         }
-//         if (!found) {
-//             try types.append(self.allocator, typ.name);
-//         }
-//     }
-// }
+pub fn exportNode(self: *Self, path: []const u8, id: nux.ID) !Scene {
+
+    // Collect nodes
+    self.ids.items.len = 0;
+    try self.node.collectInto(&self.ids, self.allocator, id);
+
+    // Allocate resources
+    var entries: std.ArrayList(Entry) = try .initCapacity(self.allocator, self.ids.items.len);
+    errdefer entries.deinit(self.allocator);
+    var component_ids: std.ArrayList(nux.Component.ID) = try .initCapacity(self.allocator, 256);
+    errdefer component_ids.deinit(self.allocator);
+
+    var component_indices: std.ArrayList(usize) = try .initCapacity(self.allocator, 256);
+    errdefer component_indices.deinit(self.allocator);
+    var data: std.ArrayList(u8) = try .initCapacity(self.allocator, 256);
+    errdefer data.deinit(self.allocator);
+
+    // Collect entries and components
+    for (self.ids.items, 0..) |node, node_index| {
+        const name = try self.node.getName(node);
+
+        // Create entry
+        var entry = try entries.addOne(self.allocator);
+
+        // Append name
+        entry.name_start = data.items.len;
+        try data.appendSlice(self.allocator, name);
+        entry.name_end = data.items.len;
+
+        // Find parent index
+        entry.parent = null;
+        if (node_index != 0) {
+            const node_parent = try self.node.getParent(node);
+            for (self.ids.items, 0..) |parent, parent_index| {
+                if (parent == node_parent) {
+                    entry.parent = parent_index;
+                    break;
+                }
+            }
+            unreachable;
+        }
+
+        // Collect components
+        var it = try self.node.iterComponents(node);
+        entry.component_indices_start = component_indices.items.len;
+        while (it.next()) |cid| {
+
+            // Find component index from component ids
+            var component_index: ?usize = null;
+            for (component_ids.items, 0..) |component_id, index| {
+                if (component_id == cid) {
+                    component_index = index;
+                    break;
+                }
+            }
+
+            // Component not found, append id to list
+            if (component_index == null) {
+                component_index = component_ids.items.len;
+                try component_ids.append(self.allocator, cid);
+            }
+
+            // Append component index
+            try component_indices.append(self.allocator, component_index.?);
+        }
+        entry.component_indices_end = component_indices.items.len;
+    }
+
+    // Prepare data writer
+    var data_writer = std.Io.Writer.Allocating.init(self.allocator);
+    var writer = nux.Writer{
+        .writer = &data_writer.writer,
+        .node = self.node,
+        .nodes = self.ids.items,
+    };
+
+    // Collect components data
+    for (self.ids.items, 0..) |node, index| {
+
+        // Collect components
+        entries.items[index].component_data_start = data.items.len;
+        var it = try self.node.iterComponents(node);
+        while (it.next()) |cid| {
+            const typ = try self.component.get(cid);
+            try typ.v_save(typ.v_ptr, node, &writer);
+        }
+        entries.items[index].component_data_end = data.items.len;
+    }
+
+    return .{
+        .path = path,
+        .component_ids = component_ids,
+        .component_indices = component_indices,
+        .data = data_writer.toArrayList(),
+        .entries = entries,
+        .references = undefined,
+    };
+}
 // pub fn load(self: *Self, path: []const u8) !void {}
 // pub fn save(self: *Self, path: []const u8) !void {
 //
@@ -105,13 +186,14 @@ pub fn instantiate(self: *Self, path: []const u8, parent: nux.ID) !nux.ID {
     // Create components
     for (scene.entries.items, 0..) |*entry, index| {
         const id = self.ids.items[index];
-        var data_reader = std.Io.Reader.fixed(entry.data);
+        var data_reader = std.Io.Reader.fixed(scene.data.items[entry.component_data_start..entry.component_data_end]);
         var reader = nux.Node.Reader{
             .reader = &data_reader,
             .node = self.node,
             .nodes = self.ids.items,
         };
-        for (entry.components) |component_id| {
+        for (scene.component_indices.items[entry.component_indices_start..entry.component_indices_end]) |component_index| {
+            const component_id = scene.component_ids.items[component_index];
             const typ = try self.component.get(component_id);
             try typ.v_load(typ.v_ptr, id, &reader);
         }

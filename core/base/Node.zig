@@ -289,7 +289,7 @@ const ComponentIterator = struct {
             .current = 0,
         };
     }
-    fn next(it: *@This()) ?nux.Component.ID {
+    pub fn next(it: *@This()) ?nux.Component.ID {
         while (it.current < it.entry.components.len) {
             const index = it.current;
             it.current += 1;
@@ -321,8 +321,19 @@ pub fn visit(self: *Self, id: ID, visitor: anytype) !void {
     }
 }
 pub fn collect(self: *Self, allocator: std.mem.Allocator, id: ID) !std.ArrayList(ID) {
+    var nodes = try std.ArrayList(ID).initCapacity(allocator, 32);
+    errdefer nodes.deinit(allocator);
+    try self.collectInto(&nodes, allocator, id);
+    return nodes;
+}
+pub fn collectInto(
+    self: *Self,
+    array_list: *std.ArrayList(ID),
+    allocator: std.mem.Allocator,
+    id: ID,
+) !void {
     const Collector = struct {
-        nodes: std.ArrayList(ID),
+        nodes: *std.ArrayList(ID),
         allocator: std.mem.Allocator,
         fn onPreOrder(collector: *@This(), node: ID) !void {
             try collector.nodes.append(collector.allocator, node);
@@ -330,11 +341,9 @@ pub fn collect(self: *Self, allocator: std.mem.Allocator, id: ID) !std.ArrayList
     };
     var collector = Collector{
         .allocator = allocator,
-        .nodes = try .initCapacity(allocator, 32),
+        .nodes = array_list,
     };
-    errdefer collector.nodes.deinit(self.allocator);
     try self.visit(id, &collector);
-    return collector.nodes;
 }
 
 allocator: std.mem.Allocator,

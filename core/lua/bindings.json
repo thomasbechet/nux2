@@ -15,6 +15,7 @@
                 "iterComponents",
                 "visit",
                 "collect",
+                "collectInto",
                 "setNameFormat",
                 "Reader",
                 "Writer",

@@ -23,7 +23,10 @@
             ]
         },
         {
-            "path": "base/Scene.zig"
+            "path": "base/Collection.zig",
+            "ignore": [
+                "exportNode"
+            ]
         },
         {
             "path": "base/Signal.zig",

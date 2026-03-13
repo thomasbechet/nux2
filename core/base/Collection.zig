@@ -12,7 +12,7 @@ const Entry = struct {
     component_data_start: usize,
     component_data_end: usize,
 };
-const Scene = struct {
+const Collection = struct {
     path: []const u8,
     entries: std.ArrayList(Entry),
     references: std.ArrayList([]const u8),
@@ -30,7 +30,7 @@ const Scene = struct {
 };
 
 allocator: std.mem.Allocator,
-scenes: std.StringHashMap(Scene),
+scenes: std.StringHashMap(Collection),
 node: *nux.Node,
 file: *nux.File,
 component: *nux.Component,
@@ -51,7 +51,7 @@ pub fn deinit(self: *Self) void {
     self.scenes.deinit();
 }
 
-fn getScene(self: *Self, path: []const u8) !*Scene {
+fn getCollection(self: *Self, path: []const u8) !*Collection {
     const found = try self.scenes.getOrPut(path);
     if (!found.found_existing) {
         found.key_ptr = try self.allocator.dupe(u8, path);
@@ -59,7 +59,7 @@ fn getScene(self: *Self, path: []const u8) !*Scene {
     return found.value_ptr;
 }
 
-pub fn exportNode(self: *Self, path: []const u8, id: nux.ID) !Scene {
+pub fn exportNode(self: *Self, path: []const u8, id: nux.ID) !Collection {
 
     // Collect nodes
     self.ids.items.len = 0;
@@ -166,7 +166,7 @@ pub fn exportNode(self: *Self, path: []const u8, id: nux.ID) !Scene {
 //     defer file_writer.close();
 // }
 pub fn instantiate(self: *Self, path: []const u8, parent: nux.ID) !nux.ID {
-    const scene = self.scenes.get(path) orelse return error.SceneNotFound;
+    const scene = self.scenes.get(path) orelse return error.CollectionNotFound;
 
     // Create nodes
     try self.ids.resize(self.allocator, scene.entries.items.len);

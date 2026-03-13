@@ -3,7 +3,7 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
-const Entry = struct {
+const Node = struct {
     parent: ?usize, // null if root node
     name_start: usize,
     name_end: usize,
@@ -14,14 +14,14 @@ const Entry = struct {
 };
 const Collection = struct {
     path: []const u8,
-    entries: std.ArrayList(Entry),
+    nodes: std.ArrayList(Node),
     references: std.ArrayList([]const u8),
     component_ids: std.ArrayList(nux.Component.ID),
     component_indices: std.ArrayList(usize),
     data: std.ArrayList(u8),
 
     fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
-        self.entries.deinit(allocator);
+        self.nodes.deinit(allocator);
         self.references.deinit(allocator);
         self.component_ids.deinit(allocator);
         self.component_indices.deinit(allocator);
@@ -30,29 +30,29 @@ const Collection = struct {
 };
 
 allocator: std.mem.Allocator,
-scenes: std.StringHashMap(Collection),
+collections: std.StringHashMap(Collection),
 node: *nux.Node,
 file: *nux.File,
 component: *nux.Component,
-ids: std.ArrayList(nux.ID), // Temporary id pool for entry_index => id
+ids: std.ArrayList(nux.ID), // Temporary id pool for node_index <> id mapping
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.scenes = .init(self.allocator);
+    self.collections = .init(self.allocator);
     self.ids = .empty;
 }
 pub fn deinit(self: *Self) void {
     self.ids.deinit(self.allocator);
-    var it = self.scenes.iterator();
+    var it = self.collections.iterator();
     while (it.next()) |entry| {
         self.allocator.free(entry.key_ptr.*);
         entry.value_ptr.deinit(self.allocator);
     }
-    self.scenes.deinit();
+    self.collections.deinit();
 }
 
 fn getCollection(self: *Self, path: []const u8) !*Collection {
-    const found = try self.scenes.getOrPut(path);
+    const found = try self.collections.getOrPut(path);
     if (!found.found_existing) {
         found.key_ptr = try self.allocator.dupe(u8, path);
     }
@@ -66,7 +66,7 @@ pub fn exportNode(self: *Self, path: []const u8, id: nux.ID) !Collection {
     try self.node.collectInto(&self.ids, self.allocator, id);
 
     // Allocate resources
-    var entries: std.ArrayList(Entry) = try .initCapacity(self.allocator, self.ids.items.len);
+    var entries: std.ArrayList(Node) = try .initCapacity(self.allocator, self.ids.items.len);
     errdefer entries.deinit(self.allocator);
     var component_ids: std.ArrayList(nux.Component.ID) = try .initCapacity(self.allocator, 256);
     errdefer component_ids.deinit(self.allocator);
@@ -153,7 +153,7 @@ pub fn exportNode(self: *Self, path: []const u8, id: nux.ID) !Collection {
         .component_ids = component_ids,
         .component_indices = component_indices,
         .data = data_writer.toArrayList(),
-        .entries = entries,
+        .nodes = entries,
         .references = undefined,
     };
 }
@@ -166,11 +166,11 @@ pub fn exportNode(self: *Self, path: []const u8, id: nux.ID) !Collection {
 //     defer file_writer.close();
 // }
 pub fn instantiate(self: *Self, path: []const u8, parent: nux.ID) !nux.ID {
-    const scene = self.scenes.get(path) orelse return error.CollectionNotFound;
+    const collection = self.collections.get(path) orelse return error.CollectionNotFound;
 
     // Create nodes
-    try self.ids.resize(self.allocator, scene.entries.items.len);
-    for (scene.entries.items, 0..) |*entry, index| {
+    try self.ids.resize(self.allocator, collection.nodes.items.len);
+    for (collection.nodes.items, 0..) |*entry, index| {
         const node_parent = if (entry.parent) |parent_index| {
             return self.ids.items[parent_index];
         } else {
@@ -184,16 +184,16 @@ pub fn instantiate(self: *Self, path: []const u8, parent: nux.ID) !nux.ID {
     }
 
     // Create components
-    for (scene.entries.items, 0..) |*entry, index| {
+    for (collection.nodes.items, 0..) |*entry, index| {
         const id = self.ids.items[index];
-        var data_reader = std.Io.Reader.fixed(scene.data.items[entry.component_data_start..entry.component_data_end]);
+        var data_reader = std.Io.Reader.fixed(collection.data.items[entry.component_data_start..entry.component_data_end]);
         var reader = nux.Node.Reader{
             .reader = &data_reader,
             .node = self.node,
             .nodes = self.ids.items,
         };
-        for (scene.component_indices.items[entry.component_indices_start..entry.component_indices_end]) |component_index| {
-            const component_id = scene.component_ids.items[component_index];
+        for (collection.component_indices.items[entry.component_indices_start..entry.component_indices_end]) |component_index| {
+            const component_id = collection.component_ids.items[component_index];
             const typ = try self.component.get(component_id);
             try typ.v_load(typ.v_ptr, id, &reader);
         }

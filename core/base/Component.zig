@@ -106,6 +106,10 @@ pub fn Components(T: type) type {
                     .id = id,
                 }));
             }
+            // Resize bitset
+            if (index >= self.bitset.unmanaged.bit_length) {
+                try self.bitset.resize((index + 1) * 2, false);
+            }
             self.bitset.set(@intCast(index));
             entry.components[@intCast(self.id)] = index;
             return &self.data.get(index).data;

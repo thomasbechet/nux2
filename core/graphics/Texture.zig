@@ -15,14 +15,19 @@ pub const Type = enum(u32) {
 };
 
 const Self = @This();
-const Component = struct {
+const Texture = struct {
     data: ?[]u8 = null,
     path: ?[]const u8 = null, // Nonnull if loaded from file
     sync: bool = false,
     info: nux.Platform.GPU.TextureInfo = .{},
     handle: ?nux.GPU.Texture = null,
 
-    pub fn deinit(self: *Component, mod: *Self) void {
+    const Serialized = struct {
+        data: ?[]u8 = null,
+        path: ?[]const u8 = null,
+    };
+
+    pub fn deinit(self: *Texture, mod: *Self) void {
         if (self.data) |data| {
             mod.allocator.free(data);
         }
@@ -34,29 +39,33 @@ const Component = struct {
         }
         self.* = .{};
     }
-    pub fn load(mod: *Self, reader: *nux.Reader) !Component {
-        if (try reader.takeOptionalBytes()) |path| { // File source
-            return .initFromFile(mod, path);
-        } else { // Data source
-            const data = try reader.takeOptionalBytes() orelse return error.MissingTextureData;
-            return .initFromData(mod, data);
-        }
+    pub fn load(mod: *Self, reader: *nux.Reader) !Texture {
+        // const serialized = try reader.read(Serialized);
+        // if (serialized.path) |path| {
+        //     return .initFromFile(mod, path);
+        // } else if (serialized.data) |data| {
+        //     return .initFromData(mod, data);
+        // }
+        _ = mod;
+        _ = reader;
+        return .{};
     }
-    pub fn save(self: *Component, _: *Self, writer: *nux.Writer) !void {
-        if (self.path != null) {
-            try writer.write(self.path);
-        } else if (self.data != null) {
-            try writer.write(self.data);
-        }
+    pub fn save(self: *Texture, _: *Self, writer: *nux.Writer) !void {
+        // try writer.write(Serialized{
+        //     .data = self.data,
+        //     .path = self.path,
+        // });
+        _ = self;
+        _ = writer;
     }
-    pub fn description(self: *Component, _: *Self, w: *std.Io.Writer) !void {
+    pub fn description(self: *Texture, _: *Self, w: *std.Io.Writer) !void {
         try w.print("{d}x{d} ", .{ self.info.width, self.info.height });
         if (self.path) |path| {
             try w.print("{s}", .{path});
         }
     }
 
-    fn initFromFile(mod: *Self, path: []const u8) !Component {
+    fn initFromFile(mod: *Self, path: []const u8) !Texture {
         // Read file
         const data = try mod.file.read(path, mod.allocator);
         errdefer mod.allocator.free(data);
@@ -69,7 +78,7 @@ const Component = struct {
             .path = try mod.allocator.dupe(u8, path),
         };
     }
-    fn initFromData(mod: *Self, data: []const u8) !Component {
+    fn initFromData(mod: *Self, data: []const u8) !Texture {
         // Load image
         var img = try zigimg.Image.fromMemory(mod.allocator, data);
         defer img.deinit(mod.allocator);
@@ -85,7 +94,7 @@ const Component = struct {
     }
 };
 
-components: nux.Components(Component),
+components: nux.Components(Texture),
 node: *nux.Node,
 logger: *nux.Logger,
 file: *nux.File,

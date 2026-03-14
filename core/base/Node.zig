@@ -68,13 +68,13 @@ pub const Writer = struct {
         switch (T) {
             nux.ID => {
                 if (self.node.exists(v)) {
-                    try self.node.writePath(v, self.writer);
                     var found = false;
                     for (self.nodes, 0..) |id, index| {
                         if (v == id) {
                             try self.writer.writeByte(1); // Local path
                             try self.writer.writeInt(u32, @intCast(index), .little);
                             found = true;
+                            break;
                         }
                     }
                     if (!found) { // write full path
@@ -190,7 +190,7 @@ pub const Reader = struct {
                         return try self.node.findGlobal(global_path);
                     },
                     else => {
-                        return error.invalidPathType;
+                        return error.InvalidNodePathType;
                     },
                 }
             },
@@ -454,7 +454,7 @@ pub fn create(self: *Self, parent: ID) !ID {
 }
 pub fn createNamed(self: *Self, parent: ID, name: []const u8) !ID {
     const id = try self.create(parent);
-    try self.setName(parent, name);
+    try self.setName(id, name);
     return id;
 }
 pub fn createPath(self: *Self, base: ID, path: []const u8) !ID {

@@ -3,6 +3,8 @@ local mymodule = require("mymodule")
 function M:onInit()
     File.logGlob("*")
     Gltf.loadGltf(Node.getRoot(), "industrial.glb")
+    local c = Collection.exportNode(Node.getRoot(), Node.getRoot())
+    Collection.instantiate(c, Node.getRoot())
     Node.dump(Node.getRoot())
 end
 

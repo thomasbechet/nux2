@@ -23,15 +23,12 @@
             ]
         },
         {
-            "path": "base/Collection.zig",
-            "ignore": [
-                "exportNode"
-            ]
+            "path": "base/Collection.zig"
         },
         {
             "path": "base/Signal.zig",
             "ignore": [
-                "connect", 
+                "connect",
                 "disconnect"
             ]
         },

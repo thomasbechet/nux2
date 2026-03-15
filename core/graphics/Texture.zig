@@ -23,8 +23,12 @@ const Texture = struct {
     handle: ?nux.GPU.Texture = null,
 
     const Serialized = struct {
-        data: ?[]u8 = null,
         path: ?[]const u8 = null,
+        raw: ?struct {
+            data: []u8,
+            width: u32,
+            height: u32,
+        } = null,
     };
 
     pub fn deinit(self: *Texture, mod: *Self) void {
@@ -40,23 +44,28 @@ const Texture = struct {
         self.* = .{};
     }
     pub fn load(mod: *Self, reader: *nux.Reader) !Texture {
-        // const serialized = try reader.read(Serialized);
-        // if (serialized.path) |path| {
-        //     return .initFromFile(mod, path);
-        // } else if (serialized.data) |data| {
-        //     return .initFromData(mod, data);
-        // }
-        _ = mod;
-        _ = reader;
+        const serialized = try reader.read(Serialized);
+        if (serialized.path) |path| {
+            return try .initFromFile(mod, path);
+        } else if (serialized.raw) |raw| {
+            return try .initFromRawPixels(mod, raw.width, raw.height, raw.data);
+        }
         return .{};
     }
     pub fn save(self: *Texture, _: *Self, writer: *nux.Writer) !void {
-        // try writer.write(Serialized{
-        //     .data = self.data,
-        //     .path = self.path,
-        // });
-        _ = self;
-        _ = writer;
+        if (self.path) |path| {
+            try writer.write(Serialized{
+                .path = path,
+            });
+        } else if (self.data) |data| {
+            try writer.write(Serialized{
+                .raw = .{
+                    .data = data,
+                    .width = self.info.width,
+                    .height = self.info.height,
+                },
+            });
+        }
     }
     pub fn description(self: *Texture, _: *Self, w: *std.Io.Writer) !void {
         try w.print("{d}x{d} ", .{ self.info.width, self.info.height });
@@ -83,12 +92,15 @@ const Texture = struct {
         var img = try zigimg.Image.fromMemory(mod.allocator, data);
         defer img.deinit(mod.allocator);
         try img.convert(mod.allocator, .rgba32);
-        // Deinit node
+        // Init node
+        return try .initFromRawPixels(mod, @intCast(img.width), @intCast(img.height), img.rawBytes());
+    }
+    fn initFromRawPixels(mod: *Self, width: u32, height: u32, data: []const u8) !Texture {
         return .{
-            .data = try mod.allocator.dupe(u8, img.rawBytes()),
+            .data = try mod.allocator.dupe(u8, data),
             .info = .{
-                .width = @intCast(img.width),
-                .height = @intCast(img.height),
+                .width = width,
+                .height = height,
             },
         };
     }

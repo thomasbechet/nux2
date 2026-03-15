@@ -162,15 +162,25 @@ pub fn instantiate(self: *Self, id: nux.ID, parent: nux.ID) !nux.ID {
     }
 
     // Create components
+    var arena = std.heap.ArenaAllocator.init(self.allocator);
+    defer arena.deinit();
+    var reader = nux.Node.Reader{
+        .reader = undefined,
+        .node = self.node,
+        .nodes = self.ids.items,
+        .allocator = arena.allocator(),
+    };
     for (collection.nodes.items, 0..) |*node, index| {
-        var data_reader = std.Io.Reader.fixed(collection.data.items[node.component_data_start..node.component_data_end]);
-        var reader = nux.Node.Reader{
-            .reader = &data_reader,
-            .node = self.node,
-            .nodes = self.ids.items,
-        };
+        // Create reader on component data
+        const data = collection.data.items[node.component_data_start..node.component_data_end];
+        var data_reader = std.Io.Reader.fixed(data);
+        reader.reader = &data_reader;
+        // Load components
         const node_id = self.ids.items[index];
         for (collection.component_indices.items[node.component_indices_start..node.component_indices_end]) |component_index| {
+            // Clear arena
+            _ = arena.reset(.retain_capacity);
+            // Load component
             const component_id = collection.component_ids.items[component_index];
             const typ = try self.component.get(component_id);
             try typ.v_load(typ.v_ptr, node_id, &reader);

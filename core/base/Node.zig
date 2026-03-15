@@ -119,7 +119,11 @@ pub const Writer = struct {
                     inline for (S.fields) |F| {
                         if (F.type == void) continue;
                         if (@typeInfo(F.type) == .optional) {
-                            if (@field(v, F.name) == null) {}
+                            if (@field(v, F.name) == null) {
+                                try self.writer.writeByte(0);
+                            } else {
+                                try self.writer.writeByte(1);
+                            }
                         }
                         try self.write(@field(v, F.name));
                     }
@@ -159,17 +163,8 @@ pub const Reader = struct {
     reader: *std.Io.Reader,
     node: *Self,
     nodes: []const ID,
+    allocator: std.mem.Allocator,
 
-    pub fn takeBytes(self: *@This()) ![]const u8 {
-        const size = try self.read(u32);
-        return try self.reader.take(size);
-    }
-    pub fn takeOptionalBytes(self: *@This()) !?[]const u8 {
-        if ((try self.reader.takeByte()) == 0) {
-            return null;
-        }
-        return try self.takeBytes();
-    }
     pub fn read(self: *@This(), comptime T: type) !T {
         switch (T) {
             nux.ID => {
@@ -181,12 +176,12 @@ pub const Reader = struct {
                     1 => {
                         const local_index = try self.reader.takeInt(u32, .little);
                         if (local_index > self.nodes.len) {
-                            return error.invalidLocalNodeIndex;
+                            return error.InvalidLocalNodeIndex;
                         }
                         return self.nodes[local_index];
                     },
                     2 => {
-                        const global_path = try self.takeBytes();
+                        const global_path = try self.read([]u8);
                         return try self.node.findGlobal(global_path);
                     },
                     else => {
@@ -233,14 +228,26 @@ pub const Reader = struct {
                     }
                     return s;
                 },
-                // .pointer => |info| switch (info.size) {
-                //     // .one => {
-                //     //     return self.write(v.*);
-                //     //     const slice = try allocator.alloc(info.child, size);
-                //     // },
-                //     .slice => {},
-                //     else => @compileError("Unable to deserialize type '" ++ @typeName(T) ++ "'"),
-                // },
+                .pointer => |info| switch (info.size) {
+                    // .one => {
+                    //     return self.write(v.*);
+                    //     const slice = try allocator.alloc(info.child, size);
+                    // },
+                    .slice => {
+                        const len = @as(usize, @intCast(try self.read(u32)));
+                        if (info.child == u8) {
+                            return try self.reader.readAlloc(self.allocator, len);
+                        } else {
+                            const buf = try self.allocator.alloc(info.child, len);
+                            errdefer self.allocator.free(buf);
+                            for (0..len) |index| {
+                                buf[index] = try self.read(info.child);
+                            }
+                            return buf;
+                        }
+                    },
+                    else => @compileError("Unable to deserialize type '" ++ @typeName(T) ++ "'"),
+                },
                 .array => |info| {
                     var s: T = undefined;
                     for (&s) |*x| {
@@ -352,6 +359,7 @@ root: ID,
 component: *nux.Component,
 file: *nux.File,
 logger: *nux.Logger,
+collection: *nux.Collection,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -469,6 +477,9 @@ pub fn createPath(self: *Self, base: ID, path: []const u8) !ID {
         }
     }
     return node;
+}
+pub fn createInstanceOf(self: *Self, parent: ID, collection: ID) !ID {
+    return self.collection.instantiate(collection, parent); 
 }
 pub fn delete(self: *Self, id: ID) !void {
 

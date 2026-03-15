@@ -2,86 +2,102 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 
 const Self = @This();
-const Platform = nux.Platform.GPU;
+const GPU = nux.Platform.GPU;
 
 pub const Framebuffer = struct {
-    handle: Platform.Handle,
-    gpu: *Self,
+    handle: GPU.Handle,
+    renderer: *Self,
 };
 
 pub const Pipeline = struct {
-    handle: Platform.Handle,
-    gpu: *Self,
+    handle: GPU.Handle,
+    renderer: *Self,
 
-    pub fn init(gpu: *Self, info: Platform.PipelineInfo) !Pipeline {
+    pub fn init(renderer: *Self, info: GPU.PipelineInfo) !Pipeline {
         return .{
-            .handle = try gpu.platform.vtable.create_pipeline(gpu.platform.ptr, info),
-            .gpu = gpu,
+            .handle = try renderer.gpu.vtable.create_pipeline(renderer.gpu.ptr, info),
+            .renderer = renderer,
         };
     }
     pub fn deinit(self: *Pipeline) void {
-        self.gpu.platform.vtable.delete_pipeline(self.gpu.platform.ptr, self.handle);
+        self.renderer.gpu.vtable.delete_pipeline(self.renderer.gpu.ptr, self.handle);
     }
 };
 
 pub const Texture = struct {
-    handle: Platform.Handle,
-    gpu: *Self,
+    handle: GPU.Handle,
+    renderer: *Self,
 
-    pub fn init(gpu: *Self, info: Platform.TextureInfo) !Texture {
+    pub fn init(renderer: *Self, info: GPU.TextureInfo) !Texture {
         return .{
-            .handle = try gpu.platform.vtable.create_texture(gpu.platform.ptr, info),
-            .gpu = gpu,
+            .handle = try renderer.gpu.vtable.create_texture(renderer.gpu.ptr, info),
+            .renderer = renderer,
         };
     }
     pub fn deinit(self: *Texture) void {
-        self.gpu.platform.vtable.delete_texture(self.gpu.platform.ptr, self.handle);
+        self.renderer.gpu.vtable.delete_texture(self.renderer.gpu.ptr, self.handle);
     }
     pub fn update(self: *Texture, x: u32, y: u32, w: u32, h: u32, data: []const u8) !void {
-        try self.gpu.platform.vtable.update_texture(self.gpu.platform.ptr, self.handle, x, y, w, h, data);
+        try self.renderer.gpu.vtable.update_texture(
+            self.renderer.gpu.ptr,
+            self.handle,
+            x,
+            y,
+            w,
+            h,
+            data,
+        );
     }
 };
 
 pub const Buffer = struct {
-    handle: Platform.Handle,
-    gpu: *Self,
+    handle: GPU.Handle,
+    renderer: *Self,
 
-    pub fn init(gpu: *Self, typ: Platform.BufferType, size: u64) !Buffer {
+    pub fn init(renderer: *Self, typ: GPU.BufferType, size: u64) !Buffer {
         return .{
-            .gpu = gpu,
-            .handle = try gpu.platform.vtable.create_buffer(gpu.platform.ptr, typ, size),
+            .renderer = renderer,
+            .handle = try renderer.gpu.vtable.create_buffer(renderer.gpu.ptr, typ, size),
         };
     }
     pub fn deinit(self: *Buffer) void {
-        self.gpu.platform.vtable.delete_buffer(self.gpu.platform.ptr, self.handle);
+        self.renderer.gpu.vtable.delete_buffer(self.renderer.gpu.ptr, self.handle);
     }
     pub fn update(self: *Buffer, offset: u64, size: u64, data: []const u8) !void {
-        try self.gpu.platform.vtable.update_buffer(self.gpu.platform.ptr, self.handle, offset, size, data);
+        try self.renderer.gpu.vtable.update_buffer(
+            self.renderer.gpu.ptr,
+            self.handle,
+            offset,
+            size,
+            data,
+        );
     }
 };
 
-pub const Encoder = struct {
-    gpu: *Self,
-    allocator: std.mem.Allocator,
-    commands: std.ArrayList(Platform.Command),
+pub const CanvasEncoder = struct {};
 
-    pub fn init(gpu: *Self) Encoder {
+pub const Encoder = struct {
+    renderer: *Self,
+    allocator: std.mem.Allocator,
+    commands: std.ArrayList(GPU.Command),
+
+    pub fn init(renderer: *Self) Encoder {
         return .{
-            .gpu = gpu,
-            .allocator = gpu.allocator,
+            .renderer = renderer,
+            .allocator = renderer.allocator,
             .commands = .empty,
         };
     }
     pub fn deinit(self: *Encoder) void {
-        self.commands.deinit(self.gpu.allocator);
+        self.commands.deinit(self.renderer.allocator);
     }
     pub fn submit(self: *Encoder) !void {
-        try self.gpu.platform.vtable.submit_commands(self.gpu.platform.ptr, self.commands.items);
+        try self.renderer.gpu.vtable.submit_commands(self.renderer.gpu.ptr, self.commands.items);
         self.commands.clearRetainingCapacity();
     }
 
     pub fn bindFramebuffer(self: *Encoder, framebuffer: ?*const Framebuffer) !void {
-        var handle: ?Platform.Handle = null;
+        var handle: ?GPU.Handle = null;
         if (framebuffer) |fb| {
             handle = fb.handle;
         }
@@ -94,22 +110,22 @@ pub const Encoder = struct {
             .bind_pipeline = .{ .pipeline = pipeline.handle },
         });
     }
-    pub fn bindTexture(self: *Encoder, descriptor: Platform.Descriptor, texture: *const Texture) !void {
+    pub fn bindTexture(self: *Encoder, descriptor: GPU.Descriptor, texture: *const Texture) !void {
         try self.commands.append(self.allocator, .{
             .bind_texture = .{ .texture = texture.handle, .descriptor = descriptor },
         });
     }
-    pub fn bindBuffer(self: *Encoder, descriptor: Platform.Descriptor, buffer: *const Buffer) !void {
+    pub fn bindBuffer(self: *Encoder, descriptor: GPU.Descriptor, buffer: *const Buffer) !void {
         try self.commands.append(self.allocator, .{
             .bind_buffer = .{ .buffer = buffer.handle, .descriptor = descriptor },
         });
     }
-    pub fn pushU32(self: *Encoder, descriptor: Platform.Descriptor, value: u32) !void {
+    pub fn pushU32(self: *Encoder, descriptor: GPU.Descriptor, value: u32) !void {
         try self.commands.append(self.allocator, .{
             .push_u32 = .{ .value = value, .descriptor = descriptor },
         });
     }
-    pub fn pushF32(self: *Encoder, descriptor: Platform.Descriptor, value: f32) !void {
+    pub fn pushF32(self: *Encoder, descriptor: GPU.Descriptor, value: f32) !void {
         try self.commands.append(self.allocator, .{
             .push_f32 = .{ .value = value, .descriptor = descriptor },
         });
@@ -138,14 +154,14 @@ pub const Encoder = struct {
     }
 };
 
-platform: Platform,
+gpu: GPU,
 allocator: std.mem.Allocator,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
-    self.platform = core.platform.gpu;
+    self.gpu = core.platform.gpu;
     self.allocator = core.platform.allocator;
-    try self.platform.vtable.create_device(self.platform.ptr);
+    try self.gpu.vtable.create_device(self.gpu.ptr);
 }
 pub fn deinit(self: *Self) void {
-    self.platform.vtable.delete_device(self.platform.ptr);
+    self.gpu.vtable.delete_device(self.gpu.ptr);
 }

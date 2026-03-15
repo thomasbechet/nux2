@@ -20,7 +20,7 @@ const Texture = struct {
     path: ?[]const u8 = null, // Nonnull if loaded from file
     sync: bool = false,
     info: nux.Platform.GPU.TextureInfo = .{},
-    handle: ?nux.GPU.Texture = null,
+    handle: ?nux.Renderer.Texture = null,
 
     const Serialized = struct {
         path: ?[]const u8 = null,
@@ -111,7 +111,7 @@ node: *nux.Node,
 logger: *nux.Logger,
 file: *nux.File,
 graphics: *nux.Graphics,
-gpu: *nux.GPU,
+renderer: *nux.Renderer,
 allocator: std.mem.Allocator,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -128,13 +128,13 @@ pub fn addFromFile(self: *Self, id: nux.ID, path: []const u8) !void {
 pub fn addFromData(self: *Self, id: nux.ID, data: []const u8) !void {
     try self.components.addWith(id, try .initFromData(self, data));
 }
-pub fn syncGPU(self: *Self) !void {
+pub fn syncRenderer(self: *Self) !void {
     var it = self.components.values();
     while (it.next()) |texture| {
         if (!texture.sync) {
-            // Check gpu allocation
+            // Check renderer allocation
             if (texture.handle == null) {
-                texture.handle = try .init(self.gpu, texture.info);
+                texture.handle = try .init(self.renderer, texture.info);
             }
             // Upload data
             if (texture.data != null) {
@@ -147,13 +147,18 @@ pub fn syncGPU(self: *Self) !void {
 }
 pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2) !void {
     const node = try self.components.get(id);
-    var encoder = nux.GPU.Encoder.init(self.gpu);
+    var encoder = nux.Renderer.Encoder.init(self.renderer);
     defer encoder.deinit();
     try encoder.bindFramebuffer(null);
-    try encoder.viewport(@intFromFloat(pos.data[0]), @intFromFloat(pos.data[1]), node.info.width, node.info.height);
+    try encoder.viewport(
+        @intFromFloat(pos.data[0]),
+        @intFromFloat(pos.data[1]),
+        node.info.width,
+        node.info.height,
+    );
     try encoder.bindPipeline(&self.graphics.pipelines.blit);
     if (node.handle == null) {
-        node.handle = try .init(self.gpu, node.info);
+        node.handle = try .init(self.renderer, node.info);
     }
     try encoder.bindTexture(.texture, &node.handle.?);
     try encoder.pushU32(.texture_width, node.info.width);

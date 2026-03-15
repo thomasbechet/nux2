@@ -37,8 +37,8 @@ const Component = struct {
 allocator: std.mem.Allocator,
 components: nux.Components(Component),
 config: *nux.Config,
-gpu: *nux.GPU,
-vertex_buffer: nux.GPU.Buffer,
+renderer: *nux.Renderer,
+vertex_buffer: nux.Renderer.Buffer,
 vertex_span_allocator: nux.SpanAllocator,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -48,7 +48,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
         try self.config.getInt(usize, "Graphics.defaultVertexBufferSize"),
         try self.config.getInt(usize, "Graphics.defaultVertexBufferSpanCapacity"),
     );
-    self.vertex_buffer = try .init(self.gpu, .vertices, self.vertex_span_allocator.size);
+    self.vertex_buffer = try .init(self.renderer, .vertices, self.vertex_span_allocator.size);
 }
 pub fn deinit(self: *Self) void {
     self.vertex_span_allocator.deinit();
@@ -154,11 +154,11 @@ pub fn addFromGltfPrimitive(self: *Self, id: nux.ID, gltf: *const zgltf.Gltf, pr
         }
     }
 }
-pub fn syncGPU(self: *Self) !void {
+pub fn syncRenderer(self: *Self) !void {
     var it = self.components.values();
     while (it.next()) |mesh| {
         if (!mesh.sync) {
-            // Check gpu span allocation
+            // Check renderer span allocation
             if (mesh.span == null or mesh.span.?.length < mesh.vertices.items.len) {
                 mesh.span = self.vertex_span_allocator.alloc(mesh.vertices.items.len * @sizeOf(f32)) orelse return error.OutOfVertices;
             }

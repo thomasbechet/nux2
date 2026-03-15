@@ -5,22 +5,22 @@ const Self = @This();
 const Platform = nux.Platform.GPU;
 
 const Component = struct {
-    encoder: nux.GPU.Encoder,
-    constants_buffer: nux.GPU.Buffer,
+    encoder: nux.Renderer.Encoder,
+    constants_buffer: nux.Renderer.Buffer,
     quads: std.ArrayList(Platform.Quad),
-    quads_buffer: nux.GPU.Buffer,
+    quads_buffer: nux.Renderer.Buffer,
     batches: std.ArrayList(Platform.Batch),
-    batches_buffer: nux.GPU.Buffer,
+    batches_buffer: nux.Renderer.Buffer,
     active_batch: Platform.Batch,
 
     pub fn init(mod: *Self) !@This() {
         return .{
-            .encoder = .init(mod.gpu),
-            .constants_buffer = try .init(mod.gpu, .constants, @sizeOf(Platform.Constants)),
+            .encoder = .init(mod.renderer),
+            .constants_buffer = try .init(mod.renderer, .constants, @sizeOf(Platform.Constants)),
             .quads = try .initCapacity(mod.allocator, 64),
-            .quads_buffer = try .init(mod.gpu, .quads, @sizeOf(Platform.Quad) * 128),
+            .quads_buffer = try .init(mod.renderer, .quads, @sizeOf(Platform.Quad) * 128),
             .batches = try .initCapacity(mod.allocator, 64),
-            .batches_buffer = try .init(mod.gpu, .batches, @sizeOf(Platform.Batch) * 128),
+            .batches_buffer = try .init(mod.renderer, .batches, @sizeOf(Platform.Batch) * 128),
             .active_batch = undefined,
         };
     }
@@ -31,7 +31,7 @@ const Component = struct {
 };
 
 allocator: std.mem.Allocator,
-gpu: *nux.GPU,
+renderer: *nux.Renderer,
 components: nux.Components(Component),
 
 pub fn init(self: *Self, core: *const nux.Core) !void {

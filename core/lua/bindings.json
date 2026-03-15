@@ -71,7 +71,8 @@
         {
             "path": "graphics/Texture.zig",
             "ignore": [
-                "addFromGltfImage"
+                "addFromGltfImage",
+                "syncRenderer"
             ]
         },
         {
@@ -80,7 +81,8 @@
         {
             "path": "graphics/Mesh.zig",
             "ignore": [
-                "addFromGltfPrimitive"
+                "addFromGltfPrimitive",
+                "syncRenderer"
             ]
         },
         {

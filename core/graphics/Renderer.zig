@@ -74,7 +74,64 @@ pub const Buffer = struct {
     }
 };
 
-pub const CanvasEncoder = struct {};
+pub const CommandBuffer = struct {
+    const CanvasPass = struct {
+        scissor: nux.Vec4,
+        clear_color: ?nux.Vec4,
+        command_count: u32,
+    };
+
+    const DataSlice = struct {
+        start: usize,
+        end: usize,
+    };
+
+    const RenderPass = struct {
+        viewport: nux.Vec4,
+        target: nux.ID,
+        command_count: u32,
+        camera: nux.ID,
+        clear_color: ?nux.Vec4,
+    };
+
+    const BeginPass = union(enum) {
+        canvas: CanvasPass,
+        render: RenderPass,
+    };
+
+    const Rectangle = struct {
+        box: nux.Vec4,
+        color: nux.Vec4,
+        radius: f32,
+    };
+
+    const Line = struct {
+        start: nux.Vec2,
+        end: nux.Vec2,
+    };
+
+    const Text = struct {
+        text: DataSlice,
+        color: nux.Vec4,
+    };
+
+    const Command = union(enum) {
+        begin_pass: BeginPass,
+        text: Text,
+        rectangle: Rectangle,
+        staticmesh: nux.ID,
+    };
+
+    allocator: std.mem.Allocator,
+    commands: std.ArrayList(Command),
+    data: std.ArrayList(u8),
+
+    pub fn drawStaticMesh(self: *CommandBuffer, id: nux.ID) !void {}
+    pub fn drawLine(self: *CommandBuffer) !void {}
+    pub fn drawRectangle(self: *CommandBuffer) !void {}
+    pub fn drawText(self: *CommandBuffer) !void {}
+    pub fn blit(self: *CommandBuffer) !void {}
+};
 
 pub const Encoder = struct {
     renderer: *Self,

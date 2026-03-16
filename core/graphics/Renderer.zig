@@ -2,223 +2,125 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 
 const Self = @This();
-const GPU = nux.Platform.GPU;
-
-pub const Framebuffer = struct {
-    handle: GPU.Handle,
-    renderer: *Self,
-};
-
-pub const Pipeline = struct {
-    handle: GPU.Handle,
-    renderer: *Self,
-
-    pub fn init(renderer: *Self, info: GPU.PipelineInfo) !Pipeline {
-        return .{
-            .handle = try renderer.gpu.vtable.create_pipeline(renderer.gpu.ptr, info),
-            .renderer = renderer,
-        };
-    }
-    pub fn deinit(self: *Pipeline) void {
-        self.renderer.gpu.vtable.delete_pipeline(self.renderer.gpu.ptr, self.handle);
-    }
-};
-
-pub const Texture = struct {
-    handle: GPU.Handle,
-    renderer: *Self,
-
-    pub fn init(renderer: *Self, info: GPU.TextureInfo) !Texture {
-        return .{
-            .handle = try renderer.gpu.vtable.create_texture(renderer.gpu.ptr, info),
-            .renderer = renderer,
-        };
-    }
-    pub fn deinit(self: *Texture) void {
-        self.renderer.gpu.vtable.delete_texture(self.renderer.gpu.ptr, self.handle);
-    }
-    pub fn update(self: *Texture, x: u32, y: u32, w: u32, h: u32, data: []const u8) !void {
-        try self.renderer.gpu.vtable.update_texture(
-            self.renderer.gpu.ptr,
-            self.handle,
-            x,
-            y,
-            w,
-            h,
-            data,
-        );
-    }
-};
-
-pub const Buffer = struct {
-    handle: GPU.Handle,
-    renderer: *Self,
-
-    pub fn init(renderer: *Self, typ: GPU.BufferType, size: u64) !Buffer {
-        return .{
-            .renderer = renderer,
-            .handle = try renderer.gpu.vtable.create_buffer(renderer.gpu.ptr, typ, size),
-        };
-    }
-    pub fn deinit(self: *Buffer) void {
-        self.renderer.gpu.vtable.delete_buffer(self.renderer.gpu.ptr, self.handle);
-    }
-    pub fn update(self: *Buffer, offset: u64, size: u64, data: []const u8) !void {
-        try self.renderer.gpu.vtable.update_buffer(
-            self.renderer.gpu.ptr,
-            self.handle,
-            offset,
-            size,
-            data,
-        );
-    }
-};
 
 pub const CommandBuffer = struct {
-    const CanvasPass = struct {
-        scissor: nux.Vec4,
-        clear_color: ?nux.Vec4,
-        command_count: u32,
-    };
-
     const DataSlice = struct {
         start: usize,
         end: usize,
     };
 
-    const RenderPass = struct {
-        viewport: nux.Vec4,
-        target: nux.ID,
-        command_count: u32,
-        camera: nux.ID,
-        clear_color: ?nux.Vec4,
-    };
-
-    const BeginPass = union(enum) {
-        canvas: CanvasPass,
-        render: RenderPass,
-    };
-
     const Rectangle = struct {
-        box: nux.Vec4,
-        color: nux.Vec4,
-        radius: f32,
+        bounding: nux.Box2i,
+        color: u32 = 0,
+        radius: u32 = 0,
+        bevel: u32 = 0,
     };
 
     const Line = struct {
         start: nux.Vec2,
         end: nux.Vec2,
+        color: u32 = 0,
     };
 
     const Text = struct {
-        text: DataSlice,
-        color: nux.Vec4,
+        text: []const u8,
+        color: u32 = 0,
+        position: nux.Vec2i = .zero(),
+    };
+
+    const Blit = struct {
+        source: nux.Box2i,
+        position: nux.Vec2i = .zero(),
+        scale: u32 = 1,
     };
 
     const Command = union(enum) {
-        begin_pass: BeginPass,
-        text: Text,
-        rectangle: Rectangle,
-        staticmesh: nux.ID,
+        scissor: struct {
+            bounding: nux.Box2i,
+        },
+        text: struct {
+            data: DataSlice,
+            position: nux.Vec2i,
+            color: u32,
+        },
+        line: struct {
+            start: nux.Vec2i,
+            stop: nux.Vec2i,
+            color: u32,
+        },
+        rectangle: struct {
+            bounding: nux.Box2i,
+            color: u32,
+        },
+        staticmesh: struct {
+            id: nux.ID,
+        },
+        camera: struct {
+            id: nux.ID,
+        },
     };
 
     allocator: std.mem.Allocator,
     commands: std.ArrayList(Command),
     data: std.ArrayList(u8),
+    palette: std.ArrayList(nux.Vec4),
 
-    pub fn drawStaticMesh(self: *CommandBuffer, id: nux.ID) !void {}
-    pub fn drawLine(self: *CommandBuffer) !void {}
-    pub fn drawRectangle(self: *CommandBuffer) !void {}
-    pub fn drawText(self: *CommandBuffer) !void {}
-    pub fn blit(self: *CommandBuffer) !void {}
-};
-
-pub const Encoder = struct {
-    renderer: *Self,
-    allocator: std.mem.Allocator,
-    commands: std.ArrayList(GPU.Command),
-
-    pub fn init(renderer: *Self) Encoder {
+    pub fn init(allocator: std.mem.Allocator) CommandBuffer {
         return .{
-            .renderer = renderer,
-            .allocator = renderer.allocator,
+            .allocator = allocator,
             .commands = .empty,
+            .data = .empty,
+            .palette = .empty,
         };
     }
-    pub fn deinit(self: *Encoder) void {
-        self.commands.deinit(self.renderer.allocator);
-    }
-    pub fn submit(self: *Encoder) !void {
-        try self.renderer.gpu.vtable.submit_commands(self.renderer.gpu.ptr, self.commands.items);
-        self.commands.clearRetainingCapacity();
+    pub fn deinit(self: *CommandBuffer) void {
+        self.commands.deinit(self.allocator);
+        self.data.deinit(self.allocator);
+        self.palette.deinit(self.allocator);
     }
 
-    pub fn bindFramebuffer(self: *Encoder, framebuffer: ?*const Framebuffer) !void {
-        var handle: ?GPU.Handle = null;
-        if (framebuffer) |fb| {
-            handle = fb.handle;
-        }
+    pub fn clear(self: *CommandBuffer) !void {
+        self.commands.clearRetainingCapacity();
+        self.data.clearRetainingCapacity();
+    }
+    pub fn reset(self: *CommandBuffer) !void {
+        _ = self;
+    }
+    pub fn scissor(self: *CommandBuffer, b: nux.Box2i) !void {
         try self.commands.append(self.allocator, .{
-            .bind_framebuffer = .{ .framebuffer = handle },
+            .scissor = .{ .bounding = b },
         });
     }
-    pub fn bindPipeline(self: *Encoder, pipeline: *const Pipeline) !void {
+    pub fn line(self: *CommandBuffer) !void {
+        _ = self;
+    }
+    pub fn rectangle(self: *CommandBuffer, info: Rectangle) !void {
         try self.commands.append(self.allocator, .{
-            .bind_pipeline = .{ .pipeline = pipeline.handle },
+            .rectangle = .{
+                .bounding = info.bounding,
+                .color = info.color,
+            },
         });
     }
-    pub fn bindTexture(self: *Encoder, descriptor: GPU.Descriptor, texture: *const Texture) !void {
+    pub fn text(self: *CommandBuffer, info: Text) !void {
+        const start = self.data.items.len;
+        try self.data.appendSlice(self.allocator, info.text);
         try self.commands.append(self.allocator, .{
-            .bind_texture = .{ .texture = texture.handle, .descriptor = descriptor },
+            .text = .{
+                .data = .{ .start = start, .end = self.data.items.len },
+                .color = 0,
+            },
         });
     }
-    pub fn bindBuffer(self: *Encoder, descriptor: GPU.Descriptor, buffer: *const Buffer) !void {
-        try self.commands.append(self.allocator, .{
-            .bind_buffer = .{ .buffer = buffer.handle, .descriptor = descriptor },
-        });
+    pub fn blit(self: *CommandBuffer, info: Blit) !void {
+        _ = self;
+        _ = info;
     }
-    pub fn pushU32(self: *Encoder, descriptor: GPU.Descriptor, value: u32) !void {
-        try self.commands.append(self.allocator, .{
-            .push_u32 = .{ .value = value, .descriptor = descriptor },
-        });
+    pub fn drawMesh(self: *CommandBuffer) !void {
+        _ = self;
     }
-    pub fn pushF32(self: *Encoder, descriptor: GPU.Descriptor, value: f32) !void {
-        try self.commands.append(self.allocator, .{
-            .push_f32 = .{ .value = value, .descriptor = descriptor },
-        });
-    }
-    pub fn draw(self: *Encoder, count: u32) !void {
-        try self.commands.append(self.allocator, .{
-            .draw = .{ .count = count },
-        });
-    }
-    pub fn drawFullQuad(self: *Encoder) !void {
-        try self.draw(3); // Draw full screen triangle
-    }
-    pub fn clearColor(self: *Encoder, color: u32) !void {
-        try self.commands.append(self.allocator, .{ .clear_color = .{ .color = color } });
-    }
-    pub fn clearDepth(self: *Encoder) !void {
-        try self.commands.append(self.allocator, .{.clear_depth});
-    }
-    pub fn viewport(self: *Encoder, x: i32, y: i32, w: u32, h: u32) !void {
-        try self.commands.append(self.allocator, .{ .viewport = .{
-            .x = x,
-            .y = y,
-            .width = w,
-            .height = h,
-        } });
+    pub fn drawStaticMesh(self: *CommandBuffer, staticmesh: nux.ID) !void {
+        _ = self;
+        _ = staticmesh;
     }
 };
-
-gpu: GPU,
-allocator: std.mem.Allocator,
-
-pub fn init(self: *Self, core: *const nux.Core) !void {
-    self.gpu = core.platform.gpu;
-    self.allocator = core.platform.allocator;
-    try self.gpu.vtable.create_device(self.gpu.ptr);
-}
-pub fn deinit(self: *Self) void {
-    self.gpu.vtable.delete_device(self.gpu.ptr);
-}

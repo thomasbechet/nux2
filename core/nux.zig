@@ -22,6 +22,7 @@ pub const GUI = @import("gui/GUI.zig");
 pub const Window = @import("graphics/Window.zig");
 pub const Vertex = @import("graphics/Vertex.zig");
 pub const Renderer = @import("graphics/Renderer.zig");
+pub const GPU = @import("graphics/GPU.zig");
 pub const Canvas = @import("graphics/Canvas.zig");
 pub const Gltf = @import("graphics/Gltf.zig");
 
@@ -34,8 +35,13 @@ pub const vec = @import("math/vec.zig");
 pub const Vec2 = vec.Vec2f;
 pub const Vec3 = vec.Vec3f;
 pub const Vec4 = vec.Vec4f;
+pub const Vec2i = vec.Vec2i;
+pub const Vec3i = vec.Vec3i;
+pub const Vec4i = vec.Vec4i;
 pub const quat = @import("math/quat.zig");
 pub const Quat = quat.Quat;
+pub const box = @import("math/box.zig");
+pub const Box2i = box.Box2i;
 pub const SpanAllocator = @import("utils/SpanAllocator.zig");
 pub const Callable = @import("utils/Callable.zig");
 pub const Deque = @import("utils/Deque.zig").Deque; // TODO: wait 0.16.0 for std
@@ -269,6 +275,7 @@ pub const Core = struct {
             Transform,
             InputMap,
             Renderer,
+            GPU,
             Graphics,
             Texture,
             Mesh,

@@ -111,7 +111,7 @@ node: *nux.Node,
 logger: *nux.Logger,
 file: *nux.File,
 graphics: *nux.Graphics,
-renderer: *nux.Renderer,
+gpu: *nux.GPU,
 allocator: std.mem.Allocator,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -128,13 +128,13 @@ pub fn addFromFile(self: *Self, id: nux.ID, path: []const u8) !void {
 pub fn addFromData(self: *Self, id: nux.ID, data: []const u8) !void {
     try self.components.addWith(id, try .initFromData(self, data));
 }
-pub fn syncRenderer(self: *Self) !void {
+pub fn syncGPU(self: *Self) !void {
     var it = self.components.values();
     while (it.next()) |texture| {
         if (!texture.sync) {
             // Check renderer allocation
             if (texture.handle == null) {
-                texture.handle = try .init(self.renderer, texture.info);
+                texture.handle = try .init(self.gpu, texture.info);
             }
             // Upload data
             if (texture.data != null) {
@@ -147,7 +147,7 @@ pub fn syncRenderer(self: *Self) !void {
 }
 pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2) !void {
     const node = try self.components.get(id);
-    var encoder = nux.Renderer.Encoder.init(self.renderer);
+    var encoder = nux.Renderer.Encoder.init(self.gpu);
     defer encoder.deinit();
     try encoder.bindFramebuffer(null);
     try encoder.viewport(
@@ -158,7 +158,7 @@ pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2) !void {
     );
     try encoder.bindPipeline(&self.graphics.pipelines.blit);
     if (node.handle == null) {
-        node.handle = try .init(self.renderer, node.info);
+        node.handle = try .init(self.gpu, node.info);
     }
     try encoder.bindTexture(.texture, &node.handle.?);
     try encoder.pushU32(.texture_width, node.info.width);

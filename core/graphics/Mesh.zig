@@ -37,8 +37,8 @@ const Component = struct {
 allocator: std.mem.Allocator,
 components: nux.Components(Component),
 config: *nux.Config,
-renderer: *nux.Renderer,
-vertex_buffer: nux.Renderer.Buffer,
+gpu: *nux.GPU,
+vertex_buffer: nux.GPU.Buffer,
 vertex_span_allocator: nux.SpanAllocator,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -48,7 +48,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
         try self.config.getInt(usize, "Graphics.defaultVertexBufferSize"),
         try self.config.getInt(usize, "Graphics.defaultVertexBufferSpanCapacity"),
     );
-    self.vertex_buffer = try .init(self.renderer, .vertices, self.vertex_span_allocator.size);
+    self.vertex_buffer = try .init(self.gpu, .vertices, self.vertex_span_allocator.size);
 }
 pub fn deinit(self: *Self) void {
     self.vertex_span_allocator.deinit();
@@ -154,7 +154,7 @@ pub fn addFromGltfPrimitive(self: *Self, id: nux.ID, gltf: *const zgltf.Gltf, pr
         }
     }
 }
-pub fn syncRenderer(self: *Self) !void {
+pub fn syncGPU(self: *Self) !void {
     var it = self.components.values();
     while (it.next()) |mesh| {
         if (!mesh.sync) {

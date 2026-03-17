@@ -63,9 +63,27 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     const commands = clay.endLayout();
     // self.logger.info("CLAY COMMANDS {d}", .{commands.len});
 
+    var cmds: nux.Renderer.CommandBuffer = .init(self.allocator);
+    defer cmds.deinit();
     for (commands) |command| {
         switch (command.command_type) {
-            else => {},
+            .none => {},
+            .rectangle => {
+                try cmds.rectangle(.{
+                    .box = .init(
+                        @intCast(command.bounding_box.x),
+                        @intCast(command.bounding_box.y),
+                        @intCast(command.bounding_box.width),
+                        @intCast(command.bounding_box.height),
+                    ),
+                });
+            },
+            .border => {},
+            .text => {},
+            .image => {},
+            .scissor_start => {},
+            .scissor_end => {},
+            .custom => {},
         }
     }
 }

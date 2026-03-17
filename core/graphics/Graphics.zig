@@ -2,7 +2,6 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 
 const Self = @This();
-const GPU = nux.GPU;
 const Platform = nux.Platform.GPU;
 
 gpu: *nux.GPU,
@@ -15,15 +14,15 @@ transform: *nux.Transform,
 
 allocator: std.mem.Allocator,
 pipelines: struct {
-    uber_opaque: Renderer.Pipeline,
-    uber_line: Renderer.Pipeline,
-    canvas: Renderer.Pipeline,
-    blit: Renderer.Pipeline,
+    uber_opaque: nux.GPU.Pipeline,
+    uber_line: nux.GPU.Pipeline,
+    canvas: nux.GPU.Pipeline,
+    blit: nux.GPU.Pipeline,
 },
 buffers: struct {
-    constants: Renderer.Buffer,
-    batches: Renderer.Buffer,
-    transforms: Renderer.Buffer,
+    constants: nux.GPU.Buffer,
+    batches: nux.GPU.Buffer,
+    transforms: nux.GPU.Buffer,
 },
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -76,7 +75,7 @@ pub fn onPostUpdate(self: *Self) !void {
     try self.texture.syncGPU();
 }
 pub fn onRender(self: *Self) !void {
-    var encoder = nux.Renderer.Encoder.init(self.gpu);
+    var encoder = nux.GPU.Encoder.init(self.gpu);
     defer encoder.deinit();
 
     const constants: Platform.Constants = .{

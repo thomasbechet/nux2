@@ -10,7 +10,7 @@ pub const CommandBuffer = struct {
     };
 
     const Rectangle = struct {
-        bounding: nux.Box2i,
+        box: nux.Box2i,
         color: u32 = 0,
         radius: u32 = 0,
         bevel: u32 = 0,
@@ -36,7 +36,7 @@ pub const CommandBuffer = struct {
 
     const Command = union(enum) {
         scissor: struct {
-            bounding: nux.Box2i,
+            box: nux.Box2i,
         },
         text: struct {
             data: DataSlice,
@@ -49,7 +49,7 @@ pub const CommandBuffer = struct {
             color: u32,
         },
         rectangle: struct {
-            bounding: nux.Box2i,
+            box: nux.Box2i,
             color: u32,
         },
         staticmesh: struct {
@@ -88,7 +88,7 @@ pub const CommandBuffer = struct {
     }
     pub fn scissor(self: *CommandBuffer, b: nux.Box2i) !void {
         try self.commands.append(self.allocator, .{
-            .scissor = .{ .bounding = b },
+            .scissor = .{ .box = b },
         });
     }
     pub fn line(self: *CommandBuffer) !void {
@@ -97,7 +97,7 @@ pub const CommandBuffer = struct {
     pub fn rectangle(self: *CommandBuffer, info: Rectangle) !void {
         try self.commands.append(self.allocator, .{
             .rectangle = .{
-                .bounding = info.bounding,
+                .box = info.box,
                 .color = info.color,
             },
         });

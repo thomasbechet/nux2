@@ -2,7 +2,6 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 
 const Self = @This();
-
 const GPU = nux.Platform.GPU;
 
 pub const Framebuffer = struct {
@@ -164,3 +163,12 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn deinit(self: *Self) void {
     self.gpu.vtable.delete_device(self.gpu.ptr);
 }
+// pub fn render(self: *Self, cmds: *nux.Renderer.CommandBuffer) !void {
+//     for (cmds.commands.items) |cmd| {
+//         switch (cmd) {
+//             .rectangle => {
+//                 
+//             },
+//         }
+//     }
+// }

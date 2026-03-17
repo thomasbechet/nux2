@@ -20,7 +20,7 @@ const Texture = struct {
     path: ?[]const u8 = null, // Nonnull if loaded from file
     sync: bool = false,
     info: nux.Platform.GPU.TextureInfo = .{},
-    handle: ?nux.Renderer.Texture = null,
+    handle: ?nux.GPU.Texture = null,
 
     const Serialized = struct {
         path: ?[]const u8 = null,
@@ -147,7 +147,7 @@ pub fn syncGPU(self: *Self) !void {
 }
 pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2) !void {
     const node = try self.components.get(id);
-    var encoder = nux.Renderer.Encoder.init(self.gpu);
+    var encoder = nux.GPU.Encoder.init(self.gpu);
     defer encoder.deinit();
     try encoder.bindFramebuffer(null);
     try encoder.viewport(

@@ -18,14 +18,6 @@ const UserData = union(enum) {
     quat: nux.Quat,
 };
 
-const Error = error{
-    NewState,
-    LuaSyntax,
-    OutOfMemory,
-    LuaRuntime,
-    LuaMsgHandler,
-};
-
 pub const Table = struct {
     ref: c_int = 0,
 };

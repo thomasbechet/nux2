@@ -33,7 +33,5 @@ pub fn Box(n: comptime_int, comptime T: type) type {
     };
 }
 
-pub const Box2i = Box(2, i32);
-pub const Box3i = Box(3, i32);
-pub const Box2f = Box(2, f32);
-pub const Box3f = Box(3, f32);
+pub const Box2 = Box(2, f32);
+pub const Box3 = Box(3, f32);

@@ -60,9 +60,6 @@
             "path": "input/InputMap.zig"
         },
         {
-            "path": "graphics/Graphics.zig"
-        },
-        {
             "path": "gui/Button.zig"
         },
         {
@@ -72,7 +69,7 @@
             "path": "graphics/Texture.zig",
             "ignore": [
                 "addFromGltfImage",
-                "syncRenderer"
+                "syncGPU"
             ]
         },
         {
@@ -82,7 +79,7 @@
             "path": "graphics/Mesh.zig",
             "ignore": [
                 "addFromGltfPrimitive",
-                "syncRenderer"
+                "syncGPU"
             ]
         },
         {

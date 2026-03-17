@@ -5,12 +5,6 @@ pub fn Vec(n: comptime_int, comptime T: type) type {
         @compileError("invalid vector dimension");
     }
 
-    const type_info = @typeInfo(T);
-    comptime switch (type_info) {
-        .float => {},
-        else => @compileError("vec not implemented for type " ++ @typeName(T)),
-    };
-
     return struct {
         const Self = @This();
         pub const N = n;
@@ -151,12 +145,9 @@ pub fn Vec(n: comptime_int, comptime T: type) type {
     };
 }
 
-pub const Vec2f = Vec(2, f32);
-pub const Vec3f = Vec(3, f32);
-pub const Vec4f = Vec(4, f32);
+pub const Vec2 = Vec(2, f32);
+pub const Vec3 = Vec(3, f32);
+pub const Vec4 = Vec(4, f32);
 pub const Vec2d = Vec(2, f64);
 pub const Vec3d = Vec(3, f64);
 pub const Vec4d = Vec(4, f64);
-pub const Vec2i = Vec(2, i32);
-pub const Vec3i = Vec(3, i32);
-pub const Vec4i = Vec(4, i32);

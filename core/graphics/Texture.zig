@@ -147,22 +147,13 @@ pub fn syncGPU(self: *Self) !void {
 }
 pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2) !void {
     const node = try self.components.get(id);
-    var encoder = nux.GPU.Encoder.init(self.gpu);
-    defer encoder.deinit();
-    try encoder.bindFramebuffer(null);
-    try encoder.viewport(
-        @intFromFloat(pos.data[0]),
-        @intFromFloat(pos.data[1]),
-        node.info.width,
-        node.info.height,
-    );
-    try encoder.bindPipeline(&self.graphics.pipelines.blit);
-    if (node.handle == null) {
-        node.handle = try .init(self.gpu, node.info);
-    }
-    try encoder.bindTexture(.texture, &node.handle.?);
-    try encoder.pushU32(.texture_width, node.info.width);
-    try encoder.pushU32(.texture_height, node.info.height);
-    try encoder.drawFullQuad();
-    try encoder.submit();
+
+    var cb = nux.Graphics.CommandBuffer.init(self.allocator);
+    defer cb.deinit();
+    try cb.blit(.{
+        .source = id,
+        .pos = pos,
+        .box = .init(0, 0, @floatFromInt(node.info.width), @floatFromInt(node.info.height)),
+    });
+    try self.gpu.render(&cb);
 }

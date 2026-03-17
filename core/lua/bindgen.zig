@@ -190,7 +190,6 @@ const AstIter = struct {
                     };
                 },
                 else => {
-                    std.log.err("unhandled arg type: {any}", .{param_node.tag});
                     return error.Unimplemented;
                 },
             }
@@ -357,25 +356,30 @@ const Modules = struct {
         if (std.mem.startsWith(u8, typ.name, "nux.")) {
             name = typ.name[4..];
         }
+
         // Try resolve primitive
         if (std.meta.stringToEnum(PrimitiveType, name)) |primitive| {
             typ.resolved = .{ .primitive = primitive };
             return;
         }
+
         // Resolve enum declaration
         var parts = std.mem.splitScalar(u8, name, '.');
-        const module_name = parts.next() orelse return;
-        const decl_name = parts.next() orelse return;
-        for (modules) |*module| {
-            if (std.mem.eql(u8, module.name, module_name)) {
-                if (module.enums.getPtr(decl_name)) |enu| {
-                    typ.resolved = .{ .@"enum" = enu };
-                    return;
+        if (parts.next()) |module_name| {
+            if (parts.next()) |decl_name| {
+                for (modules) |*module| {
+                    if (std.mem.eql(u8, module.name, module_name)) {
+                        if (module.enums.getPtr(decl_name)) |enu| {
+                            typ.resolved = .{ .@"enum" = enu };
+                            return;
+                        }
+                    }
                 }
             }
         }
+
         // Not type found
-        std.log.err("unresolved type {s} at {s}", .{ name, source });
+        std.log.err("Unresolved type {s} at {s}", .{ name, source });
         return error.UnresolvedType;
     }
 

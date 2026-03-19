@@ -145,9 +145,9 @@ fn createPipeline(ctx: *anyopaque, info: Platform.PipelineInfo) anyerror!Platfor
             index = gl.GetProgramResourceIndex(pipeline.program, gl.UNIFORM_BLOCK, "ConstantBlock");
             gl.UniformBlockBinding(pipeline.program, index, 1);
             index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "BatchBlock");
-            gl.UniformBlockBinding(pipeline.program, index, 2);
+            gl.ShaderStorageBlockBinding(pipeline.program, index, 2);
             index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "QuadBlock");
-            gl.UniformBlockBinding(pipeline.program, index, 3);
+            gl.ShaderStorageBlockBinding(pipeline.program, index, 3);
 
             pipeline.indices[@intFromEnum(Platform.Descriptor.constants_buffer)] = 1;
             pipeline.indices[@intFromEnum(Platform.Descriptor.batches_buffer)] = 2;
@@ -320,11 +320,15 @@ fn submitCommands(ctx: *anyopaque, commands: []const Platform.Command) anyerror!
                 gl.BindBufferBase(buffer.type, index, buffer.handle);
             },
             .bind_texture => |cmd| {
-                const texture: *TextureHandle = @ptrCast(@alignCast(cmd.texture));
+                var handle: gl.uint = 0;
+                if (cmd.texture) |t| {
+                    const texture: *TextureHandle = @ptrCast(@alignCast(t));
+                    handle = texture.handle;
+                }
                 const unit = self.active_pipeline.?.units[@intFromEnum(cmd.descriptor)];
                 const location = self.active_pipeline.?.locations[@intFromEnum(cmd.descriptor)];
                 gl.ActiveTexture(gl.TEXTURE0 + unit);
-                gl.BindTexture(gl.TEXTURE_2D, texture.handle);
+                gl.BindTexture(gl.TEXTURE_2D, handle);
                 gl.Uniform1i(location, @intCast(unit));
             },
             .push_u32 => |cmd| {

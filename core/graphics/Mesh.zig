@@ -14,7 +14,7 @@ const Component = struct {
     pub fn deinit(self: *Component, mod: *Self) void {
         self.vertices.deinit(mod.allocator);
         if (self.span) |span| {
-            mod.vertex_span_allocator.free(span) catch {};
+            mod.gpu.vertex_span_allocator.free(span) catch {};
         }
     }
     pub fn description(self: *const @This(), _: *Self, w: *std.Io.Writer) !void {
@@ -38,22 +38,7 @@ allocator: std.mem.Allocator,
 components: nux.Components(Component),
 config: *nux.Config,
 gpu: *nux.GPU,
-vertex_buffer: nux.GPU.Buffer,
-vertex_span_allocator: nux.SpanAllocator,
 
-pub fn init(self: *Self, core: *const nux.Core) !void {
-    self.allocator = core.platform.allocator;
-    self.vertex_span_allocator = try .init(
-        self.allocator,
-        try self.config.getInt(usize, "Graphics.defaultVertexBufferSize"),
-        try self.config.getInt(usize, "Graphics.defaultVertexBufferSpanCapacity"),
-    );
-    self.vertex_buffer = try .init(self.gpu, .vertices, self.vertex_span_allocator.size);
-}
-pub fn deinit(self: *Self) void {
-    self.vertex_span_allocator.deinit();
-    self.vertex_buffer.deinit();
-}
 pub fn resize(self: *Self, id: nux.ID, size: u32) !void {
     const component = try self.components.get(id);
     const old_size = component.vertices.items.len;
@@ -160,11 +145,11 @@ pub fn syncGPU(self: *Self) !void {
         if (!mesh.sync) {
             // Check renderer span allocation
             if (mesh.span == null or mesh.span.?.length < mesh.vertices.items.len) {
-                mesh.span = self.vertex_span_allocator.alloc(mesh.vertices.items.len * @sizeOf(f32)) orelse return error.OutOfVertices;
+                mesh.span = self.gpu.vertex_span_allocator.alloc(mesh.vertices.items.len * @sizeOf(f32)) orelse return error.OutOfVertices;
             }
             // Upload data
             if (mesh.span) |span| {
-                try self.vertex_buffer.update(
+                try self.gpu.buffers.vertices.update(
                     span.offset * @sizeOf(f32),
                     span.length * @sizeOf(f32),
                     @ptrCast(&mesh.vertices.items),

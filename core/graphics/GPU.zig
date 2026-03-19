@@ -108,9 +108,13 @@ const Encoder = struct {
             .bind_pipeline = .{ .pipeline = pipeline.handle },
         });
     }
-    fn bindTexture(self: *Encoder, descriptor: GPU.Descriptor, texture: *const Texture) !void {
+    fn bindTexture(self: *Encoder, descriptor: GPU.Descriptor, texture: ?*const Texture) !void {
+        var handle: ?GPU.Handle = null;
+        if (texture) |t| {
+            handle = t.handle;
+        }
         try self.commands.append(self.allocator, .{
-            .bind_texture = .{ .texture = texture.handle, .descriptor = descriptor },
+            .bind_texture = .{ .texture = handle, .descriptor = descriptor },
         });
     }
     fn bindBuffer(self: *Encoder, descriptor: GPU.Descriptor, buffer: *const Buffer) !void {
@@ -152,8 +156,9 @@ const Encoder = struct {
     }
 };
 
-gpu: GPU,
 allocator: std.mem.Allocator,
+gpu: GPU,
+config: *nux.Config,
 window: *nux.Window,
 mesh: *nux.Mesh,
 texture: *nux.Texture,
@@ -170,7 +175,14 @@ buffers: struct {
     constants: nux.GPU.Buffer,
     batches: nux.GPU.Buffer,
     transforms: nux.GPU.Buffer,
+    quads: nux.GPU.Buffer,
+    vertices: nux.GPU.Buffer,
 },
+batches: std.ArrayList(GPU.Batch),
+batches_head: usize,
+quads_queue: std.ArrayList(GPU.Quad),
+quads_head: usize,
+vertex_span_allocator: nux.SpanAllocator,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.gpu = core.platform.gpu;
@@ -210,10 +222,37 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     errdefer self.pipelines.blit.deinit();
 
     // Create buffers
+    const default_quad_size = try self.config.getUint(usize, "GPU.defaultQuadBufferSize");
+    const quad_queue_size = try self.config.getUint(usize, "GPU.quadQueueSize");
+    const default_vertex_buffer_size = try self.config.getUint(usize, "GPU.defaultVertexBufferSize");
+    const default_span_capacity = try self.config.getUint(usize, "GPU.defaultVertexBufferSpanCapacity");
+    const default_batches_capacity = try self.config.getUint(usize, "GPU.batchesCapacity");
     self.buffers.constants = try .init(self, .constants, @sizeOf(GPU.Constants));
     errdefer self.buffers.constants.deinit();
+    self.buffers.vertices = try .init(self, .vertices, default_vertex_buffer_size);
+    errdefer self.buffers.vertices.deinit();
+    self.buffers.quads = try .init(self, .quads, @sizeOf(GPU.Quad) * default_quad_size);
+    errdefer self.buffers.quads.deinit();
+    self.buffers.batches = try .init(self, .batches, @sizeOf(GPU.Batch) * default_batches_capacity);
+    errdefer self.buffers.batches.deinit();
+
+    // Create transfer buffers
+    self.batches_head = 0;
+    self.quads_queue = try .initCapacity(self.allocator, quad_queue_size);
+    self.quads_head = 0;
+    errdefer self.quads_queue.deinit(self.allocator);
+    self.vertex_span_allocator = try .init(
+        self.allocator,
+        default_vertex_buffer_size,
+        default_span_capacity,
+    );
 }
 pub fn deinit(self: *Self) void {
+    self.vertex_span_allocator.deinit();
+    self.quads_queue.deinit(self.allocator);
+    self.buffers.batches.deinit();
+    self.buffers.quads.deinit();
+    self.buffers.vertices.deinit();
     self.buffers.constants.deinit();
     self.pipelines.uber_opaque.deinit();
     self.pipelines.uber_line.deinit();
@@ -224,15 +263,38 @@ pub fn deinit(self: *Self) void {
 pub fn onPostUpdate(self: *Self) !void {
     try self.mesh.syncGPU();
     try self.texture.syncGPU();
+    try self.flushQuads();
+    self.quads_head = 0;
+    self.batches_head = 0;
+}
+fn flushQuads(self: *Self) !void {
+    const offset = @sizeOf(GPU.Quad) * self.quads_head;
+    const size = @sizeOf(GPU.Quad) * self.quads_queue.items.len;
+    try self.buffers.quads.update(offset, size, @ptrCast(self.quads_queue.items));
+    self.quads_queue.clearRetainingCapacity();
+    self.quads_head += self.quads_queue.items.len;
+}
+fn pushQuad(self: *Self, box: nux.Box2, tex: nux.Vec2) !usize {
+    if (self.quads_queue.capacity == self.quads_queue.items.len) {
+        try self.flushQuads();
+    }
+    self.quads_queue.appendAssumeCapacity(.{
+        .pos = @as(u32, @intFromFloat(box.pos[1])) << 16 | @as(u32, @intFromFloat(box.pos[0])),
+        .tex = @as(u32, @intFromFloat(tex.data[1])) << 16 | @as(u32, @intFromFloat(tex.data[0])),
+        .size = @as(u32, @intFromFloat(box.size[1])) << 16 | @as(u32, @intFromFloat(box.size[0])),
+    });
+    return self.quads_head + self.quads_queue.items.len - 1;
 }
 pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
+    var encoder = nux.GPU.Encoder.init(self);
+    defer encoder.deinit();
+    try encoder.bindFramebuffer(null);
+    try encoder.clearColor(0);
+    var active_batch: GPU.Batch = undefined;
     for (cb.commands.items) |cmd| {
         switch (cmd) {
             .blit => |info| {
                 const node = try self.texture.components.get(info.source);
-                var encoder = nux.GPU.Encoder.init(self);
-                defer encoder.deinit();
-                try encoder.bindFramebuffer(null);
                 try encoder.viewport(
                     @intFromFloat(info.pos.data[0]),
                     @intFromFloat(info.pos.data[1]),
@@ -247,11 +309,55 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
                 try encoder.pushU32(.texture_width, node.info.width);
                 try encoder.pushU32(.texture_height, node.info.height);
                 try encoder.drawFullQuad();
-                try encoder.submit();
+
+                // const node = try self.texture.components.get(info.source);
+                // var encoder = nux.GPU.Encoder.init(self);
+                // defer encoder.deinit();
+                // try encoder.bindFramebuffer(null);
+                // try encoder.viewport(0, 0, self.window.width, self.window.height);
+                // try encoder.bindPipeline(&self.pipelines.canvas);
+            },
+            .rectangle => |info| {
+
+                // Update constants
+                const constants = GPU.Constants{
+                    .view = undefined,
+                    .proj = undefined,
+                    .screen_size = .{ self.window.width, self.window.height },
+                    .time = 0,
+                };
+                try self.buffers.constants.update(0, @sizeOf(GPU.Constants), @ptrCast(&constants));
+
+                // Push quad
+                const quad_index = try self.pushQuad(info.box, .zero());
+
+                // Push batch
+                active_batch = .{
+                    .mode = 0,
+                    .first = @intCast(quad_index),
+                    .count = 1,
+                    .texture_width = 0,
+                    .texture_height = 0,
+                    .color = .{ 1, 0, 0, 1 },
+                };
+                const batch_index = self.batches_head;
+                try self.buffers.batches.update(@sizeOf(GPU.Batch) * batch_index, @sizeOf(GPU.Batch), @ptrCast(&active_batch));
+                self.batches_head += 1;
+
+                try encoder.viewport(0, 0, self.window.width, self.window.height);
+                try encoder.bindPipeline(&self.pipelines.canvas);
+                try encoder.bindBuffer(.constants_buffer, &self.buffers.constants);
+                try encoder.bindBuffer(.batches_buffer, &self.buffers.batches);
+                try encoder.bindBuffer(.quads_buffer, &self.buffers.quads);
+                try encoder.bindTexture(.texture, null);
+
+                try encoder.pushU32(.batch_index, @intCast(batch_index));
+                try encoder.draw(1 * 6);
             },
             else => {},
         }
     }
+    try encoder.submit();
 }
 pub fn onRender(self: *Self) !void {
     _ = self;

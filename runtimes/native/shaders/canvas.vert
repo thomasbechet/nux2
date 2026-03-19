@@ -18,11 +18,6 @@ struct Batch
     vec4 color;
 };
 
-layout(binding = 2, std430) readonly buffer BatchBlock
-{
-    Batch batches[];
-};
-
 layout(binding = 0, std140) uniform ConstantBlock
 {
     Constants constants;
@@ -30,6 +25,10 @@ layout(binding = 0, std140) uniform ConstantBlock
 layout(binding = 1, std430) readonly buffer QuadBlock
 {
     uint quads[];
+};
+layout(binding = 2, std430) readonly buffer BatchBlock
+{
+    Batch batches[];
 };
 
 layout(location = 0) out vec2 outUV;

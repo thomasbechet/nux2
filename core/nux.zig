@@ -38,6 +38,7 @@ pub const quat = @import("math/quat.zig");
 pub const Quat = quat.Quat;
 pub const box = @import("math/box.zig");
 pub const Box2 = box.Box2;
+pub const Box3 = box.Box3;
 pub const SpanAllocator = @import("utils/SpanAllocator.zig");
 pub const Callable = @import("utils/Callable.zig");
 pub const Deque = @import("utils/Deque.zig").Deque; // TODO: wait 0.16.0 for std

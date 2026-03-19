@@ -4,6 +4,7 @@ const c = @cImport({
 const builtin = @import("builtin");
 const nux = @import("nux");
 const gl = @import("gl");
+const std = @import("std");
 
 var procs: gl.ProcTable = undefined;
 var key_map: [c.GLFW_KEY_LAST + 1]?nux.Input.Key = undefined;
@@ -25,6 +26,19 @@ prev_position: struct {
 } = .{},
 prev_size: Size = .{},
 size: Size = .{},
+
+fn glMessageCallback(source: gl.@"enum", @"type": gl.@"enum", id: gl.uint, severity: gl.@"enum", length: gl.sizei, message: [*:0]const gl.char, userParam: ?*const anyopaque) callconv(gl.APIENTRY) void {
+    if (@"type" == gl.DEBUG_TYPE_OTHER) {
+        return;
+    }
+    _ = id;
+    _ = severity;
+    _ = source;
+    _ = length;
+    _ = userParam;
+    const msg = std.mem.span(message);
+    std.log.err("{s}", .{msg});
+}
 
 fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     var self: *Self = @ptrCast(@alignCast(ctx));
@@ -49,6 +63,9 @@ fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     c.glfwMakeContextCurrent(self.window);
     gl.makeProcTableCurrent(&procs);
     if (!procs.init(c.glfwGetProcAddress)) return error.initFailed;
+
+    gl.Enable(gl.DEBUG_OUTPUT);
+    gl.DebugMessageCallback(glMessageCallback, null);
 
     // Setup callbacks
     _ = c.glfwSetFramebufferSizeCallback(self.window, resizeCallback);
@@ -254,7 +271,7 @@ fn resizeCallback(win: ?*c.GLFWwindow, w: c_int, h: c_int) callconv(.c) void {
     self.size.w = w;
     self.size.h = h;
     self.core.pushEvent(.{
-        .windowResized = .{ .height = @intCast(w), .width = @intCast(h) },
+        .windowResized = .{ .width = @intCast(w), .height = @intCast(h) },
     });
 }
 fn keyCallback(win: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {

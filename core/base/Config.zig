@@ -102,6 +102,10 @@ pub fn getInt(self: *Self, comptime T: type, key: []const u8) !T {
     const value = try self.get(key);
     return std.fmt.parseInt(T, value, 10) catch return error.InvalidSizeValue;
 }
+pub fn getUint(self: *Self, comptime T: type, key: []const u8) !T {
+    const value = try self.get(key);
+    return std.fmt.parseUnsigned(T, value, 10) catch return error.InvalidSizeValue;
+}
 pub fn getFloat(self: *Self, key: []const u8) !f32 {
     const value = try self.get(key);
     return std.fmt.parseFloat(f32, value) catch return error.InvalidFloatValue;

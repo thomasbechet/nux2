@@ -26,7 +26,7 @@ pub const Batch = extern struct {
     count: u32,
     texture_width: u32,
     texture_height: u32,
-    _pad: [3]u32,
+    _pad: [3]u32 = undefined,
     color: [4]f32,
 };
 
@@ -92,7 +92,7 @@ pub const Command = union(enum) {
         descriptor: Descriptor,
     },
     bind_texture: struct {
-        texture: Handle,
+        texture: ?Handle,
         descriptor: Descriptor,
     },
     push_u32: struct {

@@ -155,5 +155,11 @@ pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2) !void {
         .pos = pos,
         .box = .init(0, 0, @floatFromInt(node.info.width), @floatFromInt(node.info.height)),
     });
+    try cb.rectangle(.{
+        .box = .init(10, 10, 100, 100),
+    });
+    try cb.rectangle(.{
+        .box = .init(110, 110, 100, 100),
+    });
     try self.gpu.render(&cb);
 }

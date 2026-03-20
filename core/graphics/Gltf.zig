@@ -39,10 +39,10 @@ fn createNode(self: *Self, parent: nux.ID, ctx: *const GltfContext, index: usize
         _ = matrix;
     } else {
         try self.transform.components.add(node);
-        try self.transform.setPosition(node, .init(gltf_node.translation));
+        try self.transform.setPosition(node, .initArray(gltf_node.translation));
         const rot = gltf_node.rotation;
         try self.transform.setRotation(node, .init(rot[0], rot[1], rot[2], rot[3]));
-        try self.transform.setScale(node, .init(gltf_node.scale));
+        try self.transform.setScale(node, .initArray(gltf_node.scale));
     }
     try self.transform.setParent(node, parent);
 

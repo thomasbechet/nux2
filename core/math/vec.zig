@@ -11,7 +11,28 @@ pub fn Vec(n: comptime_int, comptime T: type) type {
 
         data: @Vector(n, T),
 
-        pub fn init(v: [n]T) Self {
+        const Impl = switch (N) {
+            2 => struct {
+                fn init(vx: T, vy: T) Self {
+                    return .initArray(.{ vx, vy });
+                }
+            },
+            3 => struct {
+                fn init(vx: T, vy: T, vz: T) Self {
+                    return .initArray(.{ vx, vy, vz });
+                }
+            },
+            4 => struct {
+                fn init(vx: T, vy: T, vz: T, vw: T) Self {
+                    return .initArray(.{ vx, vy, vz, vw });
+                }
+            },
+            else => unreachable,
+        };
+
+        pub const init = Impl.init;
+
+        pub fn initArray(v: [n]T) Self {
             var vec = Self{ .data = undefined };
             inline for (0..n) |i| {
                 vec.data[i] = v[i];
@@ -25,6 +46,22 @@ pub fn Vec(n: comptime_int, comptime T: type) type {
 
         pub fn scalar(v: T) Self {
             return Self{ .data = @splat(v) };
+        }
+
+        pub fn x(self: Self) T {
+            return self.data[0];
+        }
+
+        pub fn y(self: Self) T {
+            return self.data[1];
+        }
+
+        pub fn z(self: Self) T {
+            return self.data[2];
+        }
+
+        pub fn w(self: Self) T {
+            return self.data[3];
         }
 
         pub fn add(self: Self, other: Self) Self {
@@ -60,11 +97,7 @@ pub fn Vec(n: comptime_int, comptime T: type) type {
         }
 
         pub fn dot(self: Self, other: Self) T {
-            var sum: T = 0;
-            inline for (0..n) |i| {
-                sum += self.data[i] * other.data[i];
-            }
-            return sum;
+            return @reduce(.Add, self.data * other.data);
         }
 
         pub fn neg(self: Self) Self {

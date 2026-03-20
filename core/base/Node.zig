@@ -190,7 +190,7 @@ pub const Reader = struct {
                 }
             },
             nux.Vec2, nux.Vec3, nux.Vec4 => {
-                return .init(try self.read(@FieldType(T, "data")));
+                return .initArray(try self.read(@FieldType(T, "data")));
             },
             nux.Quat => {
                 return .init(

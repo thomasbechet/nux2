@@ -279,9 +279,9 @@ fn pushQuad(self: *Self, box: nux.Box2, tex: nux.Vec2) !usize {
         try self.flushQuads();
     }
     self.quads_queue.appendAssumeCapacity(.{
-        .pos = @as(u32, @intFromFloat(box.pos[1])) << 16 | @as(u32, @intFromFloat(box.pos[0])),
-        .tex = @as(u32, @intFromFloat(tex.data[1])) << 16 | @as(u32, @intFromFloat(tex.data[0])),
-        .size = @as(u32, @intFromFloat(box.size[1])) << 16 | @as(u32, @intFromFloat(box.size[0])),
+        .pos = @as(u32, @intFromFloat(box.pos.y())) << 16 | @as(u32, @intFromFloat(box.pos.x())),
+        .tex = @as(u32, @intFromFloat(tex.y())) << 16 | @as(u32, @intFromFloat(tex.x())),
+        .size = @as(u32, @intFromFloat(box.size.y())) << 16 | @as(u32, @intFromFloat(box.size.x())),
     });
     return self.quads_head + self.quads_queue.items.len - 1;
 }
@@ -296,10 +296,10 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
             .blit => |info| {
                 const node = try self.texture.components.get(info.source);
                 try encoder.viewport(
-                    @intFromFloat(info.pos.data[0]),
-                    @intFromFloat(info.pos.data[1]),
-                    @intFromFloat(info.box.size[0]),
-                    @intFromFloat(info.box.size[1]),
+                    @intFromFloat(info.pos.x()),
+                    @intFromFloat(info.pos.y()),
+                    @intFromFloat(info.box.size.x()),
+                    @intFromFloat(info.box.size.y()),
                 );
                 try encoder.bindPipeline(&self.pipelines.blit);
                 if (node.handle == null) {

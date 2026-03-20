@@ -9,19 +9,19 @@ pub fn Box(n: comptime_int, comptime T: type) type {
             f32;
         pub const N = n;
 
-        pos: @Vector(n, T),
-        size: @Vector(n, ST),
+        pos: nux.vec.Vec(n, T),
+        size: nux.vec.Vec(n, ST),
 
         pub fn init(x: T, y: T, w: ST, h: ST) Self {
             return .{
-                .pos = .{ x, y },
-                .size = .{ w, h },
+                .pos = .init(x, y),
+                .size = .init(w, h),
             };
         }
         pub fn initVector(pos: nux.vec.Vec(N, T), size: nux.vec.Vec(N, ST)) Self {
             return .{
-                .pos = pos.data,
-                .size = size.data,
+                .pos = pos,
+                .size = size,
             };
         }
         pub fn empty(x: T, y: T) Self {

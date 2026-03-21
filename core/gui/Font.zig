@@ -7,22 +7,22 @@ const default_font_id = "Fonts/Default";
 const Self = @This();
 const Font = struct {
     const Glyph = struct {
-        box: nux.Box2,
+        box: nux.Box2i,
     };
 
-    glyphs: std.ArrayList(?Glyph) = .empty,
+    glyphs: []?Glyph = undefined,
     texture: nux.ID = .null,
 
     pub fn deinit(self: *Font, mod: *Self) void {
-        self.glyphs.deinit(mod.allocator);
+        mod.allocator.free(self.glyphs);
     }
 
-    fn getGlyph(self: *Font, c: u8) ?Glyph {
+    pub fn getGlyph(self: *Font, c: u8) ?Glyph {
         const index: usize = @intCast(c);
-        if (index >= self.glyphs.items.len) {
+        if (index >= self.glyphs.len) {
             return null;
         }
-        return self.glyphs.items[index];
+        return self.glyphs[index];
     }
 };
 
@@ -30,38 +30,25 @@ allocator: std.mem.Allocator,
 components: nux.Components(Font),
 node: *nux.Node,
 texture: *nux.Texture,
-logger: *nux.Logger,
-
-fn u60ToBytesBE(v: u60) [8]u8 {
-    return [8]u8{
-        @intCast((v >> 56) & 0xFF),
-        @intCast((v >> 48) & 0xFF),
-        @intCast((v >> 40) & 0xFF),
-        @intCast((v >> 32) & 0xFF),
-        @intCast((v >> 24) & 0xFF),
-        @intCast((v >> 16) & 0xFF),
-        @intCast((v >> 8) & 0xFF),
-        @intCast((v) & 0xFF),
-    };
-}
-
-fn u60ToBytesLE(value: u64) [8]u8 {
-    const v = value & 0x0FFFFFFFFFFFFFFF;
-
-    return [8]u8{
-        @intCast(0xFF & (v)),
-        @intCast(0xFF & (v >> 8)),
-        @intCast(0xFF & (v >> 16)),
-        @intCast(0xFF & (v >> 24)),
-        @intCast(0xFF & (v >> 32)),
-        @intCast(0xFF & (v >> 40)),
-        @intCast(0xFF & (v >> 48)),
-        @intCast(0xFF & (v >> 56)),
-    };
-}
 
 fn createDefaultFont(self: *Self) !void {
     const id = try self.node.createPath(self.node.getRoot(), default_font_id);
+
+    // Find min/max
+    var max: usize = 0;
+    for (monogram.glyphs) |glyph| {
+        max = @max(@as(usize, @intCast(glyph.char)), max);
+    }
+
+    // Create font
+    const font = try self.components.addPtr(id);
+    font.texture = id;
+    font.glyphs = try self.allocator.alloc(?Font.Glyph, max + 1);
+    errdefer self.allocator.free(font.glyphs);
+    for (0..font.glyphs.len) |i| {
+        font.glyphs[i] = null;
+    }
+
     // Generate sprite font
     const width =
         monogram.glyphs.len * monogram.width;
@@ -70,30 +57,29 @@ fn createDefaultFont(self: *Self) !void {
     const texture = try self.texture.components.get(id);
 
     // Find min/max char index
-    var max: usize = 0;
     var box: nux.Box2i = .init(0, 0, monogram.width, monogram.height);
     for (monogram.glyphs) |glyph| {
 
-        // Find min/max
-        max = @max(@as(usize, @intCast(glyph.char)), max);
-
         // Render glyph
-        const bitmap = u60ToBytesLE(glyph.bitmap);
         nux.Rasterizer.renderBitmap(
             .{ .pixels = texture.data.?, .width = width, .height = height },
-            &bitmap,
+            glyph.bitmap,
             box,
         );
+
+        // Setup glyph
+        font.glyphs[@intCast(glyph.char)] = .{
+            .box = box,
+        };
+
+        // Move to next glyph box
         box.translate(.init(monogram.width, 0));
     }
-    const font = try self.components.addPtr(id);
-    font.glyphs = try .initCapacity(self.allocator, max);
-    font.texture = id;
 }
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     try self.createDefaultFont();
 }
-pub fn default(self: *Self) nux.ID {
+pub fn default(self: *Self) !nux.ID {
     return self.node.findGlobal(default_font_id);
 }

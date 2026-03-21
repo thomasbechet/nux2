@@ -1,34 +1,23 @@
 import json
 
+def to_zig(data):
+    lines = []
+    lines.append("const Glyph = struct {")
+    lines.append("    char: u32,")
+    lines.append("    bitmap: []const u8,")
+    lines.append("};\n")
+
+    lines.append("const glyphs = [_]Glyph{")
+
+    for char, bitmap in data.items():
+        values = ", ".join(str(v) for v in bitmap)
+        lines.append(f"    Glyph{{ .char = '{char}', .bitmap = &[_]u8{{ {values} }} }},")
+    
+    lines.append("};")
+    return "\n".join(lines)
+
 # paste your JSON here or load from file
-with open("monogram-bitmap.json") as f:
+with open("monogram-bitmap.json", encoding="utf-8") as f:
     data = json.load(f)
-
-def rows_to_u60(rows):
-    value = 0
-    for row in rows:
-        value <<= 5          # 5 pixels per row
-        value |= (row & 0x1F)  # keep only 5 bits
-    return value
-
-print("const monogram_glyphs: []struct {")
-print("    char: u8,")
-print("    bitmap: u60,")
-print("} = .{")
-
-for ch, rows in data.items():
-    bitmap = rows_to_u60(rows)
     
-    # escape characters for Zig
-    if ch == "'":
-        zig_char = "'\\''"
-    elif ch == "\\":
-        zig_char = "'\\\\'"
-    elif ch == "\n":
-        zig_char = "'\\n'"
-    else:
-        zig_char = f"'{ch}'"
-    
-    print(f"    .{{ .char = {zig_char}, .bitmap = 0x{bitmap:015x} }},")
-    
-print("};")
+print(to_zig(data))

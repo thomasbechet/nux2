@@ -196,9 +196,9 @@ pub fn Vec(n: comptime_int, comptime Type: type) type {
                 }
             } else {
                 if (V.is_integer) {
-                    for (0..V.N) |i| data[i] = @floatCast(self.data[i]);
-                } else {
                     for (0..V.N) |i| data[i] = @intFromFloat(self.data[i]);
+                } else {
+                    for (0..V.N) |i| data[i] = @floatCast(self.data[i]);
                 }
             }
             return V{ .data = data };

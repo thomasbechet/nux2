@@ -165,6 +165,7 @@ texture: *nux.Texture,
 material: *nux.Material,
 staticmesh: *nux.StaticMesh,
 transform: *nux.Transform,
+font: *nux.Font,
 pipelines: struct {
     uber_opaque: nux.GPU.Pipeline,
     uber_line: nux.GPU.Pipeline,
@@ -274,14 +275,14 @@ fn flushQuads(self: *Self) !void {
     self.quads_queue.clearRetainingCapacity();
     self.quads_head += self.quads_queue.items.len;
 }
-fn pushQuad(self: *Self, box: nux.Box2, tex: nux.Vec2) !usize {
+fn pushQuad(self: *Self, box: nux.Box2i, tex: nux.Vec2i) !usize {
     if (self.quads_queue.capacity == self.quads_queue.items.len) {
         try self.flushQuads();
     }
     self.quads_queue.appendAssumeCapacity(.{
-        .pos = @as(u32, @intFromFloat(box.pos.y())) << 16 | @as(u32, @intFromFloat(box.pos.x())),
-        .tex = @as(u32, @intFromFloat(tex.y())) << 16 | @as(u32, @intFromFloat(tex.x())),
-        .size = @as(u32, @intFromFloat(box.size.y())) << 16 | @as(u32, @intFromFloat(box.size.x())),
+        .pos = @as(u32, @intCast(box.y())) << 16 | @as(u32, @intCast(box.x())),
+        .tex = @as(u32, @intCast(tex.y())) << 16 | @as(u32, @intCast(tex.x())),
+        .size = @as(u32, @intCast(box.h())) << 16 | @as(u32, @intCast(box.w())),
     });
     return self.quads_head + self.quads_queue.items.len - 1;
 }
@@ -296,10 +297,10 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
             .blit => |info| {
                 const node = try self.texture.components.get(info.source);
                 try encoder.viewport(
-                    @intFromFloat(info.pos.x()),
-                    @intFromFloat(info.pos.y()),
-                    @intFromFloat(info.box.size.x()),
-                    @intFromFloat(info.box.size.y()),
+                    info.pos.x(),
+                    info.pos.y(),
+                    info.box.w(),
+                    info.box.h(),
                 );
                 try encoder.bindPipeline(&self.pipelines.blit);
                 if (node.handle == null) {
@@ -309,13 +310,6 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
                 try encoder.pushU32(.texture_width, node.info.width);
                 try encoder.pushU32(.texture_height, node.info.height);
                 try encoder.drawFullQuad();
-
-                // const node = try self.texture.components.get(info.source);
-                // var encoder = nux.GPU.Encoder.init(self);
-                // defer encoder.deinit();
-                // try encoder.bindFramebuffer(null);
-                // try encoder.viewport(0, 0, self.window.width, self.window.height);
-                // try encoder.bindPipeline(&self.pipelines.canvas);
             },
             .rectangle => |info| {
 
@@ -353,6 +347,61 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
 
                 try encoder.pushU32(.batch_index, @intCast(batch_index));
                 try encoder.draw(1 * 6);
+            },
+            .text => |info| {
+                const font = try self.font.components.get(try self.font.default());
+                const texture = try self.texture.components.get(font.texture);
+                try texture.syncGPU(self);
+
+                // Update constants
+                const constants = GPU.Constants{
+                    .view = undefined,
+                    .proj = undefined,
+                    .screen_size = .{ self.window.width, self.window.height },
+                    .time = 0,
+                };
+                try self.buffers.constants.update(0, @sizeOf(GPU.Constants), @ptrCast(&constants));
+
+                const first_quad = self.quads_head + self.quads_queue.items.len;
+                var quad_count: u32 = 0;
+                var pos: nux.Vec2i = info.position.as(nux.Vec2i);
+                var line_height: u32 = 0;
+                for (cb.dataSlice(info.data)) |char| {
+                    if (font.getGlyph(char)) |glyph| {
+
+                        // Push quad
+                        const quad = nux.Box2i.init(pos.x(), pos.y(), glyph.box.w(), glyph.box.h());
+                        _ = try self.pushQuad(quad, glyph.box.pos);
+                        quad_count += 1;
+
+                        // Advance text box
+                        line_height = @max(line_height, glyph.box.h());
+                        pos = pos.add(.init(@as(i32, @intCast(glyph.box.w())) + 1, 0));
+                    }
+                }
+
+                // Push batch
+                active_batch = .{
+                    .mode = 1,
+                    .first = @intCast(first_quad),
+                    .count = quad_count,
+                    .texture_width = texture.info.width,
+                    .texture_height = texture.info.height,
+                    .color = .{ 1, 1, 1, 1 },
+                };
+                const batch_index = self.batches_head;
+                try self.buffers.batches.update(@sizeOf(GPU.Batch) * batch_index, @sizeOf(GPU.Batch), @ptrCast(&active_batch));
+                self.batches_head += 1;
+
+                try encoder.viewport(0, 0, self.window.width, self.window.height);
+                try encoder.bindPipeline(&self.pipelines.canvas);
+                try encoder.bindBuffer(.constants_buffer, &self.buffers.constants);
+                try encoder.bindBuffer(.batches_buffer, &self.buffers.batches);
+                try encoder.bindBuffer(.quads_buffer, &self.buffers.quads);
+                try encoder.bindTexture(.texture, &texture.handle.?);
+
+                try encoder.pushU32(.batch_index, @intCast(batch_index));
+                try encoder.draw(quad_count * 6);
             },
             else => {},
         }

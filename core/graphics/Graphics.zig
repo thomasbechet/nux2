@@ -11,52 +11,52 @@ pub const CommandBuffer = struct {
     };
 
     const Rectangle = struct {
-        box: nux.Box2,
+        box: nux.Box2i,
         color: u32 = 0,
         radius: u32 = 0,
         bevel: u32 = 0,
     };
 
     const Line = struct {
-        start: nux.Vec2,
-        end: nux.Vec2,
+        start: nux.Vec2i,
+        end: nux.Vec2i,
         color: u32 = 0,
     };
 
     const Text = struct {
         text: []const u8,
         color: u32 = 0,
-        position: nux.Vec2 = .zero(),
+        position: nux.Vec2i = .zero(),
     };
 
     const Blit = struct {
         source: nux.ID,
-        box: nux.Box2,
-        pos: nux.Vec2 = .zero(),
+        box: nux.Box2i,
+        pos: nux.Vec2i = .zero(),
         scale: u32 = 1,
     };
 
     const Command = union(enum) {
         scissor: struct {
-            box: nux.Box2,
+            box: nux.Box2i,
         },
         blit: struct {
             source: nux.ID,
-            box: nux.Box2,
-            pos: nux.Vec2,
+            box: nux.Box2i,
+            pos: nux.Vec2i,
         },
         text: struct {
             data: DataSlice,
-            position: nux.Vec2,
+            position: nux.Vec2i,
             color: u32,
         },
         line: struct {
-            start: nux.Vec2,
-            stop: nux.Vec2,
+            start: nux.Vec2i,
+            stop: nux.Vec2i,
             color: u32,
         },
         rectangle: struct {
-            box: nux.Box2,
+            box: nux.Box2i,
             color: u32,
         },
         staticmesh: struct {
@@ -66,8 +66,6 @@ pub const CommandBuffer = struct {
             id: nux.ID,
         },
     };
-
-    pub const GraphicsPass = struct {};
 
     allocator: std.mem.Allocator,
     commands: std.ArrayList(Command),
@@ -92,6 +90,9 @@ pub const CommandBuffer = struct {
         self.data.clearRetainingCapacity();
     }
 
+    pub fn dataSlice(self: *const CommandBuffer, slice: DataSlice) []const u8 {
+        return self.data.items[slice.start..slice.end];
+    }
     pub fn scissor(self: *CommandBuffer, b: nux.Box2i) !void {
         try self.commands.append(self.allocator, .{
             .scissor = .{ .box = b },
@@ -114,6 +115,7 @@ pub const CommandBuffer = struct {
         try self.commands.append(self.allocator, .{
             .text = .{
                 .data = .{ .start = start, .end = self.data.items.len },
+                .position = info.position,
                 .color = 0,
             },
         });

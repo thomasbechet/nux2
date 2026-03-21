@@ -115,6 +115,26 @@ const Texture = struct {
             },
         };
     }
+    pub fn syncGPU(self: *Texture, gpu: *nux.GPU) !void {
+        if (!self.sync) {
+            // Check renderer allocation
+            if (self.handle == null) {
+                self.handle = try .init(gpu, self.info);
+            }
+            // Upload data
+            if (self.data != null) {
+                try self.handle.?.update(
+                    0,
+                    0,
+                    self.info.width,
+                    self.info.height,
+                    self.data.?,
+                );
+            }
+            // Reset sync flag
+            self.sync = true;
+        }
+    }
 };
 
 components: nux.Components(Texture),
@@ -145,21 +165,10 @@ pub fn addFromData(self: *Self, id: nux.ID, data: []const u8) !void {
 pub fn syncGPU(self: *Self) !void {
     var it = self.components.values();
     while (it.next()) |texture| {
-        if (!texture.sync) {
-            // Check renderer allocation
-            if (texture.handle == null) {
-                texture.handle = try .init(self.gpu, texture.info);
-            }
-            // Upload data
-            if (texture.data != null) {
-                try texture.handle.?.update(0, 0, texture.info.width, texture.info.height, texture.data.?);
-            }
-            // Reset sync flag
-            texture.sync = true;
-        }
+        try texture.syncGPU(self.gpu);
     }
 }
-pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2) !void {
+pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2i) !void {
     const node = try self.components.get(id);
 
     var cb = nux.Graphics.CommandBuffer.init(self.allocator);
@@ -167,13 +176,17 @@ pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2) !void {
     try cb.blit(.{
         .source = id,
         .pos = pos,
-        .box = .init(0, 0, @floatFromInt(node.info.width), @floatFromInt(node.info.height)),
+        .box = .init(0, 0, node.info.width, node.info.height),
     });
     try cb.rectangle(.{
         .box = .init(10, 10, 100, 100),
     });
     try cb.rectangle(.{
         .box = .init(110, 110, 100, 100),
+    });
+    try cb.text(.{
+        .position = .init(200, 200),
+        .text = "Coucou Juliaaaaaa !",
     });
     try self.gpu.render(&cb);
 }

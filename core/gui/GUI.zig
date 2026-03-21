@@ -71,10 +71,10 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
             .rectangle => {
                 try cb.rectangle(.{
                     .box = .init(
-                        command.bounding_box.x,
-                        command.bounding_box.y,
-                        command.bounding_box.width,
-                        command.bounding_box.height,
+                        @intFromFloat(command.bounding_box.x),
+                        @intFromFloat(command.bounding_box.y),
+                        @intFromFloat(command.bounding_box.width),
+                        @intFromFloat(command.bounding_box.height),
                     ),
                 });
             },

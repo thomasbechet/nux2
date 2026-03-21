@@ -31,48 +31,24 @@ pub const Framebuffer = struct {
     }
 };
 
-const BitIter = struct {
-    data: []const u8,
-    byte_index: usize = 0,
-    bit_index: usize = 0,
-
-    pub fn next(self: *BitIter) ?bool {
-        if (self.byte_index >= self.data.len) return null;
-
-        const byte = self.data[self.byte_index];
-        const bit = (byte >> @as(u3, @intCast(7 - self.bit_index))) & 1;
-
-        self.bit_index += 1;
-        if (self.bit_index == 8) {
-            self.bit_index = 0;
-            self.byte_index += 1;
-        }
-
-        return (bit & 0x1) != 0;
-    }
-};
-
 pub fn renderBitmap(fb: Framebuffer, bitmap: []const u8, box: nux.Box2i) void {
     const clipi32 = fb.box().intersect(box) orelse return;
-    std.log.info("CLIP {}", .{clipi32});
     const clip = clipi32.as(nux.Box2u);
-    var bits = BitIter{ .data = bitmap };
 
     for (0..clip.size.y()) |row| {
         const dst_y = clip.y() + row;
 
         for (0..clip.w()) |col| {
-            const isset = bits.next() orelse return;
-            if (!isset) continue;
-
             const dst_x = clip.x() + col;
 
+            const isset = ((bitmap[row] >> @intCast(col)) & 1) != 0;
             const dst_index = dst_y * fb.width + dst_x;
             const pi = dst_index * 4;
-            fb.pixels[pi + 0] = 255;
-            fb.pixels[pi + 1] = 255;
-            fb.pixels[pi + 2] = 255;
-            fb.pixels[pi + 3] = 255;
+            const value: u8 = if (isset) 255 else 0;
+            fb.pixels[pi + 0] = value;
+            fb.pixels[pi + 1] = value;
+            fb.pixels[pi + 2] = value;
+            fb.pixels[pi + 3] = value;
         }
     }
 }

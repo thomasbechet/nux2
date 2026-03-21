@@ -5,7 +5,7 @@ function M:onInit()
     Gltf.loadGltf(Node.getRoot(), "industrial.glb")
     local c = Collection.exportNode(Node.getRoot(), Node.getRoot())
     Collection.instantiate(c, Node.getRoot())
-    Node.dump(Node.getRoot())
+    -- Node.dump(Node.getRoot())
 end
 
 function M:onDeinit()

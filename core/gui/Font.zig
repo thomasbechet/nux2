@@ -30,6 +30,35 @@ allocator: std.mem.Allocator,
 components: nux.Components(Font),
 node: *nux.Node,
 texture: *nux.Texture,
+logger: *nux.Logger,
+
+fn u60ToBytesBE(v: u60) [8]u8 {
+    return [8]u8{
+        @intCast((v >> 56) & 0xFF),
+        @intCast((v >> 48) & 0xFF),
+        @intCast((v >> 40) & 0xFF),
+        @intCast((v >> 32) & 0xFF),
+        @intCast((v >> 24) & 0xFF),
+        @intCast((v >> 16) & 0xFF),
+        @intCast((v >> 8) & 0xFF),
+        @intCast((v) & 0xFF),
+    };
+}
+
+fn u60ToBytesLE(value: u64) [8]u8 {
+    const v = value & 0x0FFFFFFFFFFFFFFF;
+
+    return [8]u8{
+        @intCast(0xFF & (v)),
+        @intCast(0xFF & (v >> 8)),
+        @intCast(0xFF & (v >> 16)),
+        @intCast(0xFF & (v >> 24)),
+        @intCast(0xFF & (v >> 32)),
+        @intCast(0xFF & (v >> 40)),
+        @intCast(0xFF & (v >> 48)),
+        @intCast(0xFF & (v >> 56)),
+    };
+}
 
 fn createDefaultFont(self: *Self) !void {
     const id = try self.node.createPath(self.node.getRoot(), default_font_id);
@@ -49,9 +78,10 @@ fn createDefaultFont(self: *Self) !void {
         max = @max(@as(usize, @intCast(glyph.char)), max);
 
         // Render glyph
+        const bitmap = u60ToBytesLE(glyph.bitmap);
         nux.Rasterizer.renderBitmap(
             .{ .pixels = texture.data.?, .width = width, .height = height },
-            @ptrCast(&glyph.bitmap),
+            &bitmap,
             box,
         );
         box.translate(.init(monogram.width, 0));

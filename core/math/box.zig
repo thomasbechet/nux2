@@ -44,24 +44,50 @@ pub fn Box(n: comptime_int, comptime T: type) type {
         pub fn w(self: Self) ST {
             return self.size.x();
         }
-        pub fn h(self: Self) T {
+        pub fn h(self: Self) ST {
             return self.size.y();
         }
-        pub fn clip(self: Self, other: Self) Self {
-            const new_pos = self.pos.max(other.pos);
-            const self_end = self.pos.add(self.size.as(nux.Vec2i));
-            const other_end = other.pos.add(other.size.as(nux.Vec2i));
-            const new_end = self_end.min(other_end);
-            const new_size = new_end.sub(new_pos).max(.zero());
-            return .{
-                .pos = new_pos,
-                .size = new_size.as(nux.Vec2u),
+        pub fn tl(self: Self) VP {
+            return .init(self.x(), self.y());
+        }
+        pub fn tr(self: Self) VP {
+            return .init(
+                self.x() + @as(T, @intCast(self.w())),
+                self.y(),
+            );
+        }
+        pub fn bl(self: Self) VP {
+            return .init(
+                self.x(),
+                self.y() + @as(T, @intCast(self.h())),
+            );
+        }
+        pub fn br(self: Self) VP {
+            return .init(
+                self.x() + @as(T, @intCast(self.w())),
+                self.y() + @as(T, @intCast(self.h())),
+            );
+        }
+        pub fn area(self: Self) T {
+            return self.w() * self.h();
+        }
+        pub fn intersect(self: Self, b: Self) ?Self {
+            const p1 = self.tl().max(b.tl());
+            const p2 = self.br().min(b.br());
+
+            if (p2.x() <= p1.x() or p2.y() <= p1.y()) {
+                return null;
+            }
+
+            return Self{
+                .pos = p1,
+                .size = p2.sub(p1).as(VS),
             };
         }
         pub fn as(self: Self, B: type) B {
             return .{
                 .pos = self.pos.as(B.VP),
-                .size = self.pos.as(B.VS),
+                .size = self.size.as(B.VS),
             };
         }
     };

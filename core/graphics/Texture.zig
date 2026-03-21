@@ -74,6 +74,17 @@ const Texture = struct {
         }
     }
 
+    fn initTransparent(mod: *Self, width: u32, height: u32) !Texture {
+        const texture = Texture{
+            .data = try mod.allocator.alloc(u8, width * height * 4),
+            .info = .{
+                .width = width,
+                .height = height,
+            },
+        };
+        @memset(texture.data.?, 0);
+        return texture;
+    }
     fn initFromFile(mod: *Self, path: []const u8) !Texture {
         // Read file
         const data = try mod.file.read(path, mod.allocator);
@@ -121,6 +132,9 @@ pub fn addFromGltfImage(self: *Self, id: nux.ID, image: *const zgltf.Gltf.Image)
     if (image.data) |data| {
         try self.addFromData(id, data);
     }
+}
+pub fn addTransparent(self: *Self, id: nux.ID, width: u32, height: u32) !void {
+    try self.components.addWith(id, try .initTransparent(self, width, height));
 }
 pub fn addFromFile(self: *Self, id: nux.ID, path: []const u8) !void {
     try self.components.addWith(id, try .initFromFile(self, path));

@@ -19,9 +19,11 @@ pub const Material = @import("graphics/Material.zig");
 pub const StaticMesh = @import("graphics/StaticMesh.zig");
 pub const Camera = @import("graphics/Camera.zig");
 pub const GUI = @import("gui/GUI.zig");
+pub const Font = @import("gui/Font.zig");
 pub const Window = @import("graphics/Window.zig");
 pub const Vertex = @import("graphics/Vertex.zig");
 pub const GPU = @import("graphics/GPU.zig");
+pub const Rasterizer = @import("graphics/Rasterizer.zig");
 pub const Canvas = @import("graphics/Canvas.zig");
 pub const Gltf = @import("graphics/Gltf.zig");
 
@@ -34,11 +36,21 @@ pub const vec = @import("math/vec.zig");
 pub const Vec2 = vec.Vec2;
 pub const Vec3 = vec.Vec3;
 pub const Vec4 = vec.Vec4;
+pub const Vec2i = vec.Vec2i;
+pub const Vec3i = vec.Vec3i;
+pub const Vec4i = vec.Vec4i;
+pub const Vec2u = vec.Vec2u;
+pub const Vec3u = vec.Vec3u;
+pub const Vec4u = vec.Vec4u;
 pub const quat = @import("math/quat.zig");
 pub const Quat = quat.Quat;
 pub const box = @import("math/box.zig");
 pub const Box2 = box.Box2;
 pub const Box3 = box.Box3;
+pub const Box2i = box.Box2i;
+pub const Box3i = box.Box3i;
+pub const Box2u = box.Box2u;
+pub const Box3u = box.Box3u;
 pub const SpanAllocator = @import("utils/SpanAllocator.zig");
 pub const Callable = @import("utils/Callable.zig");
 pub const Deque = @import("utils/Deque.zig").Deque; // TODO: wait 0.16.0 for std
@@ -280,6 +292,7 @@ pub const Core = struct {
             Lua,
             Canvas,
             GUI,
+            Font,
             Gltf,
         });
 

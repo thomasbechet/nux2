@@ -1,13 +1,15 @@
 const math = @import("std").math;
 
-pub fn Vec(n: comptime_int, comptime T: type) type {
+pub fn Vec(n: comptime_int, comptime Type: type) type {
     if (n < 1) {
         @compileError("invalid vector dimension");
     }
 
     return struct {
         const Self = @This();
+        pub const T = Type;
         pub const N = n;
+        pub const is_integer = (T == i32 or T == u32);
 
         data: @Vector(n, T),
 
@@ -175,6 +177,32 @@ pub fn Vec(n: comptime_int, comptime T: type) type {
                 self.data[0] * b.data[1] - self.data[1] * b.data[0],
             } };
         }
+
+        pub fn max(self: Self, other: Self) Self {
+            return .{ .data = @max(self.data, other.data) };
+        }
+
+        pub fn min(self: Self, other: Self) Self {
+            return .{ .data = @min(self.data, other.data) };
+        }
+
+        pub fn as(self: Self, V: type) V {
+            var data: @Vector(V.N, V.T) = undefined;
+            if (is_integer) {
+                if (V.is_integer) {
+                    for (0..V.N) |i| data[i] = @intCast(self.data[i]);
+                } else {
+                    for (0..V.N) |i| data[i] = @floatFromInt(self.data[i]);
+                }
+            } else {
+                if (V.is_integer) {
+                    for (0..V.N) |i| data[i] = @floatCast(self.data[i]);
+                } else {
+                    for (0..V.N) |i| data[i] = @intFromFloat(self.data[i]);
+                }
+            }
+            return V{ .data = data };
+        }
     };
 }
 
@@ -184,3 +212,9 @@ pub const Vec4 = Vec(4, f32);
 pub const Vec2d = Vec(2, f64);
 pub const Vec3d = Vec(3, f64);
 pub const Vec4d = Vec(4, f64);
+pub const Vec2i = Vec(2, i32);
+pub const Vec3i = Vec(3, i32);
+pub const Vec4i = Vec(4, i32);
+pub const Vec2u = Vec(2, u32);
+pub const Vec3u = Vec(3, u32);
+pub const Vec4u = Vec(4, u32);

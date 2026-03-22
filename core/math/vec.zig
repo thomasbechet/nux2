@@ -215,6 +215,3 @@ pub const Vec4d = Vec(4, f64);
 pub const Vec2i = Vec(2, i32);
 pub const Vec3i = Vec(3, i32);
 pub const Vec4i = Vec(4, i32);
-pub const Vec2u = Vec(2, u32);
-pub const Vec3u = Vec(3, u32);
-pub const Vec4u = Vec(4, u32);

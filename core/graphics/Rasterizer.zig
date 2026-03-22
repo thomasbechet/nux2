@@ -32,14 +32,13 @@ pub const Framebuffer = struct {
 };
 
 pub fn renderBitmap(fb: Framebuffer, bitmap: []const u8, box: nux.Box2i) void {
-    const clipi32 = fb.box().intersect(box) orelse return;
-    const clip = clipi32.as(nux.Box2u);
+    const clip = fb.box().intersect(box) orelse return;
 
     for (0..clip.size.y()) |row| {
-        const dst_y = clip.y() + row;
+        const dst_y = @as(usize, @intCast(clip.y())) + row;
 
         for (0..clip.w()) |col| {
-            const dst_x = clip.x() + col;
+            const dst_x = @as(usize, @intCast(clip.x())) + col;
 
             const isset = ((bitmap[row] >> @intCast(col)) & 1) != 0;
             const dst_index = dst_y * fb.width + dst_x;

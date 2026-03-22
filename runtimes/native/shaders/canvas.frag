@@ -25,7 +25,7 @@ void main()
 {
     if (batches[batchIndex].mode == 1)
     {
-        outColor = texture(texture0, inUV);
+        outColor = texture(texture0, inUV) * batches[batchIndex].color;
     }
     else
     {

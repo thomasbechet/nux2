@@ -46,6 +46,7 @@ pub const Box2 = box.Box2;
 pub const Box3 = box.Box3;
 pub const Box2i = box.Box2i;
 pub const Box3i = box.Box3i;
+pub const Color = @import("math/color.zig").Color;
 pub const SpanAllocator = @import("utils/SpanAllocator.zig");
 pub const Callable = @import("utils/Callable.zig");
 pub const Deque = @import("utils/Deque.zig").Deque; // TODO: wait 0.16.0 for std

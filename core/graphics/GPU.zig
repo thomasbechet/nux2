@@ -284,7 +284,7 @@ fn pushQuad(self: *Self, box: nux.Box2i, tex: nux.Vec2i, scale: u32) !void {
     });
     self.active_batch.count += 1;
 }
-fn beginTexturedBatch(self: *Self, texture_id: nux.ID) !void {
+fn beginTexturedBatch(self: *Self, texture_id: nux.ID, color: nux.Color) !void {
 
     // Sync texture
     const texture = try self.texture.components.get(texture_id);
@@ -297,21 +297,21 @@ fn beginTexturedBatch(self: *Self, texture_id: nux.ID) !void {
         .count = 0,
         .texture_width = texture.info.width,
         .texture_height = texture.info.height,
-        .color = .{ 1, 1, 1, 1 },
+        .color = color.rgba.data,
     };
     self.active_batch_index = self.batches_head;
 
     // Begin commands
     try self.encoder.bindTexture(.texture, &texture.handle.?);
 }
-fn beginColoredBatch(self: *Self, color: [4]f32) !void {
+fn beginColoredBatch(self: *Self, color: nux.Color) !void {
     self.active_batch = .{
         .mode = 0,
         .first = @intCast(self.quads_head + self.quads_queue.items.len),
         .count = 0,
         .texture_width = 0,
         .texture_height = 0,
-        .color = color,
+        .color = color.rgba.data,
     };
 
     self.active_batch_index = self.batches_head;
@@ -355,7 +355,7 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
     for (cb.commands.items) |cmd| {
         switch (cmd) {
             .blit => |info| {
-                try self.beginTexturedBatch(info.source);
+                try self.beginTexturedBatch(info.source, .white);
                 try self.pushQuad(.init(
                     info.pos.x(),
                     info.pos.y(),
@@ -375,11 +375,12 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
             .text => |info| {
                 const font = try self.font.components.get(try self.font.default());
 
-                try self.beginTexturedBatch(font.texture);
+                try self.beginTexturedBatch(font.texture, info.color);
 
                 var pos: nux.Vec2i = info.position.as(nux.Vec2i);
                 var line_height: u32 = 0;
-                var it = font.iterate(cb.dataSlice(info.data));
+                const text = cb.dataSlice(info.data);
+                var it = font.iterate(text);
                 while (it.next()) |entry| {
                     const glyph = entry.glyph;
 

@@ -12,7 +12,7 @@ pub const CommandBuffer = struct {
 
     const Rectangle = struct {
         box: nux.Box2i,
-        color: [4]f32 = .{ 1, 1, 1, 1 },
+        color: nux.Color = .white,
         radius: u32 = 0,
         bevel: u32 = 0,
     };
@@ -25,7 +25,7 @@ pub const CommandBuffer = struct {
 
     const Text = struct {
         text: []const u8,
-        color: [4]f32 = .{ 1, 1, 1, 1 },
+        color: nux.Color = .white,
         pos: nux.Vec2i = .zero(),
         scale: u32 = 1,
     };
@@ -39,13 +39,13 @@ pub const CommandBuffer = struct {
 
     const Command = union(enum) {
         scissor: struct {
-            box: nux.Box2i,
+            box: ?nux.Box2i,
         },
         blit: Blit,
         text: struct {
             data: DataSlice,
             position: nux.Vec2i,
-            color: u32,
+            color: nux.Color,
             scale: u32,
         },
         line: Line,
@@ -84,7 +84,7 @@ pub const CommandBuffer = struct {
     pub fn dataSlice(self: *const CommandBuffer, slice: DataSlice) []const u8 {
         return self.data.items[slice.start..slice.end];
     }
-    pub fn scissor(self: *CommandBuffer, b: nux.Box2i) !void {
+    pub fn scissor(self: *CommandBuffer, b: ?nux.Box2i) !void {
         try self.commands.append(self.allocator, .{
             .scissor = .{ .box = b },
         });
@@ -104,7 +104,7 @@ pub const CommandBuffer = struct {
             .text = .{
                 .data = .{ .start = start, .end = self.data.items.len },
                 .position = info.pos,
-                .color = 0,
+                .color = info.color,
                 .scale = info.scale,
             },
         });

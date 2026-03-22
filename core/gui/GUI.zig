@@ -19,7 +19,6 @@ pub fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) 
 
     const font: *nux.Font.Font = @ptrCast(@alignCast(config.user_data));
     var it = font.iterate(text);
-    // std.log.info("MEASURE '{s}'", .{text});
     while (it.next()) |entry| {
         const glyph = entry.glyph;
         if (entry.codepoint != '\n') {
@@ -40,7 +39,7 @@ pub fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) 
     };
 }
 
-fn sidebarItemComponent(index: u32, font: *nux.Font.Font) void {
+fn sidebarItemComponent(self: *Self, index: u32, font: *nux.Font.Font, sb: *std.ArrayList(u8)) void {
     const sidebar_item_layout: clay.LayoutConfig = .{ .sizing = .{ .w = .grow, .h = .fixed(50) } };
     const orange: clay.Color = .{ 225, 138, 50, 255 };
     clay.UI()(.{
@@ -48,13 +47,16 @@ fn sidebarItemComponent(index: u32, font: *nux.Font.Font) void {
         .layout = sidebar_item_layout,
         .background_color = orange,
     })({
-        // var buf: [256]u8 = undefined;
-        // var writer = std.Io.Writer.fixed(&buf);
-        // writer.print("Side Element {d}", .{index}) catch return;
-        // const text = buf[0..writer.end];
-        clay.text("Hello World", .{
+        var buf: [256]u8 = .{0} ** 256;
+        var writer = std.Io.Writer.fixed(&buf);
+        writer.print("Side Test Hello Element {d}", .{index}) catch return;
+        const text = buf[0..writer.end];
+        const start = sb.items.len;
+        sb.appendSlice(self.allocator, text) catch return;
+        clay.text(sb.items[start..], .{
             .font_size = 24,
             .user_data = @ptrCast(font),
+            .color = .{ 255, 0, 0, 255 },
         });
     });
 }
@@ -73,14 +75,6 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn deinit(self: *Self) void {
     self.allocator.free(self.clay_memory);
 }
-fn convertClayColor(color: [4]f32) [4]f32 {
-    return .{
-        color[0] / 255,
-        color[1] / 255,
-        color[2] / 255,
-        color[3] / 255,
-    };
-}
 pub fn onUpdate(self: *Self) !void {
     clay.setLayoutDimensions(.{
         .w = @floatFromInt(self.window.width),
@@ -92,22 +86,24 @@ pub fn onUpdate(self: *Self) !void {
     const light_grey: clay.Color = .{ 224, 215, 210, 255 };
     const font = try self.font.components.get(try self.font.default());
 
+    var string_buffer: std.ArrayList(u8) = try .initCapacity(self.allocator, 256);
+    defer string_buffer.deinit(self.allocator);
     clay.beginLayout();
     clay.UI()(.{
         .id = .ID("SideBar"),
         .layout = .{
             .direction = .top_to_bottom,
-            .sizing = .{ .w = .fixed(300), .h = .grow },
+            .sizing = .{ .w = .grow, .h = .grow },
             .padding = .all(16),
             .child_alignment = .{ .x = .center, .y = .bottom },
             .child_gap = 16,
         },
         .background_color = light_grey,
     })({
-        sidebarItemComponent(0, font);
-        sidebarItemComponent(1, font);
-        sidebarItemComponent(2, font);
-        sidebarItemComponent(3, font);
+        self.sidebarItemComponent(0, font, &string_buffer);
+        self.sidebarItemComponent(1, font, &string_buffer);
+        self.sidebarItemComponent(2, font, &string_buffer);
+        self.sidebarItemComponent(3, font, &string_buffer);
     });
     const commands = clay.endLayout();
 
@@ -125,7 +121,7 @@ pub fn onUpdate(self: *Self) !void {
             .rectangle => {
                 try cb.rectangle(.{
                     .box = box,
-                    .color = convertClayColor(command.render_data.rectangle.background_color),
+                    .color = .fromRGBA255(command.render_data.rectangle.background_color),
                 });
             },
             .border => {},
@@ -135,12 +131,16 @@ pub fn onUpdate(self: *Self) !void {
                     .text = command.render_data.text.string_contents.chars[0..len],
                     .pos = box.pos,
                     .scale = command.render_data.text.font_size / 8,
-                    .color = convertClayColor(command.render_data.text.text_color),
+                    .color = .fromRGBA255(command.render_data.text.text_color),
                 });
             },
             .image => {},
-            .scissor_start => {},
-            .scissor_end => {},
+            .scissor_start => {
+                try cb.scissor(box);
+            },
+            .scissor_end => {
+                try cb.scissor(null);
+            },
             .custom => {},
         }
     }

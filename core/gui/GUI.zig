@@ -12,35 +12,32 @@ gpu: *nux.GPU,
 clay_memory: []u8,
 
 pub fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) clay.Dimensions {
-    const font_size: u32 = @intCast(config.font_size);
     var text_width: u32 = 0;
-    var max_text_width: u32 = 0;
-    var text_height: u32 = font_size;
+    var max_text_height: u32 = 0;
 
     const font: *nux.Font.Font = @ptrCast(@alignCast(config.user_data));
     var it = font.iterate(text);
     while (it.next()) |entry| {
         const glyph = entry.glyph;
         if (entry.codepoint != '\n') {
-            text_width += glyph.box.w() + 1;
+            text_width += glyph.box.w() + config.letter_spacing + 1;
+            max_text_height = @max(max_text_height, glyph.box.h());
         } else {
-            max_text_width = @max(max_text_width, text_width);
-            text_width = 0;
-            text_height += font_size + @as(u32, @intCast(config.line_height));
+            // max_text_width = @max(max_text_width, text_width);
+            // text_width = 0;
+            // text_height += font_size + @as(u32, @intCast(config.line_height));
         }
     }
-    // const letter_spacing: u32 = @intCast(config.letter_spacing);
-    const scale_factor = font_size / 8;
-    // const spacing_width = letter_spacing * (@as(u32, @floatFromInt(max_byte_counter)) - 1);
+    const scale_factor = (config.font_size / max_text_height) + 1;
 
     return clay.Dimensions{
-        .h = @floatFromInt(text_height),
-        .w = @floatFromInt(max_text_width * scale_factor),
+        .h = @floatFromInt(max_text_height * scale_factor),
+        .w = @floatFromInt(text_width * scale_factor),
     };
 }
 
 fn sidebarItemComponent(self: *Self, index: u32, font: *nux.Font.Font, sb: *std.ArrayList(u8)) void {
-    const sidebar_item_layout: clay.LayoutConfig = .{ .sizing = .{ .w = .grow, .h = .fixed(50) } };
+    const sidebar_item_layout: clay.LayoutConfig = .{ .sizing = .{ .w = .fit } };
     const orange: clay.Color = .{ 225, 138, 50, 255 };
     clay.UI()(.{
         .id = .IDI("SidebarBlob", index),
@@ -54,9 +51,10 @@ fn sidebarItemComponent(self: *Self, index: u32, font: *nux.Font.Font, sb: *std.
         const start = sb.items.len;
         sb.appendSlice(self.allocator, text) catch return;
         clay.text(sb.items[start..], .{
-            .font_size = 24,
+            .font_size = 24 * 2,
             .user_data = @ptrCast(font),
-            .color = .{ 255, 0, 0, 255 },
+            .color = .{ 255, 255, 255, 255 },
+            .alignment = .left,
         });
     });
 }
@@ -95,7 +93,7 @@ pub fn onUpdate(self: *Self) !void {
             .direction = .top_to_bottom,
             .sizing = .{ .w = .grow, .h = .grow },
             .padding = .all(16),
-            .child_alignment = .{ .x = .center, .y = .bottom },
+            .child_alignment = .{ .x = .left, .y = .top },
             .child_gap = 16,
         },
         .background_color = light_grey,
@@ -134,7 +132,12 @@ pub fn onUpdate(self: *Self) !void {
                     .color = .fromRGBA255(command.render_data.text.text_color),
                 });
             },
-            .image => {},
+            .image => {
+                // try cb.blit(.{
+                //     .box = box,
+                //     .pos = box.pos,
+                // });
+            },
             .scissor_start => {
                 try cb.scissor(box);
             },

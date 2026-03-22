@@ -385,7 +385,12 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
                     const glyph = entry.glyph;
 
                     // Push quad
-                    const quad = nux.Box2i.init(pos.x(), pos.y(), glyph.box.w(), glyph.box.h());
+                    const quad = nux.Box2i.init(
+                        pos.x(),
+                        pos.y(),
+                        glyph.box.w(),
+                        glyph.box.h(),
+                    );
                     try self.pushQuad(quad, glyph.box.pos, info.scale);
 
                     // Advance text box
@@ -398,29 +403,4 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
         }
     }
     try self.encoder.submit();
-}
-pub fn onRender(self: *Self) !void {
-    _ = self;
-
-    // const constants: GPU.Constants = .{
-    //     .view = undefined,
-    //     .proj = undefined,
-    //     .screen_size = undefined,
-    //     .time = 0,
-    // };
-    // try self.buffers.constants.update(0, @sizeOf(GPU.Constants), @ptrCast(&constants));
-    //
-    // try encoder.bindFramebuffer(null);
-    // try encoder.viewport(0, 0, self.window.width, self.window.height);
-    // try encoder.clearColor(0x0);
-    // try encoder.bindPipeline(&self.pipelines.uber_line);
-    // try encoder.bindBuffer(.constants_buffer, &self.buffers.constants);
-    // // try encoder.bindBuffer(.batches_buffer, &self.buffers.batches);
-    // // try encoder.bindBuffer(.transforms_buffer, &self.buffers.transforms);
-    // try encoder.bindBuffer(.vertices_buffer, &self.mesh.vertex_buffer);
-    //
-    // // var it = self.staticmesh.components.iterator();
-    // // while (it.next()) |entry| {}
-    //
-    // try encoder.submit();
 }

@@ -275,7 +275,7 @@ fn flushQuads(self: *Self) !void {
     self.quads_queue.clearRetainingCapacity();
     self.quads_head += self.quads_queue.items.len;
 }
-fn pushQuad(self: *Self, box: nux.Box2i, tex: nux.Vec2i) !usize {
+fn pushQuad(self: *Self, box: nux.Box2i, tex: nux.Vec2i, scale: u32) !usize {
     if (self.quads_queue.capacity == self.quads_queue.items.len) {
         try self.flushQuads();
     }
@@ -283,6 +283,7 @@ fn pushQuad(self: *Self, box: nux.Box2i, tex: nux.Vec2i) !usize {
         .pos = @as(u32, @intCast(box.y())) << 16 | @as(u32, @intCast(box.x())),
         .tex = @as(u32, @intCast(tex.y())) << 16 | @as(u32, @intCast(tex.x())),
         .size = @as(u32, @intCast(box.h())) << 16 | @as(u32, @intCast(box.w())),
+        .scale = scale,
     });
     return self.quads_head + self.quads_queue.items.len - 1;
 }
@@ -323,7 +324,7 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
                 try self.buffers.constants.update(0, @sizeOf(GPU.Constants), @ptrCast(&constants));
 
                 // Push quad
-                const quad_index = try self.pushQuad(info.box, .zero());
+                const quad_index = try self.pushQuad(info.box, .zero(), 1);
 
                 // Push batch
                 active_batch = .{
@@ -371,12 +372,12 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
 
                         // Push quad
                         const quad = nux.Box2i.init(pos.x(), pos.y(), glyph.box.w(), glyph.box.h());
-                        _ = try self.pushQuad(quad, glyph.box.pos);
+                        _ = try self.pushQuad(quad, glyph.box.pos, info.scale);
                         quad_count += 1;
 
                         // Advance text box
                         line_height = @max(line_height, glyph.box.h());
-                        pos = pos.add(.init(@as(i32, @intCast(glyph.box.w())) + 1, 0));
+                        pos = pos.add(.init(@as(i32, @intCast((glyph.box.w() + 1) * info.scale)), 0));
                     }
                 }
 

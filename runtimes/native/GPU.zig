@@ -122,11 +122,11 @@ fn createPipeline(ctx: *anyopaque, info: Platform.PipelineInfo) anyerror!Platfor
             index = gl.GetProgramResourceIndex(pipeline.program, gl.UNIFORM_BLOCK, "ConstantBlock");
             gl.UniformBlockBinding(pipeline.program, index, 1);
             index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "BatchBlock");
-            gl.UniformBlockBinding(pipeline.program, index, 2);
+            gl.ShaderStorageBlockBinding(pipeline.program, index, 2);
             index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "VertexBlock");
-            gl.UniformBlockBinding(pipeline.program, index, 3);
+            gl.ShaderStorageBlockBinding(pipeline.program, index, 3);
             index = gl.GetProgramResourceIndex(pipeline.program, gl.SHADER_STORAGE_BLOCK, "TransformBlock");
-            gl.UniformBlockBinding(pipeline.program, index, 4);
+            gl.ShaderStorageBlockBinding(pipeline.program, index, 4);
 
             pipeline.indices[@intFromEnum(Platform.Descriptor.constants_buffer)] = 1;
             pipeline.indices[@intFromEnum(Platform.Descriptor.batches_buffer)] = 2;

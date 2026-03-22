@@ -18,6 +18,7 @@ pub const Quad = extern struct {
     pos: u32,
     tex: u32,
     size: u32,
+    scale: u32,
 };
 
 pub const Batch = extern struct {

@@ -49,9 +49,10 @@ void main()
     // Extract quad data
     Batch batch = batches[batchIndex];
     uint index = batch.first + gl_VertexID / 6;
-    uint pos = quads[index * 3 + 0];
-    uint tex = quads[index * 3 + 1];
-    uint size = quads[index * 3 + 2];
+    uint pos = quads[index * 4 + 0];
+    uint tex = quads[index * 4 + 1];
+    uint size = quads[index * 4 + 2];
+    uint scale = quads[index * 4 + 3];
 
     // Decode quad data
     vec2 vertex_pos = vec2(float(pos & 0xffffu), float(pos >> 16u));
@@ -62,7 +63,7 @@ void main()
     vec2 vertex_offset = offsets[gl_VertexID % 6];
 
     // Apply offset and normalize
-    vec2 position = (vertex_pos + vertex_size * vertex_offset) / constants.screenSize;
+    vec2 position = (vertex_pos + vertex_size * scale * vertex_offset) / constants.screenSize;
     position.y = 1 - position.y;
     vec2 uv = floor(vertex_tex + vertex_size * vertex_offset) / vec2(batch.textureWidth, batch.textureHeight);
 

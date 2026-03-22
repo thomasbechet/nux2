@@ -187,6 +187,7 @@ pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2i) !void {
     try cb.text(.{
         .position = .init(200, 200),
         .text = "Coucou Juliaaaaaa !",
+        .scale = 4,
     });
     try self.gpu.render(&cb);
 }

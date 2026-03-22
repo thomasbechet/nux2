@@ -27,6 +27,7 @@ pub const CommandBuffer = struct {
         text: []const u8,
         color: u32 = 0,
         position: nux.Vec2i = .zero(),
+        scale: u32 = 1,
     };
 
     const Blit = struct {
@@ -40,25 +41,15 @@ pub const CommandBuffer = struct {
         scissor: struct {
             box: nux.Box2i,
         },
-        blit: struct {
-            source: nux.ID,
-            box: nux.Box2i,
-            pos: nux.Vec2i,
-        },
+        blit: Blit,
         text: struct {
             data: DataSlice,
             position: nux.Vec2i,
             color: u32,
+            scale: u32,
         },
-        line: struct {
-            start: nux.Vec2i,
-            stop: nux.Vec2i,
-            color: u32,
-        },
-        rectangle: struct {
-            box: nux.Box2i,
-            color: u32,
-        },
+        line: Line,
+        rectangle: Rectangle,
         staticmesh: struct {
             id: nux.ID,
         },
@@ -103,10 +94,7 @@ pub const CommandBuffer = struct {
     }
     pub fn rectangle(self: *CommandBuffer, info: Rectangle) !void {
         try self.commands.append(self.allocator, .{
-            .rectangle = .{
-                .box = info.box,
-                .color = info.color,
-            },
+            .rectangle = info,
         });
     }
     pub fn text(self: *CommandBuffer, info: Text) !void {
@@ -117,16 +105,13 @@ pub const CommandBuffer = struct {
                 .data = .{ .start = start, .end = self.data.items.len },
                 .position = info.position,
                 .color = 0,
+                .scale = info.scale,
             },
         });
     }
     pub fn blit(self: *CommandBuffer, info: Blit) !void {
         try self.commands.append(self.allocator, .{
-            .blit = .{
-                .source = info.source,
-                .box = info.box,
-                .pos = info.pos,
-            },
+            .blit = info,
         });
     }
     pub fn staticmesh(self: *CommandBuffer, id: nux.ID) !void {

@@ -313,6 +313,7 @@ fn beginColoredBatch(self: *Self, color: [4]f32) !void {
         .texture_height = 0,
         .color = color,
     };
+
     self.active_batch_index = self.batches_head;
     try self.encoder.bindTexture(.texture, null);
 }
@@ -367,7 +368,7 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
                 try self.endBatch();
             },
             .rectangle => |info| {
-                try self.beginColoredBatch(.{ 1, 0, 0, 1 });
+                try self.beginColoredBatch(info.color);
                 try self.pushQuad(info.box, .zero(), 1);
                 try self.endBatch();
             },
@@ -378,19 +379,18 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
 
                 var pos: nux.Vec2i = info.position.as(nux.Vec2i);
                 var line_height: u32 = 0;
-                for (cb.dataSlice(info.data)) |char| {
-                    if (font.getGlyph(char)) |glyph| {
+                var it = font.iterate(cb.dataSlice(info.data));
+                while (it.next()) |entry| {
+                    const glyph = entry.glyph;
 
-                        // Push quad
-                        const quad = nux.Box2i.init(pos.x(), pos.y(), glyph.box.w(), glyph.box.h());
-                        try self.pushQuad(quad, glyph.box.pos, info.scale);
+                    // Push quad
+                    const quad = nux.Box2i.init(pos.x(), pos.y(), glyph.box.w(), glyph.box.h());
+                    try self.pushQuad(quad, glyph.box.pos, info.scale);
 
-                        // Advance text box
-                        line_height = @max(line_height, glyph.box.h());
-                        pos = pos.add(.init(@as(i32, @intCast((glyph.box.w() + 1) * info.scale)), 0));
-                    }
+                    // Advance text box
+                    line_height = @max(line_height, glyph.box.h());
+                    pos = pos.add(.init(@as(i32, @intCast((glyph.box.w() + 1) * info.scale)), 0));
                 }
-
                 try self.endBatch();
             },
             else => {},

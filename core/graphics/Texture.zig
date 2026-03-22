@@ -171,24 +171,26 @@ pub fn syncGPU(self: *Self) !void {
 pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2i) !void {
     const node = try self.components.get(id);
 
-    var cb = nux.Graphics.CommandBuffer.init(self.allocator);
-    defer cb.deinit();
-    try cb.blit(.{
-        .source = id,
-        .pos = pos,
-        .box = .init(0, 0, node.info.width, node.info.height),
-        .scale = 2,
-    });
-    try cb.rectangle(.{
-        .box = .init(10, 10, 100, 100),
-    });
-    try cb.rectangle(.{
-        .box = .init(110, 110, 100, 100),
-    });
-    try cb.text(.{
-        .position = .init(200, 200),
-        .text = "Coucou Juliaaaaaa !",
-        .scale = 4,
-    });
-    try self.gpu.render(&cb);
+    _ = node;
+    _ = pos;
+    // var cb = nux.Graphics.CommandBuffer.init(self.allocator);
+    // defer cb.deinit();
+    // try cb.blit(.{
+    //     .source = id,
+    //     .pos = pos,
+    //     .box = .init(0, 0, node.info.width, node.info.height),
+    //     .scale = 2,
+    // });
+    // try cb.rectangle(.{
+    //     .box = .init(10, 10, 100, 100),
+    // });
+    // try cb.rectangle(.{
+    //     .box = .init(110, 110, 100, 100),
+    // });
+    // try cb.text(.{
+    //     .position = .init(200, 200),
+    //     .text = "Coucou Juliaaaaaa !",
+    //     .scale = 4,
+    // });
+    // try self.gpu.render(&cb);
 }

@@ -108,11 +108,13 @@ pub const Module = struct {
                 inline for (@typeInfo(T).@"struct".fields) |field| {
                     switch (@typeInfo(field.type)) {
                         .pointer => |info| {
-                            if (core.findModule(info.child)) |dependency| {
-                                if (core.platform.config.logModuleInitialization) {
-                                    core.log("inject {s} to {s}", .{ @typeName(info.child), @typeName(T) });
+                            if (info.child != u8) {
+                                if (core.findModule(info.child)) |dependency| {
+                                    if (core.platform.config.logModuleInitialization) {
+                                        core.log("inject {s} to {s}", .{ @typeName(info.child), @typeName(T) });
+                                    }
+                                    @field(self, field.name) = dependency;
                                 }
-                                @field(self, field.name) = dependency;
                             }
                         },
                         else => {},

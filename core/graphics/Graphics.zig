@@ -12,7 +12,7 @@ pub const CommandBuffer = struct {
 
     const Rectangle = struct {
         box: nux.Box2i,
-        color: u32 = 0,
+        color: [4]f32 = .{ 1, 1, 1, 1 },
         radius: u32 = 0,
         bevel: u32 = 0,
     };
@@ -25,8 +25,8 @@ pub const CommandBuffer = struct {
 
     const Text = struct {
         text: []const u8,
-        color: u32 = 0,
-        position: nux.Vec2i = .zero(),
+        color: [4]f32 = .{ 1, 1, 1, 1 },
+        pos: nux.Vec2i = .zero(),
         scale: u32 = 1,
     };
 
@@ -103,7 +103,7 @@ pub const CommandBuffer = struct {
         try self.commands.append(self.allocator, .{
             .text = .{
                 .data = .{ .start = start, .end = self.data.items.len },
-                .position = info.position,
+                .position = info.pos,
                 .color = 0,
                 .scale = info.scale,
             },

@@ -5,9 +5,23 @@ const monogram = @import("monogram.zig");
 const default_font_id = "Fonts/Default";
 
 const Self = @This();
-const Font = struct {
+pub const Font = struct {
     const Glyph = struct {
         box: nux.Box2i,
+    };
+
+    pub const GlyphIterator = struct {
+        font: *Font,
+        iterator: std.unicode.Utf8Iterator,
+
+        pub fn next(self: *GlyphIterator) ?struct { glyph: Glyph, codepoint: u32 } {
+            while (self.iterator.nextCodepoint()) |codepoint| {
+                if (self.font.getGlyph(codepoint)) |glyph| {
+                    return .{ .glyph = glyph, .codepoint = codepoint };
+                }
+            }
+            return null;
+        }
     };
 
     glyphs: []?Glyph = undefined,
@@ -17,8 +31,15 @@ const Font = struct {
         mod.allocator.free(self.glyphs);
     }
 
-    pub fn getGlyph(self: *Font, c: u8) ?Glyph {
-        const index: usize = @intCast(c);
+    pub fn iterate(self: *Font, text: []const u8) GlyphIterator {
+        return .{
+            .font = self,
+            .iterator = std.unicode.Utf8View.initUnchecked(text).iterator(),
+        };
+    }
+
+    pub fn getGlyph(self: *Font, codepoint: u32) ?Glyph {
+        const index: usize = @intCast(codepoint);
         if (index >= self.glyphs.len) {
             return null;
         }

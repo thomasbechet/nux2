@@ -19,6 +19,7 @@ pub fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) 
 
     const font: *nux.Font.Font = @ptrCast(@alignCast(config.user_data));
     var it = font.iterate(text);
+    // std.log.info("MEASURE '{s}'", .{text});
     while (it.next()) |entry| {
         const glyph = entry.glyph;
         if (entry.codepoint != '\n') {
@@ -47,11 +48,11 @@ fn sidebarItemComponent(index: u32, font: *nux.Font.Font) void {
         .layout = sidebar_item_layout,
         .background_color = orange,
     })({
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        writer.print("Side Element {d}", .{index}) catch return;
-        const text = buf[0..writer.end];
-        clay.text(text, .{
+        // var buf: [256]u8 = undefined;
+        // var writer = std.Io.Writer.fixed(&buf);
+        // writer.print("Side Element {d}", .{index}) catch return;
+        // const text = buf[0..writer.end];
+        clay.text("Hello World", .{
             .font_size = 24,
             .user_data = @ptrCast(font),
         });

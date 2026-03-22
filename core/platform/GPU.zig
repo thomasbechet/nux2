@@ -50,7 +50,6 @@ pub const BufferType = enum(u32) {
 pub const PipelineType = enum(u32) {
     uber = 0,
     canvas = 1,
-    blit = 2,
 };
 
 pub const Descriptor = enum(u32) {

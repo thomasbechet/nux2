@@ -177,6 +177,7 @@ pub fn blit(self: *Self, id: nux.ID, pos: nux.Vec2i) !void {
         .source = id,
         .pos = pos,
         .box = .init(0, 0, node.info.width, node.info.height),
+        .scale = 2,
     });
     try cb.rectangle(.{
         .box = .init(10, 10, 100, 100),

@@ -37,8 +37,6 @@ const shader_uber_vertex = @embedFile("shaders/uber.vert");
 const shader_uber_fragment = @embedFile("shaders/uber.frag");
 const shader_canvas_vertex = @embedFile("shaders/canvas.vert");
 const shader_canvas_fragment = @embedFile("shaders/canvas.frag");
-const shader_blit_vertex = @embedFile("shaders/blit.vert");
-const shader_blit_fragment = @embedFile("shaders/blit.frag");
 
 allocator: std.mem.Allocator,
 active_pipeline: ?*PipelineHandle,
@@ -155,15 +153,6 @@ fn createPipeline(ctx: *anyopaque, info: Platform.PipelineInfo) anyerror!Platfor
 
             pipeline.locations[@intFromEnum(Platform.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
             pipeline.locations[@intFromEnum(Platform.Descriptor.batch_index)] = gl.GetUniformLocation(pipeline.program, "batchIndex");
-
-            pipeline.units[@intFromEnum(Platform.Descriptor.texture)] = 0;
-        },
-        .blit => {
-            pipeline.program = try self.compileProgram(shader_blit_vertex, shader_blit_fragment);
-
-            pipeline.locations[@intFromEnum(Platform.Descriptor.texture)] = gl.GetUniformLocation(pipeline.program, "texture0");
-            pipeline.locations[@intFromEnum(Platform.Descriptor.texture_width)] = gl.GetUniformLocation(pipeline.program, "textureWidth");
-            pipeline.locations[@intFromEnum(Platform.Descriptor.texture_height)] = gl.GetUniformLocation(pipeline.program, "textureHeight");
 
             pipeline.units[@intFromEnum(Platform.Descriptor.texture)] = 0;
         },

@@ -61,7 +61,6 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     });
 
     const commands = clay.endLayout();
-    // self.logger.info("CLAY COMMANDS {d}", .{commands.len});
 
     var cb: nux.Graphics.CommandBuffer = .init(self.allocator);
     defer cb.deinit();

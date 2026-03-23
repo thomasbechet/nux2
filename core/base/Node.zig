@@ -296,7 +296,7 @@ const ComponentIterator = struct {
             .current = 0,
         };
     }
-    pub fn next(it: *@This()) ?nux.Component.ID {
+    pub fn next(it: *@This()) ?nux.ComponentID {
         while (it.current < it.entry.components.len) {
             const index = it.current;
             it.current += 1;
@@ -479,7 +479,7 @@ pub fn createPath(self: *Self, base: ID, path: []const u8) !ID {
     return node;
 }
 pub fn createInstanceOf(self: *Self, parent: ID, collection: ID) !ID {
-    return self.collection.instantiate(collection, parent); 
+    return self.collection.instantiate(collection, parent);
 }
 pub fn delete(self: *Self, id: ID) !void {
 

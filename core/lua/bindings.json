@@ -4,7 +4,6 @@
         {
             "path": "base/Node.zig",
             "ignore": [
-                "Components",
                 "ComponentType",
                 "ID",
                 "NodeEntry",
@@ -20,6 +19,16 @@
                 "Reader",
                 "Writer",
                 "has"
+            ]
+        },
+        {
+            "path": "base/Component.zig",
+            "ignore": [
+                "Components",
+                "ComponentType",
+                "registerModule",
+                "get",
+                "find"
             ]
         },
         {
@@ -63,9 +72,6 @@
             "path": "gui/Button.zig"
         },
         {
-            "path": "graphics/Canvas.zig"
-        },
-        {
             "path": "graphics/Texture.zig",
             "ignore": [
                 "addFromGltfImage",
@@ -93,12 +99,6 @@
         },
         {
             "path": "graphics/StaticMesh.zig"
-        },
-        {
-            "path": "gui/GUI.zig",
-            "ignore": [
-                "measureText"
-            ]
         },
         {
             "path": "gui/Widget.zig"

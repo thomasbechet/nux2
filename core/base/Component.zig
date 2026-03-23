@@ -206,6 +206,14 @@ pub fn get(self: *Self, component: ID) !*ComponentType {
     }
     return &self.component_types.items[component];
 }
+pub fn add(self: *Self, id: nux.ID, comp: nux.ComponentID) !void {
+    const component = try self.get(comp);
+    try component.v_add(component.v_ptr, id);
+}
+pub fn remove(self: *Self, id: nux.ID, comp: nux.ComponentID) !void {
+    const component = try self.get(comp);
+    component.v_remove(component.v_ptr, id);
+}
 pub fn registerModule(self: *Self, module: anytype) !void {
     const T = @typeInfo(@TypeOf(module)).pointer.child;
     if (@hasField(T, module_components_field)) {

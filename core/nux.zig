@@ -20,15 +20,16 @@ pub const StaticMesh = @import("graphics/StaticMesh.zig");
 pub const Camera = @import("graphics/Camera.zig");
 pub const GUI = @import("gui/GUI.zig");
 pub const Widget = @import("gui/Widget.zig");
+pub const Button = @import("gui/Button.zig");
 pub const Font = @import("gui/Font.zig");
 pub const Window = @import("graphics/Window.zig");
 pub const Vertex = @import("graphics/Vertex.zig");
 pub const GPU = @import("graphics/GPU.zig");
 pub const Rasterizer = @import("graphics/Rasterizer.zig");
-pub const Canvas = @import("graphics/Canvas.zig");
 pub const Gltf = @import("graphics/Gltf.zig");
 
 pub const ID = Node.ID;
+pub const ComponentID = Component.ID;
 pub const PropertyValue = Node.PropertyValue;
 pub const Components = Component.Components;
 pub const Writer = Node.Writer;
@@ -288,12 +289,12 @@ pub const Core = struct {
             Mesh,
             StaticMesh,
             Camera,
-            Lua,
-            Canvas,
             GUI,
             Widget,
+            Button,
             Font,
             Gltf,
+            Lua,
         });
 
         // Handle command

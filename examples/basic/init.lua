@@ -1,5 +1,12 @@
 local mymodule = require("mymodule")
 
+local function createButton(parent)
+    local button = Node.create(parent)
+    Component.add(button, Widget)
+    Component.add(button, Button)
+    return button
+end
+
 function M:onInit()
     -- File.logGlob("*")
     -- Gltf.loadGltf(Node.getRoot(), "industrial.glb")
@@ -9,6 +16,16 @@ function M:onInit()
 
     -- local gui = GUI.add(Node.getRoot())
     -- local widget = Widget.add(gui)
+
+    local gui = Node.create("/")
+    local button = createButton(gui) 
+    local button = createButton(gui) 
+    local button = createButton(gui) 
+    local button = createButton(gui) 
+    Node.dump(gui)
+
+    -- print(Transform.id)
+    -- print(Widget.id)
 end
 
 function M:onDeinit()

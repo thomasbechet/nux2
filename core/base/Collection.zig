@@ -16,7 +16,7 @@ const Collection = struct {
     path: []const u8 = "",
     nodes: std.ArrayList(Node) = .empty,
     references: std.ArrayList([]const u8) = .empty,
-    component_ids: std.ArrayList(nux.Component.ID) = .empty,
+    component_ids: std.ArrayList(nux.ComponentID) = .empty,
     component_indices: std.ArrayList(usize) = .empty,
     data: std.ArrayList(u8) = .empty,
 
@@ -55,7 +55,7 @@ pub fn exportNode(self: *Self, parent: nux.ID, root: nux.ID) !nux.ID {
     var entries: std.ArrayList(Node) = try .initCapacity(self.allocator, self.ids.items.len);
     errdefer entries.deinit(self.allocator);
 
-    var component_ids: std.ArrayList(nux.Component.ID) = try .initCapacity(self.allocator, 256);
+    var component_ids: std.ArrayList(nux.ComponentID) = try .initCapacity(self.allocator, 256);
     errdefer component_ids.deinit(self.allocator);
 
     var component_indices: std.ArrayList(usize) = try .initCapacity(self.allocator, 256);

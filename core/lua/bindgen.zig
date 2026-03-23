@@ -9,6 +9,7 @@ const PrimitiveType = enum {
     u32,
     string,
     ID,
+    ComponentID,
     Vec2,
     Vec2i,
     Vec3,
@@ -575,6 +576,19 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
         \\        }}
         \\
     , .{});
+    try writer.print(
+        \\        fn checkComponentID(lua: ?*c.lua_State, index: c_int) nux.ComponentID {{
+        \\            if (c.lua_isinteger(lua, index) != 0) {{
+        \\                return @as(nux.ComponentID, @bitCast(@as(u8, @intCast(c.luaL_checkinteger(lua, index)))));
+        \\            }} else if (c.lua_istable(lua, index)) {{
+        \\                _ = c.lua_getfield(lua, index, "id");  
+        \\                return @as(nux.ComponentID, @bitCast(@as(u8, @intCast(c.luaL_checkinteger(lua, -1)))));
+        \\            }}
+        \\            _ = c.luaL_error(lua, "invalid component id value");
+        \\            return 0;
+        \\        }}       
+        \\
+    , .{});
     for (modules.modules.items, 0..) |*module, module_index| {
         try writer.print("\t\tconst {s} = struct {{\n", .{module.name});
         try writer.print("\t\t\tconst Module = @import(\"{s}/{s}\");\n", .{ modules.rootpath, module.path });
@@ -595,6 +609,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                             .u32 => try writer.print("@as(u32, @intCast(c.luaL_checkinteger(lua, {d})));\n", .{i}),
                             .string => try writer.print("std.mem.span(c.luaL_checklstring(lua, {d}, null));\n", .{i}),
                             .ID => try writer.print("checkID(lua, {d});\n", .{i}),
+                            .ComponentID => try writer.print("checkComponentID(lua, {d});\n", .{i}),
                             .Vec2 => try writer.print("Lua.checkUserData(lua, .vec2, {d}).vec2;\n", .{i}),
                             .Vec2i => try writer.print("Lua.checkUserData(lua, .vec2, {d}).vec2.as(nux.Vec2i);\n", .{i}),
                             .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d}).vec3;\n", .{i}),
@@ -685,6 +700,10 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
         try writer.print("\t\t\tif (core.findModule({s}.Module)) |module| {{\n", .{module.name});
         try writer.print("\t\t\t\tself.mod{d} = module;\n", .{module_index});
         try writer.print("\t\t\t\tc.lua_newtable(lua);\n", .{});
+        if (module.is_component_module) {
+            try writer.print("\t\t\t\tc.lua_pushinteger(lua, module.components.id);\n", .{});
+            try writer.print("\t\t\t\tc.lua_setfield(lua, -2, \"id\");\n", .{});
+        }
         try writer.print("\t\t\t\tconst {s}_lib: [*]const c.luaL_Reg = &.{{\n", .{module.name});
         var func_it = module.functions.iterator();
         while (func_it.next()) |entry| {

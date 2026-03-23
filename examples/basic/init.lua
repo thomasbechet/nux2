@@ -1,8 +1,8 @@
 local mymodule = require("mymodule")
 
-local function createButton(parent)
-    local button = Node.create(parent)
-    Component.add(button, Widget)
+local function createButton(parent, name)
+    local button = Node.createNamed(parent, name)
+    Component.add(button, UIElement)
     Component.add(button, Button)
     return button
 end
@@ -17,12 +17,10 @@ function M:onInit()
     -- local gui = GUI.add(Node.getRoot())
     -- local widget = Widget.add(gui)
 
-    local gui = Node.create("/")
-    local button = createButton(gui) 
-    local button = createButton(gui) 
-    local button = createButton(gui) 
-    local button = createButton(gui) 
-    Node.dump(gui)
+    local ui = Node.createNamed("/", "ui")
+    local button = createButton(ui, "confirm")
+    local button = createButton(ui, "cancel")
+    Node.dump(ui)
 
     -- print(Transform.id)
     -- print(Widget.id)

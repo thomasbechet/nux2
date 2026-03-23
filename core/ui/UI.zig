@@ -6,7 +6,7 @@ const Self = @This();
 
 allocator: std.mem.Allocator,
 node: *nux.Node,
-widget: *nux.Widget,
+element: *nux.UIElement,
 button: *nux.Button,
 font: *nux.Font,
 window: *nux.Window,

@@ -69,7 +69,7 @@
             "path": "input/InputMap.zig"
         },
         {
-            "path": "gui/Button.zig"
+            "path": "ui/Button.zig"
         },
         {
             "path": "graphics/Texture.zig",
@@ -101,7 +101,7 @@
             "path": "graphics/StaticMesh.zig"
         },
         {
-            "path": "gui/Widget.zig"
+            "path": "ui/UIElement.zig"
         }
     ]
 }

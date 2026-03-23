@@ -3,6 +3,8 @@ const nux = @import("../nux.zig");
 const zigimg = @import("zigimg");
 const zgltf = @import("zgltf");
 
+const Self = @This();
+
 pub const Filtering = enum(u32) {
     nearest = 0,
     linear = 1,
@@ -14,8 +16,7 @@ pub const Type = enum(u32) {
     render_target = 2,
 };
 
-const Self = @This();
-const Texture = struct {
+const Component = struct {
     data: ?[]u8 = null,
     path: ?[]const u8 = null, // Nonnull if loaded from file
     sync: bool = false,
@@ -31,7 +32,7 @@ const Texture = struct {
         } = null,
     };
 
-    pub fn deinit(self: *Texture, mod: *Self) void {
+    pub fn deinit(self: *Component, mod: *Self) void {
         if (self.data) |data| {
             mod.allocator.free(data);
         }
@@ -43,7 +44,7 @@ const Texture = struct {
         }
         self.* = .{};
     }
-    pub fn load(mod: *Self, reader: *nux.Reader) !Texture {
+    pub fn load(mod: *Self, reader: *nux.Reader) !Component {
         const serialized = try reader.read(Serialized);
         if (serialized.path) |path| {
             return try .initFromFile(mod, path);
@@ -52,7 +53,7 @@ const Texture = struct {
         }
         return .{};
     }
-    pub fn save(self: *Texture, _: *Self, writer: *nux.Writer) !void {
+    pub fn save(self: *Component, _: *Self, writer: *nux.Writer) !void {
         if (self.path) |path| {
             try writer.write(Serialized{
                 .path = path,
@@ -67,15 +68,15 @@ const Texture = struct {
             });
         }
     }
-    pub fn description(self: *Texture, _: *Self, w: *std.Io.Writer) !void {
+    pub fn description(self: *Component, _: *Self, w: *std.Io.Writer) !void {
         try w.print("{d}x{d} ", .{ self.info.width, self.info.height });
         if (self.path) |path| {
             try w.print("{s}", .{path});
         }
     }
 
-    fn initTransparent(mod: *Self, width: u32, height: u32) !Texture {
-        const texture = Texture{
+    fn initTransparent(mod: *Self, width: u32, height: u32) !Component {
+        const texture = Component{
             .data = try mod.allocator.alloc(u8, width * height * 4),
             .info = .{
                 .width = width,
@@ -85,7 +86,7 @@ const Texture = struct {
         @memset(texture.data.?, 0);
         return texture;
     }
-    fn initFromFile(mod: *Self, path: []const u8) !Texture {
+    fn initFromFile(mod: *Self, path: []const u8) !Component {
         // Read file
         const data = try mod.file.read(path, mod.allocator);
         errdefer mod.allocator.free(data);
@@ -98,7 +99,7 @@ const Texture = struct {
             .path = try mod.allocator.dupe(u8, path),
         };
     }
-    fn initFromData(mod: *Self, data: []const u8) !Texture {
+    fn initFromData(mod: *Self, data: []const u8) !Component {
         // Load image
         var img = try zigimg.Image.fromMemory(mod.allocator, data);
         defer img.deinit(mod.allocator);
@@ -106,7 +107,7 @@ const Texture = struct {
         // Init node
         return try .initFromRawPixels(mod, @intCast(img.width), @intCast(img.height), img.rawBytes());
     }
-    fn initFromRawPixels(mod: *Self, width: u32, height: u32, data: []const u8) !Texture {
+    fn initFromRawPixels(mod: *Self, width: u32, height: u32, data: []const u8) !Component {
         return .{
             .data = try mod.allocator.dupe(u8, data),
             .info = .{
@@ -115,7 +116,7 @@ const Texture = struct {
             },
         };
     }
-    pub fn syncGPU(self: *Texture, gpu: *nux.GPU) !void {
+    pub fn syncGPU(self: *Component, gpu: *nux.GPU) !void {
         if (!self.sync) {
             // Check renderer allocation
             if (self.handle == null) {
@@ -137,7 +138,7 @@ const Texture = struct {
     }
 };
 
-components: nux.Components(Texture),
+components: nux.Components(Component),
 node: *nux.Node,
 logger: *nux.Logger,
 file: *nux.File,

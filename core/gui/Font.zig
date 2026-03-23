@@ -1,17 +1,18 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
-
 const monogram = @import("monogram.zig");
+
 const default_font_id = "Fonts/Default";
 
 const Self = @This();
-pub const Font = struct {
+
+pub const Component = struct {
     const Glyph = struct {
         box: nux.Box2i,
     };
 
     pub const GlyphIterator = struct {
-        font: *Font,
+        font: *Component,
         iterator: std.unicode.Utf8Iterator,
 
         pub fn next(self: *GlyphIterator) ?struct { glyph: Glyph, codepoint: u32 } {
@@ -27,18 +28,18 @@ pub const Font = struct {
     glyphs: []?Glyph = undefined,
     texture: nux.ID = .null,
 
-    pub fn deinit(self: *Font, mod: *Self) void {
+    pub fn deinit(self: *Component, mod: *Self) void {
         mod.allocator.free(self.glyphs);
     }
 
-    pub fn iterate(self: *Font, text: []const u8) GlyphIterator {
+    pub fn iterate(self: *Component, text: []const u8) GlyphIterator {
         return .{
             .font = self,
             .iterator = std.unicode.Utf8View.initUnchecked(text).iterator(),
         };
     }
 
-    pub fn getGlyph(self: *Font, codepoint: u32) ?Glyph {
+    pub fn getGlyph(self: *Component, codepoint: u32) ?Glyph {
         const index: usize = @intCast(codepoint);
         if (index >= self.glyphs.len) {
             return null;
@@ -48,7 +49,7 @@ pub const Font = struct {
 };
 
 allocator: std.mem.Allocator,
-components: nux.Components(Font),
+components: nux.Components(Component),
 node: *nux.Node,
 texture: *nux.Texture,
 
@@ -64,7 +65,7 @@ fn createDefaultFont(self: *Self) !void {
     // Create font
     const font = try self.components.addPtr(id);
     font.texture = id;
-    font.glyphs = try self.allocator.alloc(?Font.Glyph, max + 1);
+    font.glyphs = try self.allocator.alloc(?Component.Glyph, max + 1);
     errdefer self.allocator.free(font.glyphs);
     for (0..font.glyphs.len) |i| {
         font.glyphs[i] = null;

@@ -6,6 +6,7 @@ const Self = @This();
 
 allocator: std.mem.Allocator,
 node: *nux.Node,
+widget: *nux.Widget,
 font: *nux.Font,
 window: *nux.Window,
 gpu: *nux.GPU,
@@ -15,7 +16,7 @@ pub fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) 
     var text_width: u32 = 0;
     var max_text_height: u32 = 0;
 
-    const font: *nux.Font.Font = @ptrCast(@alignCast(config.user_data));
+    const font: *nux.Font.Component = @ptrCast(@alignCast(config.user_data));
     var it = font.iterate(text);
     while (it.next()) |entry| {
         const glyph = entry.glyph;
@@ -36,7 +37,7 @@ pub fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) 
     };
 }
 
-fn sidebarItemComponent(self: *Self, index: u32, font: *nux.Font.Font, sb: *std.ArrayList(u8)) void {
+fn sidebarItemComponent(self: *Self, index: u32, font: *nux.Font.Component, sb: *std.ArrayList(u8)) void {
     const sidebar_item_layout: clay.LayoutConfig = .{ .sizing = .{ .w = .fit } };
     const orange: clay.Color = .{ 225, 138, 50, 255 };
     clay.UI()(.{

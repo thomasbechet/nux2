@@ -4,12 +4,17 @@ pub const Color = struct {
     rgba: nux.Vec4,
 
     pub const white: Color = .init(1, 1, 1, 1);
+    pub const black: Color = .init(1, 1, 1, 0);
     pub const red: Color = .init(1, 0, 0, 1);
     pub const green: Color = .init(0, 1, 0, 1);
     pub const blue: Color = .init(0, 0, 1, 1);
+    pub const transparent: Color = .init(0, 0, 0, 0);
 
     pub fn init(rv: f32, vg: f32, vb: f32, va: f32) Color {
         return .{ .rgba = .init(rv, vg, vb, va) };
+    }
+    pub fn fromVec(v: nux.Vec4) Color {
+        return .{ .rgba = v };
     }
     pub fn fromRGBA255(value: [4]f32) Color {
         return .init(

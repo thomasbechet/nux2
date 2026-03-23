@@ -4,14 +4,14 @@ const zgltf = @import("zgltf");
 
 const Self = @This();
 
-const Mesh = struct {
+const Component = struct {
     span: ?nux.SpanAllocator.Span = null,
     vertices: std.ArrayList(f32) = .empty,
     layout: nux.Vertex.Layout = .make(.{}),
     primitive: nux.Vertex.Primitive = .triangles,
     sync: bool = false,
 
-    pub fn deinit(self: *Mesh, mod: *Self) void {
+    pub fn deinit(self: *Component, mod: *Self) void {
         self.vertices.deinit(mod.allocator);
         if (self.span) |span| {
             mod.gpu.vertex_span_allocator.free(span) catch {};
@@ -33,7 +33,7 @@ const Mesh = struct {
         return node;
     }
 
-    pub fn syncGPU(self: *Mesh, gpu: *nux.GPU) !void {
+    pub fn syncGPU(self: *Component, gpu: *nux.GPU) !void {
         if (!self.sync) {
             // Check renderer span allocation
             if (self.span == null or self.span.?.length < self.vertices.items.len) {
@@ -54,7 +54,7 @@ const Mesh = struct {
 };
 
 allocator: std.mem.Allocator,
-components: nux.Components(Mesh),
+components: nux.Components(Component),
 config: *nux.Config,
 gpu: *nux.GPU,
 

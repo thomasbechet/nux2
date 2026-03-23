@@ -16,6 +16,7 @@ const PrimitiveType = enum {
     Vec4,
     Vec4i,
     Quat,
+    Color,
     Self,
 };
 
@@ -599,6 +600,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                             .Vec3 => try writer.print("Lua.checkUserData(lua, .vec3, {d}).vec3;\n", .{i}),
                             .Vec4 => try writer.print("Lua.checkUserData(lua, .vec4, {d}).vec4;\n", .{i}),
                             .Quat => try writer.print("Lua.checkUserData(lua, .quat, {d}).quat;\n", .{i}),
+                            .Color => try writer.print("nux.Color.fromVec(Lua.checkUserData(lua, .vec4, {d}).vec4);\n", .{i}),
                             else => {},
                         }
                     },
@@ -651,6 +653,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                             .Vec3 => try writer.print("Lua.pushUserData(lua, .vec3, ret);\n", .{}),
                             .Vec4 => try writer.print("Lua.pushUserData(lua, .vec4, ret);\n", .{}),
                             .Quat => try writer.print("Lua.pushUserData(lua, .quat, ret);\n", .{}),
+                            .Color => try writer.print("Lua.pushUserData(lua, .vec4, ret.rgba);\n", .{}),
                             else => {
                                 try writer.print("c.lua_pushinteger(lua, 1);\n", .{});
                             },

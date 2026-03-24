@@ -42,12 +42,12 @@ pub fn Components(T: type) type {
                     .iterator = components.bitset.iterator(.{}),
                 };
             }
-            pub fn next(self: *@This()) ?struct { data: *T, id: nux.ID } {
+            pub fn next(self: *@This()) ?struct { component: *T, id: nux.ID } {
                 const index = self.iterator.next() orelse return null;
-                const entry = self.components.data.get(index);
+                const component = self.components.data.get(index);
                 return .{
-                    .data = &entry.data,
-                    .id = entry.id,
+                    .component = &component.data,
+                    .id = component.id,
                 };
             }
         };
@@ -61,7 +61,7 @@ pub fn Components(T: type) type {
             }
             pub fn next(self: *@This()) ?*T {
                 const entry = self.iterator.next() orelse return null;
-                return entry.data;
+                return entry.component;
             }
         };
 

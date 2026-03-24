@@ -6,6 +6,7 @@ const Component = struct {
     parent: nux.ID = .null,
     box: nux.Box2i = .empty(0, 0),
     background_color: nux.Color = .red,
+    processed: bool = false,
 };
 
 node: *nux.Node,

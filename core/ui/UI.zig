@@ -7,6 +7,8 @@ const Self = @This();
 allocator: std.mem.Allocator,
 node: *nux.Node,
 element: *nux.UIElement,
+viewport: *nux.Viewport,
+container: *nux.Container,
 button: *nux.Button,
 font: *nux.Font,
 window: *nux.Window,
@@ -38,7 +40,7 @@ pub fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) 
     };
 }
 
-fn sidebarItemComponent(self: *Self, index: u32, font: *nux.Font.Component, sb: *std.ArrayList(u8)) void {
+fn sidebarItemComponent(_: *Self, index: u32, font: *nux.Font.Component) void {
     const sidebar_item_layout: clay.LayoutConfig = .{ .sizing = .{ .w = .fit } };
     const orange: clay.Color = .{ 225, 138, 50, 255 };
     clay.UI()(.{
@@ -46,14 +48,8 @@ fn sidebarItemComponent(self: *Self, index: u32, font: *nux.Font.Component, sb: 
         .layout = sidebar_item_layout,
         .background_color = orange,
     })({
-        var buf: [256]u8 = .{0} ** 256;
-        var writer = std.Io.Writer.fixed(&buf);
-        writer.print("Side Test Hello Element {d}", .{index}) catch return;
-        const text = buf[0..writer.end];
-        const start = sb.items.len;
-        sb.appendSlice(self.allocator, text) catch return;
-        clay.text(sb.items[start..], .{
-            .font_size = 24 * 2,
+        clay.text("Hello World", .{
+            .font_size = 24,
             .user_data = @ptrCast(font),
             .color = .{ 255, 255, 255, 255 },
             .alignment = .left,
@@ -86,9 +82,21 @@ pub fn onUpdate(self: *Self) !void {
     const light_grey: clay.Color = .{ 224, 215, 210, 255 };
     const font = try self.font.components.get(try self.font.default());
 
-    var string_buffer: std.ArrayList(u8) = try .initCapacity(self.allocator, 256);
-    defer string_buffer.deinit(self.allocator);
     clay.beginLayout();
+
+    // var it = self.element.components.iterator();
+    // while (it.next()) |entry| {
+    //
+    //     // Find parent viewport
+    //     var viewport_id: ?nux.ID = null;
+    //     while (true) {
+    //         const parent_id = try self.node.getParent(entry.id);
+    //         if (self.viewport.components.has(parent_id)) {
+    //
+    //         }
+    //     }
+    // }
+
     clay.UI()(.{
         .id = .ID("SideBar"),
         .layout = .{
@@ -100,10 +108,10 @@ pub fn onUpdate(self: *Self) !void {
         },
         .background_color = light_grey,
     })({
-        self.sidebarItemComponent(0, font, &string_buffer);
-        self.sidebarItemComponent(1, font, &string_buffer);
-        self.sidebarItemComponent(2, font, &string_buffer);
-        self.sidebarItemComponent(3, font, &string_buffer);
+        self.sidebarItemComponent(0, font);
+        self.sidebarItemComponent(1, font);
+        self.sidebarItemComponent(2, font);
+        self.sidebarItemComponent(3, font);
     });
     const commands = clay.endLayout();
 

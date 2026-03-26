@@ -84,18 +84,18 @@ pub fn onUpdate(self: *Self) !void {
 
     clay.beginLayout();
 
-    // var it = self.element.components.iterator();
-    // while (it.next()) |entry| {
-    //
-    //     // Find parent viewport
-    //     var viewport_id: ?nux.ID = null;
-    //     while (true) {
-    //         const parent_id = try self.node.getParent(entry.id);
-    //         if (self.viewport.components.has(parent_id)) {
-    //
-    //         }
-    //     }
-    // }
+    var it = self.element.components.iterator();
+    while (it.next()) |entry| {
+
+        // Find parent viewport
+        var viewport_id: ?nux.ID = null;
+        while (true) {
+            const parent_id = try self.node.getParent(entry.id);
+            if (self.viewport.components.has(parent_id)) {
+
+            }
+        }
+    }
 
     clay.UI()(.{
         .id = .ID("SideBar"),

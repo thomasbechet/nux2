@@ -32,8 +32,8 @@ pub const Gltf = @import("graphics/Gltf.zig");
 
 pub const ID = Node.ID;
 pub const ComponentID = Component.ID;
-pub const PropertyValue = Node.PropertyValue;
 pub const Components = Component.Components;
+pub const Property = Component.Property;
 pub const Writer = Node.Writer;
 pub const Reader = Node.Reader;
 pub const vec = @import("math/vec.zig");

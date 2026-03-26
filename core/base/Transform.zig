@@ -15,6 +15,9 @@ const Component = struct {
     pub fn save(self: *const Component, _: *Self, writer: *nux.Writer) !void {
         try writer.write(self);
     }
+    pub fn inspect(self: *Self, prop: *nux.Property) !void {
+        if (prop.reflect(&self.position)) {}
+    }
 };
 
 components: nux.Components(Component),

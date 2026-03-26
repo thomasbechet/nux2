@@ -10,14 +10,6 @@ pub const max_name: usize = 64;
 pub const max_component = 128;
 pub const path_separator = '/';
 
-pub const PropertyValue = union(enum) {
-    id: nux.ID,
-    vec2: nux.Vec2,
-    vec3: nux.Vec3,
-    vec4: nux.Vec4,
-    quat: nux.Quat,
-};
-
 pub const ID = packed struct(u32) {
     pub const @"null" = @This(){ .version = 0, .index = 0 };
 

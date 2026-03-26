@@ -8,6 +8,22 @@ pub const ID = u8;
 
 pub const module_components_field = "components";
 
+pub const PropertyValue = union(enum) {
+    id: nux.ID,
+    vec2: nux.Vec2,
+    vec3: nux.Vec3,
+    vec4: nux.Vec4,
+    quat: nux.Quat,
+};
+
+pub const Property = struct {
+    pub fn reflect(self: *Property, value: anytype) bool {
+        _ = self;
+        _ = value;
+        return false;
+    }
+};
+
 pub const ComponentType = struct {
     name: []const u8,
     v_ptr: *anyopaque,

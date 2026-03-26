@@ -1,12 +1,11 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
-const Input = nux.Input;
 
 const Self = @This();
 const Component = struct {
     const Entry = struct {
         mapping: union(enum) {
-            key: Input.Key,
+            key: nux.Input.Key,
         },
     };
     entries: std.StringHashMap(Entry),
@@ -31,7 +30,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
 
-pub fn bindKey(self: *Self, id: nux.ID, name: []const u8, key: Input.Key) !void {
+pub fn bindKey(self: *Self, id: nux.ID, name: []const u8, key: nux.Input.Key) !void {
     // const map = try self.objects.get(id);
     // const entry = try map.entries.getOrPut(name);
     // entry.value_ptr.mapping.key = key;

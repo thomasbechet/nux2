@@ -129,6 +129,7 @@ const AstIter = struct {
             "onPreUpdate",
             "onUpdate",
             "onPostUpdate",
+            "onRender",
         }) |keyword| {
             if (std.mem.eql(u8, name, keyword)) {
                 ignore = true;

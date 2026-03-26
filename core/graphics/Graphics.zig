@@ -76,7 +76,7 @@ pub const CommandBuffer = struct {
         self.data.deinit(self.allocator);
         self.palette.deinit(self.allocator);
     }
-    pub fn reset(self: *CommandBuffer) !void {
+    pub fn reset(self: *CommandBuffer) void {
         self.commands.clearRetainingCapacity();
         self.data.clearRetainingCapacity();
     }

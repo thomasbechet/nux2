@@ -2,7 +2,7 @@ local mymodule = require("mymodule")
 
 local function createButton(parent, name)
     local button = Node.createNamed(parent, name)
-    Component.add(button, UIElement)
+    Component.add(button, Widget)
     Component.add(button, Button)
     return button
 end
@@ -18,8 +18,15 @@ function M:onInit()
     -- local widget = Widget.add(gui)
 
     local ui = Node.createNamed("/", "ui")
+    Component.add(ui, Viewport)
+    Component.add(ui, Widget)
+    Viewport.setUI(ui, ui)
     local button = createButton(ui, "confirm")
+    Widget.setBackgroundColor(button, Math.vec4(1, 0, 0, 1))
     local button = createButton(ui, "cancel")
+    Widget.setBackgroundColor(button, Math.vec4(0, 1, 0, 1))
+    local button = createButton(button, "cancel")
+    Widget.setBackgroundColor(button, Math.vec4(0, 0, 1, 1))
     Node.dump(ui)
 
     -- print(Transform.id)

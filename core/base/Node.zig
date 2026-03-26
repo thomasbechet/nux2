@@ -265,7 +265,7 @@ const ChildIterator = struct {
             .current = (try mod.getEntry(id)).first_child,
         };
     }
-    fn next(it: *@This()) ?ID {
+    pub fn next(it: *@This()) ?ID {
         const index = it.current;
         if (index == 0) return null;
         const entry = it.self.entries.get(index);

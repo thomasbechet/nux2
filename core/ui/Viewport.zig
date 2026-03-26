@@ -1,16 +1,13 @@
 const nux = @import("../nux.zig");
+const std = @import("std");
 
 const Self = @This();
 
-/// Viewport is a render target 
+/// Viewport is a render target :
 /// What to render ? (camera ? gui ?)
 /// Where to render ? (screen ? texture ?)
 ///
-/// Render step
-/// 1. Update UI layouts using viewports with UI
-/// 2. Render viewports to texture
-/// 3. Render viewports to screen
-
+/// How is describe by the components of what.
 const Source = union(enum) {
     camera: nux.ID,
     ui: nux.ID,
@@ -20,32 +17,39 @@ const Source = union(enum) {
 const Component = struct {
     source: Source = undefined,
     target: ?nux.ID = null,
+    commands: nux.Graphics.CommandBuffer,
+
+    pub fn init(mod: *Self) !Component {
+        return .{
+            .commands = .init(mod.allocator),
+        };
+    }
+    pub fn deinit(self: *Component, _: *Self) void {
+        self.commands.deinit();
+    }
 };
 
+allocator: nux.Platform.Allocator,
+node: *nux.Node,
 texture: *nux.Texture,
-camera: *nux.Camera,
-ui_element: *nux.UIElement,
+gpu: *nux.GPU,
 components: nux.Components(Component),
 
-pub fn onUpdate(self: *Self) !void {
+pub fn init(self: *Self, core: *const nux.Core) !void {
+    self.allocator = core.platform.allocator;
+}
+pub fn onRender(self: *Self) !void {
     var it = self.components.iterator();
     while (it.next()) |entry| {
-
-        
-
-        if (entry.component.target) |id| {
-            // render to texture
-        } else {
-            // render to main framebuffer
-        }
-
-        switch (entry.component.source) {
-            .camera => |id| {
-
-            },
-            .texture => |id| {
-
-            }
-        }
+        try self.gpu.render(&entry.component.commands);
+        entry.component.commands.reset();
     }
+
+    // 1. Render to texture
+    // 2. Render to screen
+}
+
+pub fn setUI(self: *Self, id: nux.ID, widget: nux.ID) !void {
+    const viewport = try self.components.get(id);
+    viewport.source = .{ .ui = widget };
 }

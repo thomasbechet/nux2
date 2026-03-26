@@ -6,13 +6,12 @@ const Self = @This();
 
 allocator: std.mem.Allocator,
 node: *nux.Node,
-element: *nux.UIElement,
+widget: *nux.Widget,
 viewport: *nux.Viewport,
 container: *nux.Container,
 button: *nux.Button,
 font: *nux.Font,
 window: *nux.Window,
-gpu: *nux.GPU,
 clay_memory: []u8,
 
 pub fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) clay.Dimensions {
@@ -71,91 +70,96 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn deinit(self: *Self) void {
     self.allocator.free(self.clay_memory);
 }
-pub fn onUpdate(self: *Self) !void {
-    clay.setLayoutDimensions(.{
-        .w = @floatFromInt(self.window.width),
-        .h = @floatFromInt(self.window.height),
+fn colorToClay(color: nux.Color) clay.Color {
+    return color.rgba.mul(.scalar(255)).data;
+}
+fn renderWidget(self: *Self, id: nux.ID) !void {
+    const widget = self.widget.components.get(id) catch return;
+    const name = try self.node.getName(id);
+    clay.UI()(.{
+        .id = .localID(name),
+        .layout = .{
+            .direction = @enumFromInt(@intFromEnum(widget.direction)),
+            .sizing = .{ .w = .grow, .h = .grow },
+            .padding = .{
+                .left = @intCast(widget.padding.x()),
+                .right = @intCast(widget.padding.y()),
+                .top = @intCast(widget.padding.z()),
+                .bottom = @intCast(widget.padding.w()),
+            },
+            .child_alignment = .{
+                .x = @enumFromInt(@intFromEnum(widget.alignX)),
+                .y = @enumFromInt(@intFromEnum(widget.alignY)),
+            },
+            .child_gap = @intCast(widget.child_gap),
+        },
+        .background_color = colorToClay(widget.background_color),
+    })({
+        var it = try self.node.iterChildren(id);
+        while (it.next()) |child| {
+            if (self.widget.components.has(child)) {
+                try self.renderWidget(child);
+            }
+        }
     });
-    clay.setPointerState(.{ .x = 0, .y = 0 }, false);
-    clay.updateScrollContainers(false, .{ .x = 0, .y = 0 }, 0);
-
-    const light_grey: clay.Color = .{ 224, 215, 210, 255 };
-    const font = try self.font.components.get(try self.font.default());
-
-    clay.beginLayout();
-
-    var it = self.element.components.iterator();
+}
+pub fn onUpdate(self: *Self) !void {
+    var it = self.viewport.components.iterator();
     while (it.next()) |entry| {
+        if (entry.component.source == .ui) {
+            clay.setLayoutDimensions(.{
+                .w = @floatFromInt(self.window.width),
+                .h = @floatFromInt(self.window.height),
+            });
+            clay.setPointerState(.{ .x = 0, .y = 0 }, false);
+            clay.updateScrollContainers(false, .{ .x = 0, .y = 0 }, 0);
+            clay.beginLayout();
+            try self.renderWidget(entry.component.source.ui);
+            const commands = clay.endLayout();
 
-        // Find parent viewport
-        var viewport_id: ?nux.ID = null;
-        while (true) {
-            const parent_id = try self.node.getParent(entry.id);
-            if (self.viewport.components.has(parent_id)) {
-
+            const cb = &entry.component.commands;
+            for (commands) |command| {
+                const box = nux.Box2i.init(
+                    @intFromFloat(command.bounding_box.x),
+                    @intFromFloat(command.bounding_box.y),
+                    @intFromFloat(command.bounding_box.width),
+                    @intFromFloat(command.bounding_box.height),
+                );
+                switch (command.command_type) {
+                    .none => {},
+                    .rectangle => {
+                        try cb.rectangle(.{
+                            .box = box,
+                            .color = .fromRGBA255(command.render_data.rectangle.background_color),
+                        });
+                    },
+                    .border => {},
+                    .text => {
+                        const len: usize = @intCast(command.render_data.text.string_contents.length);
+                        try cb.text(.{
+                            .text = command.render_data.text.string_contents.chars[0..len],
+                            .pos = box.pos,
+                            .scale = command.render_data.text.font_size / 8,
+                            .color = .fromRGBA255(command.render_data.text.text_color),
+                        });
+                    },
+                    .image => {
+                        // try cb.blit(.{
+                        //     .box = box,
+                        //     .pos = box.pos,
+                        // });
+                    },
+                    .scissor_start => {
+                        try cb.scissor(box);
+                    },
+                    .scissor_end => {
+                        try cb.scissor(null);
+                    },
+                    .custom => {},
+                }
             }
         }
     }
 
-    clay.UI()(.{
-        .id = .ID("SideBar"),
-        .layout = .{
-            .direction = .top_to_bottom,
-            .sizing = .{ .w = .grow, .h = .grow },
-            .padding = .all(16),
-            .child_alignment = .{ .x = .center, .y = .center },
-            .child_gap = 16,
-        },
-        .background_color = light_grey,
-    })({
-        self.sidebarItemComponent(0, font);
-        self.sidebarItemComponent(1, font);
-        self.sidebarItemComponent(2, font);
-        self.sidebarItemComponent(3, font);
-    });
-    const commands = clay.endLayout();
-
-    var cb: nux.Graphics.CommandBuffer = .init(self.allocator);
-    defer cb.deinit();
-    for (commands) |command| {
-        const box = nux.Box2i.init(
-            @intFromFloat(command.bounding_box.x),
-            @intFromFloat(command.bounding_box.y),
-            @intFromFloat(command.bounding_box.width),
-            @intFromFloat(command.bounding_box.height),
-        );
-        switch (command.command_type) {
-            .none => {},
-            .rectangle => {
-                try cb.rectangle(.{
-                    .box = box,
-                    .color = .fromRGBA255(command.render_data.rectangle.background_color),
-                });
-            },
-            .border => {},
-            .text => {
-                const len: usize = @intCast(command.render_data.text.string_contents.length);
-                try cb.text(.{
-                    .text = command.render_data.text.string_contents.chars[0..len],
-                    .pos = box.pos,
-                    .scale = command.render_data.text.font_size / 8,
-                    .color = .fromRGBA255(command.render_data.text.text_color),
-                });
-            },
-            .image => {
-                // try cb.blit(.{
-                //     .box = box,
-                //     .pos = box.pos,
-                // });
-            },
-            .scissor_start => {
-                try cb.scissor(box);
-            },
-            .scissor_end => {
-                try cb.scissor(null);
-            },
-            .custom => {},
-        }
-    }
-    try self.gpu.render(&cb);
+    // try self.gpu.render(&cb);
 }

@@ -101,7 +101,10 @@
             "path": "graphics/StaticMesh.zig"
         },
         {
-            "path": "ui/UIElement.zig"
+            "path": "ui/Viewport.zig"
+        },
+        {
+            "path": "ui/Widget.zig"
         }
     ]
 }

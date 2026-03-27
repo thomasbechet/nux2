@@ -34,6 +34,12 @@ const Component = struct {
     alignX: AlignmentX = .left,
     alignY: AlignmentY = .top,
     child_gap: u32 = 0,
+    sizing_x: Sizing = .grow,
+    sizing_y: Sizing = .grow,
+    min_x: f32 = 0,
+    max_x: f32 = 100,
+    min_y: f32 = 0,
+    max_y: f32 = 100,
 };
 
 node: *nux.Node,
@@ -62,4 +68,28 @@ pub fn setAlignY(self: *Self, id: nux.ID, alignment: nux.Widget.AlignmentY) !voi
 pub fn setChildGap(self: *Self, id: nux.ID, gap: u32) !void {
     const widget = try self.components.get(id);
     widget.child_gap = gap;
+}
+pub fn setSizeX(
+    self: *Self,
+    id: nux.ID,
+    sizing: nux.Widget.Sizing,
+    min: f32,
+    max: f32,
+) !void {
+    const widget = try self.components.get(id);
+    widget.sizing_x = sizing;
+    widget.min_x = min;
+    widget.max_x = max;
+}
+pub fn setSizeY(
+    self: *Self,
+    id: nux.ID,
+    sizing: nux.Widget.Sizing,
+    min: f32,
+    max: f32,
+) !void {
+    const widget = try self.components.get(id);
+    widget.sizing_y = sizing;
+    widget.min_y = min;
+    widget.max_y = max;
 }

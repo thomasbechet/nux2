@@ -80,7 +80,24 @@ fn renderWidget(self: *Self, id: nux.ID) !void {
         .id = .localID(name),
         .layout = .{
             .direction = @enumFromInt(@intFromEnum(widget.direction)),
-            .sizing = .{ .w = .grow, .h = .grow },
+            .sizing = .{
+                .w = .{
+                    .type = @enumFromInt(@intFromEnum(widget.sizing_x)),
+                    .size = if (widget.sizing_x == .percent) .{
+                        .percent = widget.max_x,
+                    } else .{
+                        .minmax = .{ .min = widget.min_x, .max = widget.max_x },
+                    },
+                },
+                .h = .{
+                    .type = @enumFromInt(@intFromEnum(widget.sizing_y)),
+                    .size = if (widget.sizing_y == .percent) .{
+                        .percent = widget.max_y,
+                    } else .{
+                        .minmax = .{ .min = widget.min_y, .max = widget.max_y },
+                    },
+                },
+            },
             .padding = .{
                 .left = @intCast(widget.padding.x()),
                 .right = @intCast(widget.padding.y()),

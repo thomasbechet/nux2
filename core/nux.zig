@@ -18,10 +18,9 @@ pub const Mesh = @import("graphics/Mesh.zig");
 pub const Material = @import("graphics/Material.zig");
 pub const StaticMesh = @import("graphics/StaticMesh.zig");
 pub const Camera = @import("graphics/Camera.zig");
-pub const UI = @import("ui/UI.zig");
 pub const Widget = @import("ui/Widget.zig");
-pub const Container = @import("ui/Container.zig");
 pub const Viewport = @import("ui/Viewport.zig");
+pub const Label = @import("ui/Label.zig");
 pub const Button = @import("ui/Button.zig");
 pub const Font = @import("ui/Font.zig");
 pub const Window = @import("graphics/Window.zig");
@@ -291,10 +290,9 @@ pub const Core = struct {
             Mesh,
             StaticMesh,
             Camera,
-            UI,
-            Widget,
             Viewport,
-            Container,
+            Widget,
+            Label,
             Button,
             Font,
             Gltf,

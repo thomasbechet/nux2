@@ -8,14 +8,9 @@ const Self = @This();
 /// Where to render ? (screen ? texture ?)
 ///
 /// How is describe by the components of what.
-const Source = union(enum) {
-    camera: nux.ID,
-    ui: nux.ID,
-    texture: nux.ID,
-};
-
-const Component = struct {
-    source: Source = undefined,
+pub const Component = struct {
+    camera: ?nux.ID = null,
+    widget: ?nux.ID = null,
     target: ?nux.ID = null,
     commands: nux.Graphics.CommandBuffer,
 
@@ -33,10 +28,21 @@ allocator: nux.Platform.Allocator,
 node: *nux.Node,
 texture: *nux.Texture,
 gpu: *nux.GPU,
+widget: *nux.Widget,
 components: nux.Components(Component),
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
+}
+pub fn onUpdate(self: *Self) !void {
+
+    // Update GUI layout
+    var it = self.components.iterator();
+    while (it.next()) |entry| {
+        if (entry.component.widget) |widget| {
+            try self.widget.renderWidget(widget, entry.component);            
+        }
+    }
 }
 pub fn onRender(self: *Self) !void {
     var it = self.components.iterator();
@@ -49,7 +55,11 @@ pub fn onRender(self: *Self) !void {
     // 2. Render to screen
 }
 
-pub fn setUI(self: *Self, id: nux.ID, widget: nux.ID) !void {
+pub fn setWidget(self: *Self, id: nux.ID, widget: nux.ID) !void {
     const viewport = try self.components.get(id);
-    viewport.source = .{ .ui = widget };
+    viewport.widget = widget;
+}
+pub fn setCamera(self: *Self, id: nux.ID, camera: nux.ID) !void {
+    const viewport = try self.components.get(id);
+    viewport.camera = camera;
 }

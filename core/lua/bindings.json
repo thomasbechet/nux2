@@ -69,9 +69,6 @@
             "path": "input/InputMap.zig"
         },
         {
-            "path": "ui/Button.zig"
-        },
-        {
             "path": "graphics/Texture.zig",
             "ignore": [
                 "addFromGltfImage",
@@ -104,7 +101,16 @@
             "path": "ui/Viewport.zig"
         },
         {
-            "path": "ui/Widget.zig"
+            "path": "ui/Widget.zig",
+            "ignore": [
+                "renderWidget"
+            ]
+        },
+        {
+            "path": "ui/Button.zig"
+        },
+        {
+            "path": "ui/Label.zig"
         }
     ]
 }

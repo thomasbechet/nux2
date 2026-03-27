@@ -7,6 +7,7 @@ const PrimitiveType = enum {
     void,
     bool,
     u32,
+    f32,
     string,
     ID,
     ComponentID,
@@ -130,6 +131,7 @@ const AstIter = struct {
             "onUpdate",
             "onPostUpdate",
             "onRender",
+            "Component",
         }) |keyword| {
             if (std.mem.eql(u8, name, keyword)) {
                 ignore = true;
@@ -608,6 +610,7 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                         switch (primitive) {
                             .bool => try writer.print("c.lua_toboolean(lua, {d});\n", .{i}),
                             .u32 => try writer.print("@as(u32, @intCast(c.luaL_checkinteger(lua, {d})));\n", .{i}),
+                            .f32 => try writer.print("@as(f32, @floatCast(c.luaL_checknumber(lua, {d})));\n", .{i}),
                             .string => try writer.print("std.mem.span(c.luaL_checklstring(lua, {d}, null));\n", .{i}),
                             .ID => try writer.print("checkID(lua, {d});\n", .{i}),
                             .ComponentID => try writer.print("checkComponentID(lua, {d});\n", .{i}),
@@ -665,6 +668,8 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
                     .primitive => |primitive| {
                         switch (primitive) {
                             .bool => try writer.print("c.lua_pushboolean(lua, @intFromBool(ret));\n", .{}),
+                            .u32 => try writer.print("c.lua_pushinteger(lua, ret);\n", .{}),
+                            .f32 => try writer.print("c.lua_pushnumber(lua, ret);\n", .{}),
                             .string => try writer.print("_ = c.lua_pushlstring(lua, ret.ptr, ret.len);\n", .{}),
                             .ID => try writer.print("c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));\n", .{}),
                             .Vec2 => try writer.print("Lua.pushUserData(lua, .vec2, ret);\n", .{}),

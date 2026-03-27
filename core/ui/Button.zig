@@ -4,7 +4,6 @@ const std = @import("std");
 const Self = @This();
 
 const Component = struct {
-    transform: nux.ID = .null,
     onClick: nux.ID = .null,
 };
 

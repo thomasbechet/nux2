@@ -2,6 +2,9 @@
     "rootpath": "..",
     "modules": [
         {
+            "path": "base/Collection.zig"
+        },
+        {
             "path": "base/Node.zig",
             "ignore": [
                 "ComponentType",
@@ -25,15 +28,11 @@
             "path": "base/Component.zig",
             "ignore": [
                 "Components",
-                "ComponentType",
-                "Property",
+                "Type",
                 "registerModule",
                 "get",
                 "find"
             ]
-        },
-        {
-            "path": "base/Collection.zig"
         },
         {
             "path": "base/Signal.zig",

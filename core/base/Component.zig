@@ -7,70 +7,9 @@ pub const Index = u32;
 pub const ID = u8;
 pub const module_components_field = "components";
 
-pub const PropertyValue = union(enum) {
-    id: nux.ID,
-    vec2: nux.Vec2,
-    vec3: nux.Vec3,
-    vec4: nux.Vec4,
-    quat: nux.Quat,
-};
-
-pub const PropertyRef = struct {
-    id: nux.ID,
-    property: *const nux.Property,
-};
-
-pub const Property = struct {
+pub const Type = struct {
     name: []const u8,
-    v_get: *const fn (*anyopaque, id: nux.ID) anyerror!PropertyValue,
-    v_set: *const fn (*anyopaque, id: nux.ID, value: PropertyValue) anyerror!void,
-
-    pub fn init(
-        comptime T: type,
-        comptime V: type,
-        comptime name: []const u8,
-        getter: *const fn (*T, id: nux.ID) anyerror!V,
-        setter: *const fn (*T, id: nux.ID, value: V) anyerror!void,
-    ) Property {
-        _ = setter;
-        _ = getter;
-
-        const gen = struct {
-            fn get(module: *anyopaque, id: nux.ID) anyerror!PropertyValue {
-                _ = module;
-                _ = id;
-                return undefined;
-            }
-            fn set(module: *anyopaque, id: nux.ID, value: PropertyValue) anyerror!void {
-                _ = module;
-                _ = id;
-                _ = value;
-            }
-        };
-
-        return .{
-            .name = name,
-            .v_get = gen.get,
-            .v_set = gen.set,
-        };
-    }
-
-    // pub fn field(
-    //     comptime T: type,
-    //     f: anytype,
-    // ) Property {
-    //     _ = T;
-    //     _ = V;
-    //     _ = f;
-    //     return .{
-    //         .name = "test",
-    //     };
-    // }
-};
-
-pub const ComponentType = struct {
-    name: []const u8,
-    properties: []const Property,
+    properties: []const nux.Property.Type,
     v_ptr: *anyopaque,
     v_deinit: *const fn (*anyopaque) void,
     v_add: *const fn (*anyopaque, id: nux.ID) anyerror!void,
@@ -88,13 +27,14 @@ pub fn Components(T: type) type {
             id: nux.ID,
         };
 
-        pub const properties: []const Property = if (@hasField(T, "properties")) T.properties else &.{};
+        pub const properties: []const nux.Property.Type = if (@hasField(T, "properties")) T.properties else &.{};
 
         id: ID,
         allocator: std.mem.Allocator,
         data: nux.ObjectPool(Entry),
         bitset: std.DynamicBitSet,
         node: *nux.Node,
+        property: *nux.Property,
 
         pub const Iterator = struct {
             components: *Components(T),
@@ -128,10 +68,16 @@ pub fn Components(T: type) type {
             }
         };
 
-        fn init(allocator: std.mem.Allocator, node: *nux.Node, type_index: ID) !@This() {
+        fn init(
+            allocator: std.mem.Allocator,
+            node: *nux.Node,
+            property: *nux.Property,
+            type_index: ID,
+        ) !@This() {
             return .{
                 .allocator = allocator,
                 .node = node,
+                .property = property,
                 .data = .init(allocator),
                 .bitset = try .initEmpty(allocator, 128),
                 .id = type_index,
@@ -236,25 +182,17 @@ pub fn Components(T: type) type {
                 try data.description(@fieldParentPtr(module_components_field, self), writer);
             }
         }
-        pub fn property(self: *@This(), id: nux.ID, prop: []const u8) !PropertyRef {
-            _ = self;
-            for (@This().properties) |*p| {
-                if (std.mem.eql(u8, p.name, prop)) {
-                    return .{
-                        .id = id,
-                        .property = p,
-                    };
-                }
-            }
-            return error.PropertyNotFound;
+        pub fn bind(self: *@This(), id: nux.ID, name: []const u8) !nux.PropertyRef {
+            return self.property.bind(id, self.id, name);
         }
     };
 }
 
 allocator: std.mem.Allocator,
-component_types: std.ArrayList(ComponentType),
+component_types: std.ArrayList(Type),
 file: *nux.File,
 node: *nux.Node,
+property: *nux.Property,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -267,7 +205,7 @@ pub fn deinit(self: *Self) void {
     self.component_types.deinit(self.allocator);
 }
 
-pub fn find(self: *Self, name: []const u8) !*ComponentType {
+pub fn find(self: *Self, name: []const u8) !*Type {
     for (self.component_types.items) |*typ| {
         if (std.mem.eql(u8, typ.name, name)) {
             return typ;
@@ -275,7 +213,7 @@ pub fn find(self: *Self, name: []const u8) !*ComponentType {
     }
     return error.ComponentTypeNotFound;
 }
-pub fn get(self: *Self, component: ID) !*ComponentType {
+pub fn get(self: *Self, component: ID) !*Type {
     if (component >= self.component_types.items.len) {
         return error.InvalidComponentID;
     }
@@ -295,7 +233,12 @@ pub fn registerModule(self: *Self, module: anytype) !void {
 
         // Init pool
         const component_id: ID = @intCast(self.component_types.items.len);
-        @field(module, module_components_field) = try .init(self.allocator, self.node, component_id);
+        @field(module, module_components_field) = try .init(
+            self.allocator,
+            self.node,
+            self.property,
+            component_id,
+        );
 
         // Create vtable
         const gen = struct {

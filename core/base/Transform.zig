@@ -4,7 +4,7 @@ const nux = @import("../nux.zig");
 const Self = @This();
 
 const Component = struct {
-    pub const properties: []const nux.Property = &.{
+    pub const properties: []const nux.Property.Type = &.{
         .init(Self, nux.Vec3, "position", getPosition, setPosition),
         // .field(Self, nux.Vec3, .scale),
     };

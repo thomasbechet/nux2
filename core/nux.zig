@@ -10,6 +10,7 @@ pub const Signal = @import("base/Signal.zig");
 pub const File = @import("base/File.zig");
 pub const Cart = @import("base/Cart.zig");
 pub const Transform = @import("base/Transform.zig");
+pub const ValueTable = @import("base/ValueTable.zig");
 pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
 pub const Lua = @import("lua/Lua.zig");
@@ -293,6 +294,7 @@ pub const Core = struct {
             Signal,
             Input,
             Transform,
+            ValueTable,
             InputMap,
             Graphics,
             GPU,

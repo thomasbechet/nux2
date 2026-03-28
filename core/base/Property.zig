@@ -71,7 +71,7 @@ component: *nux.Component,
 
 pub fn bind(self: *Self, id: nux.ID, comp: nux.ComponentID, name: []const u8) !Ref {
     const component = try self.component.get(comp);
-    for (component.properties) |*p| {
+    for (component.properties(id)) |*p| {
         if (std.mem.eql(u8, p.name, name)) {
             return .{
                 .id = id,

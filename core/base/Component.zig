@@ -9,7 +9,6 @@ pub const module_components_field = "components";
 
 pub const Type = struct {
     name: []const u8,
-    properties: []const nux.Property.Type,
     v_ptr: *anyopaque,
     v_deinit: *const fn (*anyopaque) void,
     v_add: *const fn (*anyopaque, id: nux.ID) anyerror!void,
@@ -18,6 +17,7 @@ pub const Type = struct {
     v_load: *const fn (*anyopaque, id: nux.ID, reader: *nux.Reader) anyerror!void,
     v_save: *const fn (*anyopaque, id: nux.ID, writer: *nux.Writer) anyerror!void,
     v_description: *const fn (*anyopaque, id: nux.ID, w: *std.Io.Writer) anyerror!void,
+    v_properties: *const fn (*anyopaque, id: nux.ID) anyerror![]const nux.Property.Type,
 };
 
 pub fn Components(T: type) type {
@@ -26,8 +26,6 @@ pub fn Components(T: type) type {
             data: T,
             id: nux.ID,
         };
-
-        pub const properties: []const nux.Property.Type = if (@hasField(T, "properties")) T.properties else &.{};
 
         id: ID,
         allocator: std.mem.Allocator,
@@ -182,6 +180,17 @@ pub fn Components(T: type) type {
                 try data.description(@fieldParentPtr(module_components_field, self), writer);
             }
         }
+        pub fn properties(self: *@This(), id: nux.ID) ![]const nux.Property.Type {
+            if (@hasDecl(T, "properties")) {
+                if (comptime @typeInfo(@TypeOf(T.properties)) == .@"fn") {
+                    const data = try self.get(id);
+                    return T.properties(data); // Dynamic properties
+                } else {
+                    return T.properties; // Static properties
+                }
+            }
+            return &.{};
+        }
         pub fn bind(self: *@This(), id: nux.ID, name: []const u8) !nux.PropertyRef {
             return self.property.bind(id, self.id, name);
         }
@@ -270,6 +279,10 @@ pub fn registerModule(self: *Self, module: anytype) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
                 try @field(mod, module_components_field).description(id, writer);
             }
+            fn properties(pointer: *anyopaque, id: nux.ID) ![]const nux.Property.Type {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                return @field(mod, module_components_field).properties(id);
+            }
         };
 
         // Register type
@@ -277,7 +290,6 @@ pub fn registerModule(self: *Self, module: anytype) !void {
         const name = it.first();
         (try self.component_types.addOne(self.allocator)).* = .{
             .name = name,
-            .properties = @TypeOf(@field(module, module_components_field)).properties,
             .v_ptr = module,
             .v_deinit = gen.deinit,
             .v_add = gen.add,
@@ -286,6 +298,7 @@ pub fn registerModule(self: *Self, module: anytype) !void {
             .v_save = gen.save,
             .v_load = gen.load,
             .v_description = gen.description,
+            .v_properties = gen.properties,
         };
     }
 }

@@ -43,6 +43,8 @@ function M:onInit()
     Widget.setSizeY(version, Widget.SIZING_FIT, 0, 0)
     Label.setText(version, "1.0.0-dev")
 
+    -- Component.setProperty("Transform.position", Math.vec3(1, 0, 1))
+
     Node.dump(ui)
 
     -- print(Transform.id)

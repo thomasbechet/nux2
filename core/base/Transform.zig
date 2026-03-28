@@ -4,6 +4,11 @@ const nux = @import("../nux.zig");
 const Self = @This();
 
 const Component = struct {
+    pub const properties: []const nux.Property = &.{
+        .init(Self, nux.Vec3, "position", getPosition, setPosition),
+        // .field(Self, nux.Vec3, .scale),
+    };
+
     position: nux.Vec3 = .zero(),
     scale: nux.Vec3 = .scalar(1),
     rotation: nux.Quat = .identity(),
@@ -14,9 +19,6 @@ const Component = struct {
     }
     pub fn save(self: *const Component, _: *Self, writer: *nux.Writer) !void {
         try writer.write(self);
-    }
-    pub fn inspect(self: *Self, prop: *nux.Property) !void {
-        if (prop.reflect(&self.position)) {}
     }
 };
 

@@ -5,7 +5,6 @@ const Self = @This();
 
 pub const Index = u32;
 pub const ID = u8;
-
 pub const module_components_field = "components";
 
 pub const PropertyValue = union(enum) {
@@ -16,16 +15,62 @@ pub const PropertyValue = union(enum) {
     quat: nux.Quat,
 };
 
+pub const PropertyRef = struct {
+    id: nux.ID,
+    property: *const nux.Property,
+};
+
 pub const Property = struct {
-    pub fn reflect(self: *Property, value: anytype) bool {
-        _ = self;
-        _ = value;
-        return false;
+    name: []const u8,
+    v_get: *const fn (*anyopaque, id: nux.ID) anyerror!PropertyValue,
+    v_set: *const fn (*anyopaque, id: nux.ID, value: PropertyValue) anyerror!void,
+
+    pub fn init(
+        comptime T: type,
+        comptime V: type,
+        comptime name: []const u8,
+        getter: *const fn (*T, id: nux.ID) anyerror!V,
+        setter: *const fn (*T, id: nux.ID, value: V) anyerror!void,
+    ) Property {
+        _ = setter;
+        _ = getter;
+
+        const gen = struct {
+            fn get(module: *anyopaque, id: nux.ID) anyerror!PropertyValue {
+                _ = module;
+                _ = id;
+                return undefined;
+            }
+            fn set(module: *anyopaque, id: nux.ID, value: PropertyValue) anyerror!void {
+                _ = module;
+                _ = id;
+                _ = value;
+            }
+        };
+
+        return .{
+            .name = name,
+            .v_get = gen.get,
+            .v_set = gen.set,
+        };
     }
+
+    // pub fn field(
+    //     comptime T: type,
+    //     f: anytype,
+    // ) Property {
+    //     _ = T;
+    //     _ = V;
+    //     _ = f;
+    //     return .{
+    //         .name = "test",
+    //     };
+    // }
 };
 
 pub const ComponentType = struct {
     name: []const u8,
+    properties: []const Property,
     v_ptr: *anyopaque,
     v_deinit: *const fn (*anyopaque) void,
     v_add: *const fn (*anyopaque, id: nux.ID) anyerror!void,
@@ -42,6 +87,8 @@ pub fn Components(T: type) type {
             data: T,
             id: nux.ID,
         };
+
+        pub const properties: []const Property = if (@hasField(T, "properties")) T.properties else &.{};
 
         id: ID,
         allocator: std.mem.Allocator,
@@ -189,6 +236,18 @@ pub fn Components(T: type) type {
                 try data.description(@fieldParentPtr(module_components_field, self), writer);
             }
         }
+        pub fn property(self: *@This(), id: nux.ID, prop: []const u8) !PropertyRef {
+            _ = self;
+            for (@This().properties) |*p| {
+                if (std.mem.eql(u8, p.name, prop)) {
+                    return .{
+                        .id = id,
+                        .property = p,
+                    };
+                }
+            }
+            return error.PropertyNotFound;
+        }
     };
 }
 
@@ -275,6 +334,7 @@ pub fn registerModule(self: *Self, module: anytype) !void {
         const name = it.first();
         (try self.component_types.addOne(self.allocator)).* = .{
             .name = name,
+            .properties = @TypeOf(@field(module, module_components_field)).properties,
             .v_ptr = module,
             .v_deinit = gen.deinit,
             .v_add = gen.add,

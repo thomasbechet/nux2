@@ -26,6 +26,7 @@
             "ignore": [
                 "Components",
                 "ComponentType",
+                "Property",
                 "registerModule",
                 "get",
                 "find"

@@ -3,7 +3,11 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
-components: nux.Components(struct {}),
+pub const Component = struct {
+
+};
+
+components: nux.Components(Component),
 node: *nux.Node,
 allocator: std.mem.Allocator,
 

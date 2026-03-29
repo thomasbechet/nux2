@@ -63,9 +63,6 @@
             "path": "base/Transform.zig"
         },
         {
-            "path": "base/ValueTable.zig"
-        },
-        {
             "path": "input/Input.zig"
         },
         {

@@ -114,6 +114,22 @@ fn configCore(b: *std.Build, config: Config) void {
     // zigimg
     const zigimg_pkg = b.dependency("zigimg", .{ .target = config.target, .optimize = config.optimize });
 
+    // reflect
+    const reflect = b.addExecutable(.{ .name = "reflect", .root_module = b.createModule(.{
+        .target = config.target,
+        .optimize = .Debug,
+        .root_source_file = b.path("core/reflect.zig"),
+    }) });
+    const reflect_run = b.addRunArtifact(reflect);
+    reflect_run.has_side_effects = true;
+    const reflect_output_tmp = reflect_run.addOutputFileArg("reflected.zig");
+    reflect_run.addFileArg(b.path("core/lua/bindings.json"));
+    const reflect_copy = b.addUpdateSourceFiles();
+    reflect_copy.step.dependOn(&reflect_run.step);
+    reflect_copy.addCopyFileToSource(reflect_output_tmp, "core/reflected.zig");
+    const reflect_step = b.step("reflect", "Reflect API");
+    reflect_step.dependOn(&reflect_copy.step);
+
     // bindings
     const bindgen = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
         .target = config.target,

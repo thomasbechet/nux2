@@ -4,7 +4,18 @@ const nux = @import("../nux.zig");
 const Self = @This();
 pub const ID = u8;
 
-pub const Value = union(enum) {
+/// Use cases:
+/// - Bind property to a widget
+/// - Bind property to animation
+pub const Primitive = enum {
+    id,
+    vec2,
+    vec3,
+    vec4,
+    quat,
+};
+
+pub const Value = union(Primitive) {
     id: nux.ID,
     vec2: nux.Vec2,
     vec3: nux.Vec3,
@@ -16,6 +27,7 @@ pub const Ref = struct {
     id: nux.ID,
     component: nux.ComponentID,
     property: nux.PropertyID,
+    index: u32 = 0,
 };
 
 pub const Type = struct {

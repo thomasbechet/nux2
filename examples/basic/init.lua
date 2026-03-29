@@ -32,16 +32,28 @@ function M:onInit()
     Widget.setAlignY(label, Widget.ALIGNMENT_Y_CENTER)
     Label.setText(label, "Hello World !")
     Label.setColor(label, Math.vec4(1, 0.5, 0, 1))
+    self.label = label
+    self.counter = 0
 
     local version = Node.createNamed(panel, "version")
     Component.add(version, Widget)
     Component.add(version, Label)
     Widget.setAlignX(version, Widget.ALIGNMENT_X_RIGHT)
     Widget.setAlignY(version, Widget.ALIGNMENT_Y_BOTTOM)
+
     Widget.setPadding(version, Math.vec4(0, 10, 0, 10))
     Widget.setSizeX(version, Widget.SIZING_FIT, 0, 0)
     Widget.setSizeY(version, Widget.SIZING_FIT, 0, 0)
     Label.setText(version, "1.0.0-dev")
+
+    Property.set(version, "Label.Text", "hello world")
+
+    -- local df = Node.create(Node.getRoot())
+    -- DataTable.put("alive", Primitive.BOOL, false)
+    -- DataTable.put("speed", Primitive.VEC3, Math.vec3(0, 1, 1))
+    -- DataTable.put("version", Primitive.STRING, "Hello World")
+
+    -- Label.bind(version, df, "DataTable.version")
 
     -- Component.setProperty("Transform.position", Math.vec3(1, 0, 1))
 
@@ -55,6 +67,8 @@ function M:onDeinit()
 end
 
 function M:onUpdate()
+    Label.setText(self.label, "Hello World: "..self.counter)
+    self.counter = self.counter + 1
     -- Texture.blit("Textures/Building_1", Math.vec2(0, 0))
     -- Texture.blit("Textures/Building_2", Math.vec2(256, 0))
     -- Texture.blit("Textures/Building_3", Math.vec2(512, 0))

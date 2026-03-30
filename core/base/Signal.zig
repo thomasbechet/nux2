@@ -61,14 +61,14 @@ pub fn emit(self: *Self, id: nux.ID, source: nux.ID) !void {
     try self.signal_queue.pushBack(self.allocator, .{ .signal = id, .source = source });
 }
 pub fn connect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
-    const component = try self.components.get(id);
-    try component.callables.append(self.allocator, callable);
+    const signal = try self.components.get(id);
+    try signal.callables.append(self.allocator, callable);
 }
 pub fn disconnect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
-    const component = try self.components.get(id);
+    const signal = try self.components.get(id);
     // Find callback index
     var index: ?usize = null;
-    for (component.callables.items, 0..) |item, idx| {
+    for (signal.callables.items, 0..) |item, idx| {
         if (item.obj == callable.obj and item.callback == callable.callback) {
             index = idx;
             break;

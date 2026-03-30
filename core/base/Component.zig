@@ -17,7 +17,6 @@ pub const Type = struct {
     v_load: *const fn (*anyopaque, id: nux.ID, reader: *nux.Reader) anyerror!void,
     v_save: *const fn (*anyopaque, id: nux.ID, writer: *nux.Writer) anyerror!void,
     v_description: *const fn (*anyopaque, id: nux.ID, w: *std.Io.Writer) anyerror!void,
-    v_properties: *const fn (*anyopaque, id: nux.ID) anyerror![]const nux.Property.Type,
 };
 
 pub fn Components(T: type) type {
@@ -32,7 +31,6 @@ pub fn Components(T: type) type {
         data: nux.ObjectPool(Entry),
         bitset: std.DynamicBitSet,
         node: *nux.Node,
-        property: *nux.Property,
 
         pub const Iterator = struct {
             components: *Components(T),
@@ -69,13 +67,11 @@ pub fn Components(T: type) type {
         fn init(
             allocator: std.mem.Allocator,
             node: *nux.Node,
-            property: *nux.Property,
             type_index: ID,
         ) !@This() {
             return .{
                 .allocator = allocator,
                 .node = node,
-                .property = property,
                 .data = .init(allocator),
                 .bitset = try .initEmpty(allocator, 128),
                 .id = type_index,
@@ -180,20 +176,6 @@ pub fn Components(T: type) type {
                 try data.description(@fieldParentPtr(module_components_field, self), writer);
             }
         }
-        pub fn properties(self: *@This(), id: nux.ID) ![]const nux.Property.Type {
-            if (@hasDecl(T, "properties")) {
-                if (comptime @typeInfo(@TypeOf(T.properties)) == .@"fn") {
-                    const data = try self.get(id);
-                    return T.properties(data); // Dynamic properties
-                } else {
-                    return T.properties; // Static properties
-                }
-            }
-            return &.{};
-        }
-        pub fn bind(self: *@This(), id: nux.ID, name: []const u8) !nux.PropertyRef {
-            return self.property.bind(id, self.id, name);
-        }
     };
 }
 
@@ -201,7 +183,6 @@ allocator: std.mem.Allocator,
 component_types: std.ArrayList(Type),
 file: *nux.File,
 node: *nux.Node,
-property: *nux.Property,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -245,7 +226,6 @@ pub fn registerModule(self: *Self, module: anytype) !void {
         @field(module, module_components_field) = try .init(
             self.allocator,
             self.node,
-            self.property,
             component_id,
         );
 
@@ -279,10 +259,6 @@ pub fn registerModule(self: *Self, module: anytype) !void {
                 const mod: *T = @ptrCast(@alignCast(pointer));
                 try @field(mod, module_components_field).description(id, writer);
             }
-            fn properties(pointer: *anyopaque, id: nux.ID) ![]const nux.Property.Type {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, module_components_field).properties(id);
-            }
         };
 
         // Register type
@@ -298,7 +274,6 @@ pub fn registerModule(self: *Self, module: anytype) !void {
             .v_save = gen.save,
             .v_load = gen.load,
             .v_description = gen.description,
-            .v_properties = gen.properties,
         };
     }
 }

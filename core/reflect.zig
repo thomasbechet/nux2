@@ -535,6 +535,7 @@ const Modules = struct {
 };
 
 fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
+    _ = alloc;
     try modules.print();
     try writer.print("const nux = @import(\"nux.zig\");\n", .{});
     for (modules.modules.items) |*module| {
@@ -571,71 +572,6 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
             });
             try writer.print("\t\t}};\n", .{});
         }
-        try writer.print("\t}};\n", .{});
-        try writer.print("\tpub const Properties = struct {{\n", .{});
-
-        // Generate properties
-        function_it = module.functions.iterator();
-
-        // map: property name -> { getter?, setter? }
-        var props = std.StringHashMap(struct {
-            getter: ?[]const u8 = null,
-            setter: ?[]const u8 = null,
-        }).init(alloc);
-        defer props.deinit();
-
-        // First pass: collect
-        while (function_it.next()) |function| {
-            const name = function.key_ptr.*;
-
-            if (std.mem.startsWith(u8, name, "get") or
-                std.mem.startsWith(u8, name, "set"))
-            {
-                const is_get = std.mem.startsWith(u8, name, "get");
-                const prop_name = name[3..];
-
-                var entry = try props.getOrPut(prop_name);
-                if (!entry.found_existing) {
-                    entry.value_ptr.* = .{};
-                }
-
-                if (is_get) {
-                    entry.value_ptr.getter = name;
-                } else {
-                    entry.value_ptr.setter = name;
-                }
-            }
-        }
-
-        // Second pass: generate
-        var it = props.iterator();
-        while (it.next()) |entry| {
-            const prop = entry.key_ptr.*;
-            const value = entry.value_ptr.*;
-
-            try writer.print("\t\tpub const {s} = struct {{\n", .{prop});
-
-            if (value.getter) |g| {
-                try writer.print("\t\t\tpub const Name = {s}.Functions.{s}.Name[3..];\n", .{
-                    module.name,
-                    g,
-                });
-                try writer.print("\t\t\tpub const Getter = nux.{s}.{s};\n", .{
-                    module.name,
-                    g,
-                });
-            }
-
-            if (value.setter) |s| {
-                try writer.print("\t\t\tpub const Setter = nux.{s}.{s};\n", .{
-                    module.name,
-                    s,
-                });
-            }
-
-            try writer.print("\t\t}};\n", .{});
-        }
-
         try writer.print("\t}};\n", .{});
         try writer.print("}};\n", .{});
     }

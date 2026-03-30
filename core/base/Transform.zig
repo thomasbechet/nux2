@@ -4,11 +4,6 @@ const nux = @import("../nux.zig");
 const Self = @This();
 
 const Component = struct {
-    pub const properties: []const nux.Property.Type = &.{
-        .init(Self, nux.Vec3, "position", getPosition, setPosition),
-        // .field(Self, nux.Vec3, .scale),
-    };
-
     position: nux.Vec3 = .zero(),
     scale: nux.Vec3 = .scalar(1),
     rotation: nux.Quat = .identity(),

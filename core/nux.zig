@@ -5,7 +5,6 @@ pub const Config = @import("base/Config.zig");
 pub const Collection = @import("base/Collection.zig");
 pub const Node = @import("base/Node.zig");
 pub const Component = @import("base/Component.zig");
-pub const Property = @import("base/Property.zig");
 pub const Signal = @import("base/Signal.zig");
 pub const File = @import("base/File.zig");
 pub const Cart = @import("base/Cart.zig");
@@ -34,8 +33,6 @@ pub const Gltf = @import("graphics/Gltf.zig");
 pub const ID = Node.ID;
 pub const ComponentID = Component.ID;
 pub const Components = Component.Components;
-pub const PropertyID = Property.ID;
-pub const PropertyRef = Property.Ref;
 pub const Writer = Node.Writer;
 pub const Reader = Node.Reader;
 pub const vec = @import("math/vec.zig");
@@ -267,7 +264,6 @@ pub const Core = struct {
             Component,
             Collection,
             Node,
-            Property,
         });
         errdefer core.deinitNodes();
 

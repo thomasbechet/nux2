@@ -1,14 +1,15 @@
 local mymodule = require("mymodule")
 
+function M:onClicked()
+
+end
+
 function M:onInit()
     -- File.logGlob("*")
     -- Gltf.loadGltf(Node.getRoot(), "industrial.glb")
     -- local c = Collection.exportNode(Node.getRoot(), Node.getRoot())
     -- Collection.instantiate(c, Node.getRoot())
     -- Node.dump(Node.getRoot())
-
-    -- local gui = GUI.add(Node.getRoot())
-    -- local widget = Widget.add(gui)
 
     local ui = Node.createNamed("/", "ui")
     Component.add(ui, Viewport)
@@ -46,7 +47,7 @@ function M:onInit()
     Widget.setSizeY(version, Widget.SIZING_FIT, 0, 0)
     Label.setText(version, "1.0.0-dev")
 
-    Property.set(version, "Label.Text", "hello world")
+    Signal.bind(Button.SIGNAL_CLICKED, onClicked)
 
     -- local df = Node.create(Node.getRoot())
     -- DataTable.put("alive", Primitive.BOOL, false)
@@ -58,9 +59,6 @@ function M:onInit()
     -- Component.setProperty("Transform.position", Math.vec3(1, 0, 1))
 
     Node.dump(ui)
-
-    -- print(Transform.id)
-    -- print(Widget.id)
 end
 
 function M:onDeinit()

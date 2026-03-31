@@ -1,0 +1,116 @@
+{
+    "rootpath": "..",
+    "modules": [
+        {
+            "path": "base/Collection.zig"
+        },
+        {
+            "path": "base/Node.zig",
+            "ignore": [
+                "ComponentType",
+                "ID",
+                "NodeEntry",
+                "registerComponentModule",
+                "getType",
+                "findType",
+                "iterChildren",
+                "iterComponents",
+                "visit",
+                "collect",
+                "collectInto",
+                "setNameFormat",
+                "Reader",
+                "Writer",
+                "has"
+            ]
+        },
+        {
+            "path": "base/Component.zig",
+            "ignore": [
+                "Components",
+                "Type",
+                "registerModule",
+                "get",
+                "find"
+            ]
+        },
+        {
+            "path": "base/Signal.zig",
+            "ignore": [
+                "connect",
+                "disconnect"
+            ]
+        },
+        {
+            "path": "base/File.zig",
+            "ignore": [
+                "read",
+                "stat",
+                "glob",
+                "writeFile",
+                "Writer",
+                "FileList",
+                "readAligned"
+            ]
+        },
+        {
+            "path": "base/Cart.zig",
+            "ignore": [
+                "FileSystem"
+            ]
+        },
+        {
+            "path": "base/Transform.zig"
+        },
+        {
+            "path": "input/Input.zig"
+        },
+        {
+            "path": "input/InputMap.zig"
+        },
+        {
+            "path": "graphics/Texture.zig",
+            "ignore": [
+                "addFromGltfImage",
+                "syncGPU"
+            ]
+        },
+        {
+            "path": "graphics/Material.zig"
+        },
+        {
+            "path": "graphics/Mesh.zig",
+            "ignore": [
+                "addFromGltfPrimitive",
+                "syncGPU"
+            ]
+        },
+        {
+            "path": "graphics/Gltf.zig"
+        },
+        {
+            "path": "graphics/Vertex.zig",
+            "ignore": [
+                "Layout"
+            ]
+        },
+        {
+            "path": "graphics/StaticMesh.zig"
+        },
+        {
+            "path": "ui/Viewport.zig"
+        },
+        {
+            "path": "ui/Widget.zig",
+            "ignore": [
+                "renderWidget"
+            ]
+        },
+        {
+            "path": "ui/Button.zig"
+        },
+        {
+            "path": "ui/Label.zig"
+        }
+    ]
+}

@@ -46,14 +46,10 @@ function M:onInit()
     Widget.setSizeY(version, Widget.SIZING_FIT, 0, 0)
     Label.setText(version, "1.0.0-dev")
 
-    Property.set(version, "Label.Text", "hello world")
-
     -- local df = Node.create(Node.getRoot())
     -- DataTable.put("alive", Primitive.BOOL, false)
     -- DataTable.put("speed", Primitive.VEC3, Math.vec3(0, 1, 1))
     -- DataTable.put("version", Primitive.STRING, "Hello World")
-
-    -- Label.bind(version, df, "DataTable.version")
 
     -- Component.setProperty("Transform.position", Math.vec3(1, 0, 1))
 

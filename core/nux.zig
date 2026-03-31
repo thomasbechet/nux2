@@ -111,6 +111,7 @@ pub const Module = struct {
         const gen = struct {
             fn callInit(pointer: *anyopaque, core: *Core) anyerror!void {
                 const self: *T = @ptrCast(@alignCast(pointer));
+
                 // Dependency injection
                 inline for (@typeInfo(T).@"struct".fields) |field| {
                     switch (@typeInfo(field.type)) {
@@ -127,10 +128,12 @@ pub const Module = struct {
                         else => {},
                     }
                 }
+
                 // Components initialization
                 if (core.findModule(Component)) |component| {
                     try component.registerModule(self);
                 }
+
                 // Register callbacks
                 if (@hasDecl(T, "onPreUpdate")) {
                     try core.registerStageCallback(.pre_update, .wrap(T, T.onPreUpdate, self));
@@ -144,6 +147,7 @@ pub const Module = struct {
                 if (@hasDecl(T, "onRender")) {
                     try core.registerStageCallback(.render, .wrap(T, T.onRender, self));
                 }
+
                 // Initialize
                 if (@hasDecl(T, "init")) {
                     const ccore: *const Core = core;
@@ -248,12 +252,14 @@ pub const Core = struct {
         var core = try platform.allocator.create(@This());
         errdefer platform.allocator.destroy(core);
         core.platform = platform;
+
         // Init stages
         core.stages = .{};
         inline for (std.meta.fields(Stage)) |field| {
             core.stages.put(@field(Stage, field.name), .empty);
         }
         errdefer core.deinitStages();
+
         // Init modules
         core.modules = try .initCapacity(platform.allocator, 32);
         errdefer core.deinitModules();

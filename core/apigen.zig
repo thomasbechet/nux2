@@ -398,12 +398,15 @@ const Modules = struct {
         const modules_file = try std.fs.cwd().openFile(modules_path, .{});
         defer modules_file.close();
         var modules_reader = modules_file.reader(&buffer);
+
         // Load json file
         const modules_source = try modules_reader.interface.allocRemaining(alloc, .unlimited);
         errdefer alloc.free(modules_source);
+
         // Parse json
         const bindings_json = try std.json.parseFromSlice(BindingsJson, alloc, modules_source, .{});
         defer bindings_json.deinit();
+
         // Allocate arrays
         var modules: ArrayList(Module) = try .initCapacity(alloc, bindings_json.value.modules.len);
         errdefer {
@@ -412,12 +415,14 @@ const Modules = struct {
             }
             modules.deinit(alloc);
         }
+
         // Copy rootpath
         const rootpath = try alloc.dupe(u8, bindings_json.value.rootpath);
         errdefer alloc.free(rootpath);
 
         // iter files and generate bindings
         for (bindings_json.value.modules) |module| {
+
             // Convert module path to core
             const parts = [_][]const u8{ "core/", module.path };
             const module_path = try std.mem.concat(alloc, u8, &parts);
@@ -534,7 +539,28 @@ const Modules = struct {
     }
 };
 
-fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
+fn toSnakeCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
+    var out: ArrayList(u8) = try .initCapacity(alloc, s.len);
+    for (s, 0..) |c, i| {
+        if (std.ascii.isUpper(c)) {
+            if (i != 0) {
+                try out.append(alloc, '_');
+            }
+            try out.append(alloc, std.ascii.toLower(c));
+        } else {
+            try out.append(alloc, c);
+        }
+    }
+    return out;
+}
+
+fn toUpperCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
+    const snake_case = try toSnakeCase(alloc, s);
+    _ = std.ascii.upperString(snake_case.items, snake_case.items);
+    return snake_case;
+}
+
+fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
     try modules.print();
     try writer.print("const nux = @import(\"nux.zig\");\n", .{});
     for (modules.modules.items) |*module| {
@@ -547,8 +573,10 @@ fn generateBindings(alloc: Allocator, writer: *std.Io.Writer, modules: *const Mo
             try writer.print("\t\t\tpub const is_bitfield = {};\n", .{enu.value_ptr.isBitfield});
             try writer.print("\t\t\tpub const Values = struct {{\n", .{});
             for (enu.value_ptr.values.items) |value| {
-                try writer.print("\t\t\t\tpub const {s} = struct {{\n", .{value});
-                try writer.print("\t\t\t\t\tpub const Name = \"{s}\";\n", .{value});
+                var value_upper_case = try toUpperCase(alloc, value);
+                defer value_upper_case.deinit(alloc);
+                try writer.print("\t\t\t\tpub const {s} = struct {{\n", .{value_upper_case.items});
+                try writer.print("\t\t\t\t\tpub const Name = \"{s}\";\n", .{value_upper_case.items});
                 try writer.print("\t\t\t\t\tpub const Value = nux.{s}.{s}.{s};\n", .{
                     module.name,
                     enu.key_ptr.*,
@@ -662,6 +690,6 @@ pub fn main() !void {
     const out_file = try std.fs.cwd().createFile(output, .{});
     defer out_file.close();
     var writer = out_file.writer(&buffer);
-    try generateBindings(alloc, &writer.interface, &modules);
+    try generateAPI(alloc, &writer.interface, &modules);
     try writer.interface.flush();
 }

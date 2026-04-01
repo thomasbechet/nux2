@@ -139,7 +139,9 @@ const AstIter = struct {
         }
         if (self.ignore) |ignore_list| {
             for (ignore_list) |ignore_name| {
+                std.debug.print("TEST '{s}' AGAINST '{s}'\n", .{ name, ignore_name });
                 if (std.mem.eql(u8, ignore_name, name)) {
+                    std.debug.print("IGNORE\n", .{});
                     ignore = true;
                     break;
                 }
@@ -321,7 +323,7 @@ const ModuleJson = struct {
     path: []const u8,
     ignore: ?[][]const u8 = null,
 };
-const BindingsJson = struct {
+const ModulesJson = struct {
     rootpath: []const u8,
     modules: []const ModuleJson,
 };
@@ -359,6 +361,7 @@ const Modules = struct {
     source: []const u8,
 
     fn resolveType(modules: []Module, typ: *AstIter.Type, source: []const u8) !void {
+
         // Remove nux.
         var name = typ.name;
         if (std.mem.startsWith(u8, typ.name, "nux.")) {
@@ -394,21 +397,21 @@ const Modules = struct {
     fn load(alloc: Allocator, modules_path: []const u8) !Modules {
         var buffer: [1024]u8 = undefined;
 
-        // Open json file
+        // Open yaml file
         const modules_file = try std.fs.cwd().openFile(modules_path, .{});
         defer modules_file.close();
         var modules_reader = modules_file.reader(&buffer);
 
-        // Load json file
+        // Load yaml file
         const modules_source = try modules_reader.interface.allocRemaining(alloc, .unlimited);
         errdefer alloc.free(modules_source);
 
         // Parse json
-        const bindings_json = try std.json.parseFromSlice(BindingsJson, alloc, modules_source, .{});
-        defer bindings_json.deinit();
+        const modules_json = try std.json.parseFromSlice(ModulesJson, alloc, modules_source, .{});
+        defer modules_json.deinit();
 
         // Allocate arrays
-        var modules: ArrayList(Module) = try .initCapacity(alloc, bindings_json.value.modules.len);
+        var modules: ArrayList(Module) = try .initCapacity(alloc, modules_json.value.modules.len);
         errdefer {
             for (modules.items) |*module| {
                 module.deinit(alloc);
@@ -417,13 +420,11 @@ const Modules = struct {
         }
 
         // Copy rootpath
-        const rootpath = try alloc.dupe(u8, bindings_json.value.rootpath);
+        const rootpath = try alloc.dupe(u8, modules_json.value.rootpath);
         errdefer alloc.free(rootpath);
 
-        // iter files and generate bindings
-        for (bindings_json.value.modules) |module| {
-
-            // Convert module path to core
+        // Iter files and generate bindings
+        for (modules_json.value.modules) |module| {
             const parts = [_][]const u8{ "core/", module.path };
             const module_path = try std.mem.concat(alloc, u8, &parts);
             defer alloc.free(module_path);
@@ -565,19 +566,21 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
     try writer.print("const nux = @import(\"nux.zig\");\n", .{});
     for (modules.modules.items) |*module| {
         try writer.print("pub const {s} = struct {{\n", .{module.name});
+        try writer.print("\tpub const module = nux.{s};\n", .{module.name});
+        try writer.print("\tpub const is_component_module = {};\n", .{module.is_component_module});
         try writer.print("\tpub const Enums = struct {{\n", .{});
         var enum_it = module.enums.iterator();
         while (enum_it.next()) |enu| {
             try writer.print("\t\tpub const {s} = struct {{\n", .{enu.key_ptr.*});
-            try writer.print("\t\t\tpub const Name = \"{s}\";\n", .{enu.key_ptr.*});
+            try writer.print("\t\t\tpub const name = \"{s}\";\n", .{enu.key_ptr.*});
             try writer.print("\t\t\tpub const is_bitfield = {};\n", .{enu.value_ptr.isBitfield});
             try writer.print("\t\t\tpub const Values = struct {{\n", .{});
             for (enu.value_ptr.values.items) |value| {
                 var value_upper_case = try toUpperCase(alloc, value);
                 defer value_upper_case.deinit(alloc);
                 try writer.print("\t\t\t\tpub const {s} = struct {{\n", .{value_upper_case.items});
-                try writer.print("\t\t\t\t\tpub const Name = \"{s}\";\n", .{value_upper_case.items});
-                try writer.print("\t\t\t\t\tpub const Value = nux.{s}.{s}.{s};\n", .{
+                try writer.print("\t\t\t\t\tpub const name = \"{s}\";\n", .{value_upper_case.items});
+                try writer.print("\t\t\t\t\tpub const value = nux.{s}.{s}.{s};\n", .{
                     module.name,
                     enu.key_ptr.*,
                     value,
@@ -592,8 +595,8 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
         var function_it = module.functions.iterator();
         while (function_it.next()) |function| {
             try writer.print("\t\tpub const {s} = struct {{\n", .{function.key_ptr.*});
-            try writer.print("\t\t\tpub const Name = \"{s}\";\n", .{function.key_ptr.*});
-            try writer.print("\t\t\tpub const Function = nux.{s}.{s};\n", .{
+            try writer.print("\t\t\tpub const name = \"{s}\";\n", .{function.key_ptr.*});
+            try writer.print("\t\t\tpub const function = nux.{s}.{s};\n", .{
                 module.name,
                 function.key_ptr.*,
             });
@@ -644,18 +647,18 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
             try writer.print("\t\tpub const {s} = struct {{\n", .{prop});
 
             if (value.getter) |g| {
-                try writer.print("\t\t\tpub const Name = {s}.Functions.{s}.Name[3..];\n", .{
+                try writer.print("\t\t\tpub const name = {s}.Functions.{s}.Name[3..];\n", .{
                     module.name,
                     g,
                 });
-                try writer.print("\t\t\tpub const Getter = nux.{s}.{s};\n", .{
+                try writer.print("\t\t\tpub const getter = nux.{s}.{s};\n", .{
                     module.name,
                     g,
                 });
             }
 
             if (value.setter) |s| {
-                try writer.print("\t\t\tpub const Setter = nux.{s}.{s};\n", .{
+                try writer.print("\t\t\tpub const setter = nux.{s}.{s};\n", .{
                     module.name,
                     s,
                 });

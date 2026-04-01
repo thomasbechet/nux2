@@ -114,21 +114,21 @@ fn configCore(b: *std.Build, config: Config) void {
     // zigimg
     const zigimg_pkg = b.dependency("zigimg", .{ .target = config.target, .optimize = config.optimize });
 
-    // apigen
-    const apigen = b.addExecutable(.{ .name = "apigen", .root_module = b.createModule(.{
+    // codegen
+    const codegen = b.addExecutable(.{ .name = "codegen", .root_module = b.createModule(.{
         .target = config.target,
         .optimize = .Debug,
-        .root_source_file = b.path("core/apigen.zig"),
+        .root_source_file = b.path("core/codegen.zig"),
     }) });
-    const apigen_run = b.addRunArtifact(apigen);
-    apigen_run.has_side_effects = true;
-    const apigen_output_tmp = apigen_run.addOutputFileArg("api.zig");
-    apigen_run.addFileArg(b.path("core/api.json"));
-    const apigen_copy = b.addUpdateSourceFiles();
-    apigen_copy.step.dependOn(&apigen_run.step);
-    apigen_copy.addCopyFileToSource(apigen_output_tmp, "core/api.zig");
-    const apigen_step = b.step("apigen", "Reflect API");
-    apigen_step.dependOn(&apigen_copy.step);
+    const codegen_run = b.addRunArtifact(codegen);
+    codegen_run.has_side_effects = true;
+    const codegen_output_tmp = codegen_run.addOutputFileArg("modules.zig");
+    codegen_run.addFileArg(b.path("core/modules.json"));
+    const codegen_copy = b.addUpdateSourceFiles();
+    codegen_copy.step.dependOn(&codegen_run.step);
+    codegen_copy.addCopyFileToSource(codegen_output_tmp, "core/modules.zig");
+    const codegen_step = b.step("codegen", "Reflect API");
+    codegen_step.dependOn(&codegen_copy.step);
 
     // bindings
     const bindgen = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{

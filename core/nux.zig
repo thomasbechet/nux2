@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const modules = @import("modules.zig");
 pub const Logger = @import("base/Logger.zig");
 pub const Config = @import("base/Config.zig");
 pub const Collection = @import("base/Collection.zig");
@@ -91,25 +92,33 @@ pub const Platform = struct {
 };
 
 const Stage = enum {
+    start,
     pre_update,
     update,
     post_update,
     render,
+    stop,
 };
 
 pub const Module = struct {
+    const State = enum {
+        created,
+        initialized,
+        started,
+    };
+
     allocator: std.mem.Allocator,
     name: []const u8,
     v_ptr: *anyopaque,
-    v_call_init: ?*const fn (*anyopaque, core: *Core) anyerror!void,
-    v_call_deinit: ?*const fn (*anyopaque) void,
+    v_init: ?*const fn (*anyopaque, core: *Core) anyerror!void,
+    v_deinit: ?*const fn (*anyopaque) void,
     v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
 
-    pub fn init(comptime T: type, allocator: std.mem.Allocator) !@This() {
+    pub fn create(comptime T: type, allocator: std.mem.Allocator) !@This() {
         const mod: *T = try allocator.create(T);
 
         const gen = struct {
-            fn callInit(pointer: *anyopaque, core: *Core) anyerror!void {
+            fn init(pointer: *anyopaque, core: *Core) anyerror!void {
                 const self: *T = @ptrCast(@alignCast(pointer));
 
                 // Dependency injection
@@ -154,7 +163,7 @@ pub const Module = struct {
                     return self.init(ccore);
                 }
             }
-            fn callDeinit(pointer: *anyopaque) void {
+            fn deinit(pointer: *anyopaque) void {
                 const self: *T = @ptrCast(@alignCast(pointer));
                 if (@hasDecl(T, "deinit")) {
                     self.deinit();
@@ -170,25 +179,48 @@ pub const Module = struct {
         };
 
         return .{
+            .state = .created,
             .allocator = allocator,
             .name = @typeName(T),
             .v_ptr = mod,
-            .v_call_init = gen.callInit,
-            .v_call_deinit = gen.callDeinit,
+            .v_init = gen.init,
+            .v_deinit = gen.deinit,
             .v_destroy = gen.destroy,
         };
     }
-    pub fn deinit(self: *@This()) void {
-        self.v_destroy(self.v_ptr, self.allocator);
-    }
-    pub fn callInit(self: *@This(), core: *Core) !void {
-        if (self.v_call_init) |call| {
-            try call(self.v_ptr, core);
+    pub fn destroy(self: *@This()) void {
+        if (self.state == .created) {
+            self.v_destroy(self.v_ptr, self.allocator);
         }
     }
-    pub fn callDeinit(self: *@This()) void {
-        if (self.v_call_deinit) |call| {
-            call(self.v_ptr);
+    pub fn init(self: *@This(), core: *const Core) !void {
+        std.debug.assert(self.state == .created);
+        if (self.v_init) |call| {
+            try call(self.v_ptr, core);
+        }
+        self.state = .initialized;
+    }
+    pub fn deinit(self: *@This()) void {
+        if (self.state == .initialized) {
+            if (self.v_deinit) |call| {
+                call(self.v_ptr);
+            }
+            self.state = .created;
+        }
+    }
+    pub fn start(self: *@This()) !void {
+        std.debug.assert(self.state == .initialized);
+        if (self.v_start) |call| {
+            try call(self.v_ptr);
+        }
+        self.state = .started;
+    }
+    pub fn stop(self: *@This()) !void {
+        if (self.state == .started) {
+            if (self.v_stop) |call| {
+                try call(self.v_ptr);
+            }
+            self.state = .initialized;
         }
     }
 };
@@ -260,21 +292,25 @@ pub const Core = struct {
         }
         errdefer core.deinitStages();
 
-        // Init modules
+        // Create modules
         core.modules = try .initCapacity(platform.allocator, 32);
         errdefer core.deinitModules();
+        inline for (@typeInfo(modules).@"struct".decls) |mod| {
+            const Mod = @field(modules, mod.name);
+            const T = @field(Mod, "module");
+            try core.modules.append(core.platform.allocator, try .create(T, core.platform.allocator));
+        }
 
-        // Register required modules
-        try core.registerModules(.{Logger});
-        try core.registerModules(.{
-            File,
-            Cart,
-            Config,
-            Component,
-            Collection,
-            Node,
-            Property,
-        });
+        // Init modules
+        for (core.modules.items) |*module| {
+            try module.init(core);
+        }
+
+        // Start modules
+        for (core.modules.items) |*module| {
+            try module.start();
+        }
+
         errdefer core.deinitNodes();
 
         // Mount base file system
@@ -294,28 +330,6 @@ pub const Core = struct {
                 Window,
             });
         }
-
-        // Register other core modules
-        try core.registerModules(.{
-            Signal,
-            Input,
-            Transform,
-            DataFrame,
-            InputMap,
-            Graphics,
-            GPU,
-            Texture,
-            Mesh,
-            StaticMesh,
-            Camera,
-            Viewport,
-            Widget,
-            Label,
-            Button,
-            Font,
-            Gltf,
-            Lua,
-        });
 
         // Handle command
         switch (core.platform.config.command) {
@@ -366,35 +380,6 @@ pub const Core = struct {
         }
         input.onEvent(&event);
         window.onEvent(&event);
-    }
-
-    pub fn registerModules(self: *Core, comptime mods: anytype) !void {
-        const first = self.modules.items.len;
-        // Register modules
-        errdefer {
-            for (self.modules.items[first..]) |*module| {
-                module.deinit();
-            }
-        }
-        inline for (mods) |mod| {
-            if (self.platform.config.logModuleInitialization) {
-                self.log("register module {s}...", .{@typeName(mod)});
-            }
-            const module = try self.modules.addOne(self.platform.allocator);
-            module.* = try .init(mod, self.platform.allocator);
-        }
-        // Initialize modules
-        errdefer {
-            for (self.modules.items[first..]) |*module| {
-                module.callDeinit();
-            }
-        }
-        for (self.modules.items[first..]) |*module| {
-            if (self.platform.config.logModuleInitialization) {
-                self.log("init module {s}...", .{module.name});
-            }
-            try module.callInit(self);
-        }
     }
 
     pub fn findModule(self: *const @This(), comptime T: type) ?*T {

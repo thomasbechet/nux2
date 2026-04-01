@@ -7,4 +7,4 @@
 /docgen_tmp/
 runtimes/web/nux.wasm
 core/lua/bindings.zig
-core/reflected.zig
+core/modules.zig

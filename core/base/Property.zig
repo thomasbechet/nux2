@@ -8,6 +8,7 @@ pub const ID = u8;
 /// - Bind property to a widget
 /// - Bind property to animation
 pub const Primitive = enum {
+    void,
     id,
     vec2,
     vec3,
@@ -16,6 +17,7 @@ pub const Primitive = enum {
 };
 
 pub const Value = union(Primitive) {
+    void,
     id: nux.ID,
     vec2: nux.Vec2,
     vec3: nux.Vec3,

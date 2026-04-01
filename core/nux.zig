@@ -58,6 +58,7 @@ pub const SpanAllocator = @import("utils/SpanAllocator.zig");
 pub const Callable = @import("utils/Callable.zig");
 pub const Deque = @import("utils/Deque.zig").Deque; // TODO: wait 0.16.0 for std
 pub const ObjectPool = @import("utils/ObjectPool.zig").ObjectPool;
+pub const Function = @import("base/Function.zig");
 
 pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;
@@ -116,6 +117,7 @@ pub const Module = struct {
     v_start: ?*const fn (*anyopaque) anyerror!void,
     v_stop: ?*const fn (*anyopaque) void,
     v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
+    functions: std.StringHashMap(Function),
 
     pub fn create(comptime T: type, allocator: std.mem.Allocator) !@This() {
         const mod: *T = try allocator.create(T);
@@ -205,11 +207,13 @@ pub const Module = struct {
             .v_start = gen.start,
             .v_stop = gen.stop,
             .v_destroy = gen.destroy,
+            .functions = .init(allocator),
         };
     }
     pub fn destroy(self: *@This()) void {
         if (self.state == .created) {
             self.v_destroy(self.v_ptr, self.allocator);
+            self.functions.deinit();
         }
     }
     pub fn init(self: *@This(), core: *Core) !void {
@@ -286,9 +290,21 @@ pub const Core = struct {
 
         // Create modules
         inline for (@typeInfo(modules).@"struct".decls) |mod| {
-            const Mod = @field(modules, mod.name);
-            const T = @field(Mod, "module");
-            try core.modules.append(core.platform.allocator, try .create(T, core.platform.allocator));
+            const ModuleInfo = @field(modules, mod.name);
+            const ModuleType = @field(ModuleInfo, "module");
+            const module = try core.modules.addOne(core.platform.allocator);
+            module.* = try .create(ModuleType, core.platform.allocator);
+            const Functions = @field(ModuleInfo, "Functions");
+            inline for (@typeInfo(Functions).@"struct".decls) |func_decl| {
+                const FunctionInfo = @field(Functions, func_decl.name);
+                const FunctionType = @field(FunctionInfo, "function");
+                const name = @field(FunctionInfo, "name");
+                try module.functions.put(name, .wrap(
+                    ModuleType,
+                    FunctionType,
+                    @ptrCast(@alignCast(module.v_ptr)),
+                ));
+            }
         }
 
         // Init modules

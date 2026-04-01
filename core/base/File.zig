@@ -201,6 +201,13 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.platform = core.platform.file;
     self.layers = try .initCapacity(core.platform.allocator, 8);
+
+    // Mount base file system
+    if (core.platform.config.mount) |entryPoint| {
+        try self.mount(entryPoint);
+    } else {
+        try self.mount(".");
+    }
 }
 pub fn deinit(self: *Self) void {
     for (self.layers.items) |*layer| {

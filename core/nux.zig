@@ -109,13 +109,18 @@ pub const Module = struct {
 
     allocator: std.mem.Allocator,
     name: []const u8,
+    state: State = .created,
     v_ptr: *anyopaque,
     v_init: ?*const fn (*anyopaque, core: *Core) anyerror!void,
     v_deinit: ?*const fn (*anyopaque) void,
+    v_start: ?*const fn (*anyopaque) anyerror!void,
+    v_stop: ?*const fn (*anyopaque) void,
     v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
 
     pub fn create(comptime T: type, allocator: std.mem.Allocator) !@This() {
         const mod: *T = try allocator.create(T);
+
+        std.log.info("CREATE {s}", .{@typeName(T)});
 
         const gen = struct {
             fn init(pointer: *anyopaque, core: *Core) anyerror!void {
@@ -169,6 +174,18 @@ pub const Module = struct {
                     self.deinit();
                 }
             }
+            fn start(pointer: *anyopaque) !void {
+                const self: *T = @ptrCast(@alignCast(pointer));
+                if (@hasDecl(T, "onStart")) {
+                    try self.onStart();
+                }
+            }
+            fn stop(pointer: *anyopaque) void {
+                const self: *T = @ptrCast(@alignCast(pointer));
+                if (@hasDecl(T, "onStop")) {
+                    self.onStop();
+                }
+            }
             fn destroy(
                 pointer: *anyopaque,
                 alloc: std.mem.Allocator,
@@ -185,6 +202,8 @@ pub const Module = struct {
             .v_ptr = mod,
             .v_init = gen.init,
             .v_deinit = gen.deinit,
+            .v_start = gen.start,
+            .v_stop = gen.stop,
             .v_destroy = gen.destroy,
         };
     }
@@ -193,7 +212,8 @@ pub const Module = struct {
             self.v_destroy(self.v_ptr, self.allocator);
         }
     }
-    pub fn init(self: *@This(), core: *const Core) !void {
+    pub fn init(self: *@This(), core: *Core) !void {
+        std.log.info("INIT {s}", .{self.name});
         std.debug.assert(self.state == .created);
         if (self.v_init) |call| {
             try call(self.v_ptr, core);
@@ -201,6 +221,7 @@ pub const Module = struct {
         self.state = .initialized;
     }
     pub fn deinit(self: *@This()) void {
+        std.log.info("DEINIT {s}", .{self.name});
         if (self.state == .initialized) {
             if (self.v_deinit) |call| {
                 call(self.v_ptr);
@@ -209,16 +230,18 @@ pub const Module = struct {
         }
     }
     pub fn start(self: *@This()) !void {
+        std.log.info("START {s}", .{self.name});
         std.debug.assert(self.state == .initialized);
         if (self.v_start) |call| {
             try call(self.v_ptr);
         }
         self.state = .started;
     }
-    pub fn stop(self: *@This()) !void {
+    pub fn stop(self: *@This()) void {
+        std.log.info("STOP {s}", .{self.name});
         if (self.state == .started) {
             if (self.v_stop) |call| {
-                try call(self.v_ptr);
+                call(self.v_ptr);
             }
             self.state = .initialized;
         }
@@ -251,50 +274,17 @@ pub const Core = struct {
         }
     }
 
-    fn deinitModules(self: *@This()) void {
-        // Call deinit on modules
-        var i = self.modules.items.len;
-        while (i > 0) : (i -= 1) {
-            const module = &self.modules.items[i - 1];
-            if (self.platform.config.logModuleInitialization) {
-                self.log("deinit module {s}...", .{module.name});
-            }
-            module.callDeinit();
-        }
-        // Free modules
-        i = self.modules.items.len;
-        while (i > 0) : (i -= 1) {
-            self.modules.items[i - 1].deinit();
-        }
-        self.modules.deinit(self.platform.allocator);
-    }
-    fn deinitStages(self: *@This()) void {
-        var it = self.stages.iterator();
-        while (it.next()) |entry| {
-            entry.value.deinit(self.platform.allocator);
-        }
-    }
-    fn deinitNodes(self: *@This()) void {
-        if (self.findModule(Node)) |node| {
-            node.delete(node.getRoot()) catch {};
-        }
-    }
-
     pub fn init(platform: Platform) !*Core {
         var core = try platform.allocator.create(@This());
-        errdefer platform.allocator.destroy(core);
         core.platform = platform;
-
-        // Init stages
+        core.modules = try .initCapacity(platform.allocator, 32);
         core.stages = .{};
         inline for (std.meta.fields(Stage)) |field| {
             core.stages.put(@field(Stage, field.name), .empty);
         }
-        errdefer core.deinitStages();
+        errdefer core.deinit();
 
         // Create modules
-        core.modules = try .initCapacity(platform.allocator, 32);
-        errdefer core.deinitModules();
         inline for (@typeInfo(modules).@"struct".decls) |mod| {
             const Mod = @field(modules, mod.name);
             const T = @field(Mod, "module");
@@ -309,26 +299,6 @@ pub const Core = struct {
         // Start modules
         for (core.modules.items) |*module| {
             try module.start();
-        }
-
-        errdefer core.deinitNodes();
-
-        // Mount base file system
-        var file = core.findModule(File) orelse unreachable;
-        if (core.platform.config.mount) |entryPoint| {
-            try file.mount(entryPoint);
-        } else {
-            try file.mount(".");
-        }
-
-        // Load configuration
-        var config = core.findModule(Config) orelse unreachable;
-        try config.loadINI();
-
-        if (try config.getBool("Window.enable")) {
-            try core.registerModules(.{
-                Window,
-            });
         }
 
         // Handle command
@@ -351,9 +321,29 @@ pub const Core = struct {
     }
 
     pub fn deinit(self: *Core) void {
-        self.deinitNodes();
-        self.deinitStages();
-        self.deinitModules();
+
+        // Stop modules
+        for (self.modules.items) |*module| {
+            module.stop();
+        }
+
+        // Deinit modules
+        for (self.modules.items) |*module| {
+            module.deinit();
+        }
+
+        // Destroy modues
+        for (self.modules.items) |*module| {
+            module.destroy();
+        }
+        self.modules.deinit(self.platform.allocator);
+
+        // Deinit stages
+        var it = self.stages.iterator();
+        while (it.next()) |entry| {
+            entry.value.deinit(self.platform.allocator);
+        }
+
         // Free core
         self.platform.allocator.destroy(self);
     }

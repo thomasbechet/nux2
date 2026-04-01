@@ -27,6 +27,7 @@ const AstIter = struct {
     ast: *const Ast,
     slice: []const Ast.Node.Index,
     ignore: ?[][]const u8 = null,
+    ignore_all: bool = false,
 
     const Type = struct {
         name: []const u8,
@@ -81,12 +82,17 @@ const AstIter = struct {
         }
     };
 
-    pub fn init(alloc: Allocator, ast: *const Ast, ignore: ?[][]const u8) !AstIter {
+    pub fn init(
+        alloc: Allocator,
+        ast: *const Ast,
+        module: *const ModuleJson,
+    ) !AstIter {
         return .{
             .alloc = alloc,
             .ast = ast,
             .slice = ast.rootDecls(),
-            .ignore = ignore,
+            .ignore = module.ignore,
+            .ignore_all = module.ignore_all,
         };
     }
 
@@ -122,10 +128,14 @@ const AstIter = struct {
     }
 
     fn isIgnored(self: *const AstIter, name: []const u8) bool {
+        if (self.ignore_all) return true;
         var ignore = false;
         for ([_][]const u8{
             "init",
             "deinit",
+            "onStart",
+            "onStop",
+            "onPreUpdate",
             "onEvent",
             "onPreUpdate",
             "onUpdate",
@@ -139,9 +149,7 @@ const AstIter = struct {
         }
         if (self.ignore) |ignore_list| {
             for (ignore_list) |ignore_name| {
-                std.debug.print("TEST '{s}' AGAINST '{s}'\n", .{ name, ignore_name });
                 if (std.mem.eql(u8, ignore_name, name)) {
-                    std.debug.print("IGNORE\n", .{});
                     ignore = true;
                     break;
                 }
@@ -322,6 +330,7 @@ const AstIter = struct {
 const ModuleJson = struct {
     path: []const u8,
     ignore: ?[][]const u8 = null,
+    ignore_all: bool = false,
 };
 const ModulesJson = struct {
     rootpath: []const u8,
@@ -449,7 +458,7 @@ const Modules = struct {
             errdefer enums.deinit();
 
             // Filter items
-            var it = try AstIter.init(alloc, &ast, module.ignore);
+            var it = try AstIter.init(alloc, &ast, &module);
             while (try it.next()) |next| {
                 switch (next.data) {
                     .function => |*func| try functions.putNoClobber(next.name, func.*),
@@ -571,15 +580,20 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
         try writer.print("\tpub const Enums = struct {{\n", .{});
         var enum_it = module.enums.iterator();
         while (enum_it.next()) |enu| {
+            var enum_upper_case = try toUpperCase(alloc, enu.key_ptr.*);
+            defer enum_upper_case.deinit(alloc);
             try writer.print("\t\tpub const {s} = struct {{\n", .{enu.key_ptr.*});
-            try writer.print("\t\t\tpub const name = \"{s}\";\n", .{enu.key_ptr.*});
+            try writer.print("\t\t\tpub const name = \"{s}\";\n", .{enum_upper_case.items});
             try writer.print("\t\t\tpub const is_bitfield = {};\n", .{enu.value_ptr.isBitfield});
             try writer.print("\t\t\tpub const Values = struct {{\n", .{});
             for (enu.value_ptr.values.items) |value| {
                 var value_upper_case = try toUpperCase(alloc, value);
                 defer value_upper_case.deinit(alloc);
                 try writer.print("\t\t\t\tpub const {s} = struct {{\n", .{value_upper_case.items});
-                try writer.print("\t\t\t\t\tpub const name = \"{s}\";\n", .{value_upper_case.items});
+                try writer.print("\t\t\t\t\tpub const name = \"{s}_{s}\";\n", .{
+                    enum_upper_case.items,
+                    value_upper_case.items,
+                });
                 try writer.print("\t\t\t\t\tpub const value = nux.{s}.{s}.{s};\n", .{
                     module.name,
                     enu.key_ptr.*,

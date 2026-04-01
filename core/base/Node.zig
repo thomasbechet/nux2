@@ -371,6 +371,9 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn deinit(self: *Self) void {
     self.entries.deinit();
 }
+pub fn onStop(self: *Self) void {
+    self.delete(self.getRoot()) catch {};
+}
 
 fn addEntry(self: *Self, parent: ID) !ID {
     // Check parent

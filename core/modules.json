@@ -2,9 +2,6 @@
     "rootpath": "..",
     "modules": [
         {
-            "path": "base/Collection.zig"
-        },
-        {
             "path": "base/Node.zig",
             "ignore": [
                 "ComponentType",
@@ -33,6 +30,9 @@
                 "get",
                 "find"
             ]
+        },
+        {
+            "path": "base/Collection.zig"
         },
         {
             "path": "base/Signal.zig",
@@ -111,6 +111,10 @@
         },
         {
             "path": "ui/Label.zig"
+        },
+        {
+            "path": "lua/Lua.zig",
+            "ignore_all": true
         }
     ]
 }

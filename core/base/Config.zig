@@ -74,6 +74,9 @@ pub fn deinit(self: *Self) void {
     }
     self.ini_files.deinit(self.allocator);
 }
+pub fn onStart(self: *Self) void {
+    try self.loadINI();
+}
 pub fn loadINI(self: *Self) !void {
     const ini = try self.file.read("conf.ini", self.allocator);
     errdefer self.allocator.free(ini);

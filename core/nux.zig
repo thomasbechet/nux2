@@ -110,6 +110,7 @@ pub const Module = struct {
 
     allocator: std.mem.Allocator,
     name: []const u8,
+    component_id: ?ComponentID,
     state: State = .created,
     v_ptr: *anyopaque,
     v_init: ?*const fn (*anyopaque, core: *Core) anyerror!void,
@@ -118,6 +119,7 @@ pub const Module = struct {
     v_stop: ?*const fn (*anyopaque) void,
     v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
     functions: std.StringHashMap(Function),
+    enums: std.StringHashMap(u64),
 
     pub fn create(comptime T: type, allocator: std.mem.Allocator) !@This() {
         const mod: *T = try allocator.create(T);
@@ -208,12 +210,14 @@ pub const Module = struct {
             .v_stop = gen.stop,
             .v_destroy = gen.destroy,
             .functions = .init(allocator),
+            .enums = .init(allocator),
         };
     }
     pub fn destroy(self: *@This()) void {
         if (self.state == .created) {
             self.v_destroy(self.v_ptr, self.allocator);
             self.functions.deinit();
+            self.enums.deinit();
         }
     }
     pub fn init(self: *@This(), core: *Core) !void {
@@ -294,6 +298,8 @@ pub const Core = struct {
             const ModuleType = @field(ModuleInfo, "module");
             const module = try core.modules.addOne(core.platform.allocator);
             module.* = try .create(ModuleType, core.platform.allocator);
+
+            // Register functions
             const Functions = @field(ModuleInfo, "Functions");
             inline for (@typeInfo(Functions).@"struct".decls) |func_decl| {
                 const FunctionInfo = @field(Functions, func_decl.name);
@@ -304,6 +310,15 @@ pub const Core = struct {
                     FunctionType,
                     @ptrCast(@alignCast(module.v_ptr)),
                 ));
+            }
+
+            // Register enums
+            const Enums = @field(ModuleInfo, "Enums");
+            inline for (@typeInfo(Enums).@"struct".decls) |enum_decl| {
+                const EnumInfo = @field(Enums, enum_decl.name);
+                const name = @field(EnumInfo, "name");
+                const value = @field(EnumInfo, "value");
+                try module.enums.put(name, @intFromEnum(value));
             }
         }
 

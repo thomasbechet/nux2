@@ -406,7 +406,7 @@ fn openMath(lua: *c.lua_State) !void {
     c.luaL_setfuncs(lua, math_lib, 0);
     c.lua_setglobal(lua, "Math");
 }
-fn context(lua: ?*c.lua_State) *@This() {
+fn context(lua: ?*c.lua_State) *Self {
     var ud: ?*anyopaque = undefined;
     _ = c.lua_getallocf(lua, &ud);
     return @as(*Self, @ptrCast(@alignCast(ud)));
@@ -436,6 +436,14 @@ fn openRequire(lua: *c.lua_State) !void {
     c.lua_pushcfunction(lua, require);
     c.lua_setglobal(lua, "require");
 }
+fn apiCall(lua: ?*c.lua_State) callconv(.c) c_int {
+    const self = context(lua);
+    const func = @as(*nux.Function, @ptrCast(@alignCast(c.lua_touserdata(
+        self.L,
+        c.lua_upvalueindex(1),
+    ))));
+    return 0;
+}
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -444,13 +452,35 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.L = c.lua_newstate(alloc, self, 0) orelse return error.Newstate;
     errdefer c.lua_close(self.L);
 
-    // Open api
+    // Open base api
     c.luaL_openlibs(self.L);
     try openMath(self.L);
     try openRequire(self.L);
     self.bindings.openModules(self.L, core);
 
-    // Initialize modules map
+    // Open modules api
+    for (core.modules.items) |*module| {
+        c.lua_newtable(self.L);
+        c.lua_pushinteger(self.L, module.components.id);
+        c.lua_setfield(self.L, -2, "id");
+        var func_it = module.functions.iterator();
+        while (func_it.next()) |*func| {
+            const lib: [*]const c.luaL_Reg = &.{
+                .{ .name = func.key_ptr.*, .func = apiCall },
+                .{ .name = null, .func = null },
+            };
+            c.lua_pushlightuserdata(self.L, func.value_ptr.*);
+            c.luaL_setfuncs(self.L, lib, 1);
+        }
+        var enum_it = module.enums.iterator();
+        while (enum_it.next()) |*enu| {
+            c.lua_setfield(self.L, -2, enu.key_ptr.*);
+            c.lua_pushinteger(self.L, enu.value_ptr.*);
+        }
+        c.lua_setglobal(self.L, module.name);
+    }
+
+    // Initialize lua modules map
     self.modules = .init(self.allocator);
 }
 pub fn deinit(self: *Self) void {

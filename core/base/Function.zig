@@ -21,7 +21,7 @@ const ArgParser = struct {
 v_ptr: *anyopaque,
 v_call: *const fn (*anyopaque, args: *ArgParser) anyerror!?nux.Property.Value,
 
-pub fn call(self: *Self, args: *ArgParser) !nux.Property.Value {
+pub fn call(self: *Self, args: *ArgParser) !?nux.Property.Value {
     return self.v_call(self.v_ptr, args);
 }
 

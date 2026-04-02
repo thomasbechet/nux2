@@ -110,7 +110,7 @@ pub const Module = struct {
 
     allocator: std.mem.Allocator,
     name: []const u8,
-    component_id: ?ComponentID,
+    is_component_module: bool,
     state: State = .created,
     v_ptr: *anyopaque,
     v_init: ?*const fn (*anyopaque, core: *Core) anyerror!void,
@@ -203,6 +203,7 @@ pub const Module = struct {
             .state = .created,
             .allocator = allocator,
             .name = @typeName(T),
+            .is_component_module = @hasField(T, Component.module_components_field),
             .v_ptr = mod,
             .v_init = gen.init,
             .v_deinit = gen.deinit,
@@ -316,9 +317,18 @@ pub const Core = struct {
             const Enums = @field(ModuleInfo, "Enums");
             inline for (@typeInfo(Enums).@"struct".decls) |enum_decl| {
                 const EnumInfo = @field(Enums, enum_decl.name);
-                const name = @field(EnumInfo, "name");
-                const value = @field(EnumInfo, "value");
-                try module.enums.put(name, @intFromEnum(value));
+                const EnumValues = @field(EnumInfo, "Values");
+                inline for (@typeInfo(EnumValues).@"struct".decls) |value_decl| {
+                    const EnumValue = @field(EnumValues, value_decl.name);
+                    const value = @field(EnumValue, "value");
+                    const name = @field(EnumValue, "name");
+                    comptime if (EnumInfo.is_bitfield) {
+                        try module.enums.put(name, @bitCast());
+                        @bitCast(Vertex.Module.Attributes{ .position = true });
+                    } else {
+                        try module.enums.put(name, @intFromEnum(value));
+                    };
+                }
             }
         }
 

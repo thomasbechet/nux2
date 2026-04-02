@@ -436,13 +436,57 @@ fn openRequire(lua: *c.lua_State) !void {
     c.lua_pushcfunction(lua, require);
     c.lua_setglobal(lua, "require");
 }
+
+const LuaArgParser = struct {
+    lua: ?*c.lua_State,
+    interface: nux.Function.ArgParser,
+
+    fn next(comptime T: anytype) !T {
+        switch (T) {}
+    }
+
+    fn init(lua: ?*c.lua_State) @This() {
+        return .{
+            .lua = lua,
+            .interface = .{
+                .nextID = next(nux.ID),
+            },
+        };
+    }
+};
+
 fn apiCall(lua: ?*c.lua_State) callconv(.c) c_int {
     const self = context(lua);
+
+    // Get function handle from up value
     const func = @as(*nux.Function, @ptrCast(@alignCast(c.lua_touserdata(
         self.L,
         c.lua_upvalueindex(1),
     ))));
-    return 0;
+
+    // Call function
+    var parser = LuaArgParser.init(lua);
+    const ret = try func.call(&parser) catch |err| {
+        return c.luaL_error(lua, @errorName(err));
+    };
+
+    // Return value
+    if (ret) |value| {
+        switch (value) {
+            .bool => |v| c.lua_pushboolean(self.L, @intFromBool(v)),
+            .u32 => |v| c.lua_pushinteger(self.L, v),
+            .f32 => |v| c.lua_pushnumber(self.L, v),
+            .vec2 => |v| pushUserData(lua, .vec2, v),
+            .vec3 => |v| pushUserData(lua, .vec3, v),
+            .vec4 => |v| pushUserData(lua, .vec4, v),
+            .quat => |v| pushUserData(lua, .quat, v),
+            .color => |v| pushUserData(lua, .vec4, v.rgba),
+            .string => |v| _ = c.lua_pushlstring(lua, v.ptr, v.len),
+        }
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -465,17 +509,14 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
         c.lua_setfield(self.L, -2, "id");
         var func_it = module.functions.iterator();
         while (func_it.next()) |*func| {
-            const lib: [*]const c.luaL_Reg = &.{
-                .{ .name = func.key_ptr.*, .func = apiCall },
-                .{ .name = null, .func = null },
-            };
             c.lua_pushlightuserdata(self.L, func.value_ptr.*);
-            c.luaL_setfuncs(self.L, lib, 1);
+            c.lua_pushcclosure(self.L, apiCall, 1);
+            c.lua_setfield(self.L, -2, func.key_ptr.*);
         }
         var enum_it = module.enums.iterator();
         while (enum_it.next()) |*enu| {
-            c.lua_setfield(self.L, -2, enu.key_ptr.*);
             c.lua_pushinteger(self.L, enu.value_ptr.*);
+            c.lua_setfield(self.L, -2, enu.key_ptr.*);
         }
         c.lua_setglobal(self.L, module.name);
     }

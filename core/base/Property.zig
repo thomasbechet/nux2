@@ -9,20 +9,26 @@ pub const ID = u8;
 /// - Bind property to animation
 pub const Primitive = enum {
     bool,
-    id,
+    u32,
+    f32,
     vec2,
     vec3,
     vec4,
     quat,
+    string,
+    id,
 };
 
 pub const Value = union(Primitive) {
     bool: bool,
-    id: nux.ID,
+    u32: u32,
+    f32: f32,
     vec2: nux.Vec2,
     vec3: nux.Vec3,
     vec4: nux.Vec4,
     quat: nux.Quat,
+    string: []const u8,
+    id: nux.ID,
 };
 
 pub const Ref = struct {
@@ -66,18 +72,6 @@ pub const Type = struct {
             .v_set = gen.set,
         };
     }
-
-    // pub fn field(
-    //     comptime T: type,
-    //     f: anytype,
-    // ) Property {
-    //     _ = T;
-    //     _ = V;
-    //     _ = f;
-    //     return .{
-    //         .name = "test",
-    //     };
-    // }
 };
 
 node: *nux.Node,

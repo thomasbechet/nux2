@@ -594,11 +594,20 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
                     enum_upper_case.items,
                     value_upper_case.items,
                 });
-                try writer.print("\t\t\t\t\tpub const value = nux.{s}.{s}.{s};\n", .{
-                    module.name,
-                    enu.key_ptr.*,
-                    value,
-                });
+                if (enu.value_ptr.isBitfield) {
+                    try writer.print("\t\t\t\t\tpub const value = nux.{s}.{s} {{ .{s} = true }};\n", .{
+                        module.name,
+                        enu.key_ptr.*,
+                        value,
+                    });
+                } else {
+                    try writer.print("\t\t\t\t\tpub const value = nux.{s}.{s}.{s};\n", .{
+                        module.name,
+                        enu.key_ptr.*,
+                        value,
+                    });
+                }
+
                 try writer.print("\t\t\t\t}};\n", .{});
             }
             try writer.print("\t\t\t}};\n", .{});

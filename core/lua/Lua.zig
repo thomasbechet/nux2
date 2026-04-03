@@ -505,8 +505,10 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     // Open modules api
     for (core.modules.items) |*module| {
         c.lua_newtable(self.L);
-        c.lua_pushinteger(self.L, module.components.id);
-        c.lua_setfield(self.L, -2, "id");
+        if (module.is_component_module) {
+            c.lua_pushinteger(self.L, module.components.id);
+            c.lua_setfield(self.L, -2, "id");
+        }
         var func_it = module.functions.iterator();
         while (func_it.next()) |*func| {
             c.lua_pushlightuserdata(self.L, func.value_ptr.*);

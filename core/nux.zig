@@ -120,8 +120,9 @@ pub const Module = struct {
     v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
     functions: std.StringHashMap(Function),
     enums: std.StringHashMap(u64),
+    components: ?Component.Type = null,
 
-    pub fn create(comptime T: type, allocator: std.mem.Allocator) !@This() {
+    pub fn create(comptime T: type, name: []const u8, allocator: std.mem.Allocator) !@This() {
         const mod: *T = try allocator.create(T);
 
         std.log.info("CREATE {s}", .{@typeName(T)});
@@ -259,7 +260,7 @@ pub const Module = struct {
 
 pub const Core = struct {
     platform: Platform,
-    modules: std.ArrayList(Module),
+    modules: std.StringHashMap(Module),
     running: bool = false,
     stages: std.EnumMap(Stage, std.ArrayList(Callable)),
 
@@ -322,12 +323,11 @@ pub const Core = struct {
                     const EnumValue = @field(EnumValues, value_decl.name);
                     const value = @field(EnumValue, "value");
                     const name = @field(EnumValue, "name");
-                    comptime if (EnumInfo.is_bitfield) {
-                        try module.enums.put(name, @bitCast());
-                        @bitCast(Vertex.Module.Attributes{ .position = true });
+                    if (EnumInfo.is_bitfield) {
+                        try module.enums.put(name, @as(u32, @bitCast(value)));
                     } else {
                         try module.enums.put(name, @intFromEnum(value));
-                    };
+                    }
                 }
             }
         }

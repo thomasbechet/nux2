@@ -16,7 +16,7 @@ const Collection = struct {
     path: []const u8 = "",
     nodes: std.ArrayList(Node) = .empty,
     references: std.ArrayList([]const u8) = .empty,
-    component_ids: std.ArrayList(nux.ComponentID) = .empty,
+    component_ids: std.ArrayList(nux.ModuleID) = .empty,
     component_indices: std.ArrayList(usize) = .empty,
     data: std.ArrayList(u8) = .empty,
 

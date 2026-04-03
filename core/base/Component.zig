@@ -7,19 +7,6 @@ pub const Index = u32;
 pub const ID = u8;
 pub const module_components_field = "components";
 
-pub const Type = struct {
-    name: []const u8,
-    v_ptr: *anyopaque,
-    v_deinit: *const fn (*anyopaque) void,
-    v_add: *const fn (*anyopaque, id: nux.ID) anyerror!void,
-    v_remove: *const fn (*anyopaque, id: nux.ID) void,
-    v_has: *const fn (*anyopaque, id: nux.ID) bool,
-    v_load: *const fn (*anyopaque, id: nux.ID, reader: *nux.Reader) anyerror!void,
-    v_save: *const fn (*anyopaque, id: nux.ID, writer: *nux.Writer) anyerror!void,
-    v_description: *const fn (*anyopaque, id: nux.ID, w: *std.Io.Writer) anyerror!void,
-    v_properties: *const fn (*anyopaque, id: nux.ID) anyerror![]const nux.Property.Type,
-};
-
 pub fn Components(T: type) type {
     return struct {
         const Entry = struct {
@@ -32,7 +19,6 @@ pub fn Components(T: type) type {
         data: nux.ObjectPool(Entry),
         bitset: std.DynamicBitSet,
         node: *nux.Node,
-        property: *nux.Property,
 
         pub const Iterator = struct {
             components: *Components(T),
@@ -69,13 +55,11 @@ pub fn Components(T: type) type {
         fn init(
             allocator: std.mem.Allocator,
             node: *nux.Node,
-            property: *nux.Property,
             type_index: ID,
         ) !@This() {
             return .{
                 .allocator = allocator,
                 .node = node,
-                .property = property,
                 .data = .init(allocator),
                 .bitset = try .initEmpty(allocator, 128),
                 .id = type_index,
@@ -180,54 +164,12 @@ pub fn Components(T: type) type {
                 try data.description(@fieldParentPtr(module_components_field, self), writer);
             }
         }
-        pub fn properties(self: *@This(), id: nux.ID) ![]const nux.Property.Type {
-            if (@hasDecl(T, "properties")) {
-                if (comptime @typeInfo(@TypeOf(T.properties)) == .@"fn") {
-                    const data = try self.get(id);
-                    return T.properties(data); // Dynamic properties
-                } else {
-                    return T.properties; // Static properties
-                }
-            }
-            return &.{};
-        }
-        pub fn bind(self: *@This(), id: nux.ID, name: []const u8) !nux.PropertyRef {
-            return self.property.bind(id, self.id, name);
-        }
     };
 }
 
-allocator: std.mem.Allocator,
-component_types: std.ArrayList(Type),
-file: *nux.File,
 node: *nux.Node,
-property: *nux.Property,
+module: *nux.Module,
 
-pub fn init(self: *Self, core: *const nux.Core) !void {
-    self.allocator = core.platform.allocator;
-    self.component_types = try .initCapacity(self.allocator, 64);
-}
-pub fn deinit(self: *Self) void {
-    for (self.component_types.items) |typ| {
-        typ.v_deinit(typ.v_ptr);
-    }
-    self.component_types.deinit(self.allocator);
-}
-
-pub fn find(self: *Self, name: []const u8) !*Type {
-    for (self.component_types.items) |*typ| {
-        if (std.mem.eql(u8, typ.name, name)) {
-            return typ;
-        }
-    }
-    return error.ComponentTypeNotFound;
-}
-pub fn get(self: *Self, component: ID) !*Type {
-    if (component >= self.component_types.items.len) {
-        return error.InvalidComponentID;
-    }
-    return &self.component_types.items[component];
-}
 pub fn add(self: *Self, id: nux.ID, comp: nux.ComponentID) !void {
     const component = try self.get(comp);
     try component.v_add(component.v_ptr, id);
@@ -235,70 +177,4 @@ pub fn add(self: *Self, id: nux.ID, comp: nux.ComponentID) !void {
 pub fn remove(self: *Self, id: nux.ID, comp: nux.ComponentID) !void {
     const component = try self.get(comp);
     component.v_remove(component.v_ptr, id);
-}
-pub fn registerModule(self: *Self, module: anytype) !void {
-    const T = @typeInfo(@TypeOf(module)).pointer.child;
-    if (@hasField(T, module_components_field)) {
-
-        // Init pool
-        const component_id: ID = @intCast(self.component_types.items.len);
-        @field(module, module_components_field) = try .init(
-            self.allocator,
-            self.node,
-            self.property,
-            component_id,
-        );
-
-        // Create vtable
-        const gen = struct {
-            fn deinit(pointer: *anyopaque) void {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                @field(mod, module_components_field).deinit();
-            }
-            fn add(pointer: *anyopaque, id: nux.ID) !void {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                _ = try @field(mod, module_components_field).add(id);
-            }
-            fn remove(pointer: *anyopaque, id: nux.ID) void {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                @field(mod, module_components_field).remove(id);
-            }
-            fn has(pointer: *anyopaque, id: nux.ID) bool {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, module_components_field).has(id);
-            }
-            fn load(pointer: *anyopaque, id: nux.ID, reader: *nux.Reader) !void {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                try @field(mod, module_components_field).load(id, reader);
-            }
-            fn save(pointer: *anyopaque, id: nux.ID, writer: *nux.Writer) !void {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                try @field(mod, module_components_field).save(id, writer);
-            }
-            fn description(pointer: *anyopaque, id: nux.ID, writer: *std.Io.Writer) !void {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                try @field(mod, module_components_field).description(id, writer);
-            }
-            fn properties(pointer: *anyopaque, id: nux.ID) ![]const nux.Property.Type {
-                const mod: *T = @ptrCast(@alignCast(pointer));
-                return @field(mod, module_components_field).properties(id);
-            }
-        };
-
-        // Register type
-        var it = std.mem.splitBackwardsScalar(u8, @typeName(T), '.');
-        const name = it.first();
-        (try self.component_types.addOne(self.allocator)).* = .{
-            .name = name,
-            .v_ptr = module,
-            .v_deinit = gen.deinit,
-            .v_add = gen.add,
-            .v_remove = gen.remove,
-            .v_has = gen.has,
-            .v_save = gen.save,
-            .v_load = gen.load,
-            .v_description = gen.description,
-            .v_properties = gen.properties,
-        };
-    }
 }

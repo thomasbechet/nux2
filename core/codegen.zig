@@ -576,6 +576,7 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
     for (modules.modules.items) |*module| {
         try writer.print("pub const {s} = struct {{\n", .{module.name});
         try writer.print("\tpub const module = nux.{s};\n", .{module.name});
+        try writer.print("\tpub const name = \"{s}\";\n", .{module.name});
         try writer.print("\tpub const is_component_module = {};\n", .{module.is_component_module});
         try writer.print("\tpub const Enums = struct {{\n", .{});
         var enum_it = module.enums.iterator();

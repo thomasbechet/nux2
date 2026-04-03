@@ -4,8 +4,10 @@ const modules = @import("modules.zig");
 pub const Logger = @import("base/Logger.zig");
 pub const Config = @import("base/Config.zig");
 pub const Collection = @import("base/Collection.zig");
+pub const Module = @import("base/Module.zig");
 pub const Node = @import("base/Node.zig");
 pub const Component = @import("base/Component.zig");
+pub const Function = @import("base/Function.zig");
 pub const Property = @import("base/Property.zig");
 pub const Signal = @import("base/Signal.zig");
 pub const File = @import("base/File.zig");
@@ -33,10 +35,9 @@ pub const Rasterizer = @import("graphics/Rasterizer.zig");
 pub const Gltf = @import("graphics/Gltf.zig");
 
 pub const ID = Node.ID;
-pub const ComponentID = Component.ID;
+pub const ModuleID = Module.ID;
+pub const FunctionID = Function.ID;
 pub const Components = Component.Components;
-pub const PropertyID = Property.ID;
-pub const PropertyRef = Property.Ref;
 pub const Writer = Node.Writer;
 pub const Reader = Node.Reader;
 pub const vec = @import("math/vec.zig");
@@ -58,7 +59,6 @@ pub const SpanAllocator = @import("utils/SpanAllocator.zig");
 pub const Callable = @import("utils/Callable.zig");
 pub const Deque = @import("utils/Deque.zig").Deque; // TODO: wait 0.16.0 for std
 pub const ObjectPool = @import("utils/ObjectPool.zig").ObjectPool;
-pub const Function = @import("base/Function.zig");
 
 pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;
@@ -101,166 +101,9 @@ const Stage = enum {
     stop,
 };
 
-pub const Module = struct {
-    const State = enum {
-        created,
-        initialized,
-        started,
-    };
-
-    allocator: std.mem.Allocator,
-    name: []const u8,
-    is_component_module: bool,
-    state: State = .created,
-    v_ptr: *anyopaque,
-    v_init: ?*const fn (*anyopaque, core: *Core) anyerror!void,
-    v_deinit: ?*const fn (*anyopaque) void,
-    v_start: ?*const fn (*anyopaque) anyerror!void,
-    v_stop: ?*const fn (*anyopaque) void,
-    v_destroy: *const fn (*anyopaque, std.mem.Allocator) void,
-    functions: std.StringHashMap(Function),
-    enums: std.StringHashMap(u64),
-    components: ?Component.Type = null,
-
-    pub fn create(comptime T: type, name: []const u8, allocator: std.mem.Allocator) !@This() {
-        const mod: *T = try allocator.create(T);
-
-        std.log.info("CREATE {s}", .{@typeName(T)});
-
-        const gen = struct {
-            fn init(pointer: *anyopaque, core: *Core) anyerror!void {
-                const self: *T = @ptrCast(@alignCast(pointer));
-
-                // Dependency injection
-                inline for (@typeInfo(T).@"struct".fields) |field| {
-                    switch (@typeInfo(field.type)) {
-                        .pointer => |info| {
-                            if (info.child != u8) {
-                                if (core.findModule(info.child)) |dependency| {
-                                    if (core.platform.config.logModuleInitialization) {
-                                        core.log("inject {s} to {s}", .{ @typeName(info.child), @typeName(T) });
-                                    }
-                                    @field(self, field.name) = dependency;
-                                }
-                            }
-                        },
-                        else => {},
-                    }
-                }
-
-                // Components initialization
-                if (core.findModule(Component)) |component| {
-                    try component.registerModule(self);
-                }
-
-                // Register callbacks
-                if (@hasDecl(T, "onPreUpdate")) {
-                    try core.registerStageCallback(.pre_update, .wrap(T, T.onPreUpdate, self));
-                }
-                if (@hasDecl(T, "onUpdate")) {
-                    try core.registerStageCallback(.update, .wrap(T, T.onUpdate, self));
-                }
-                if (@hasDecl(T, "onPostUpdate")) {
-                    try core.registerStageCallback(.post_update, .wrap(T, T.onPostUpdate, self));
-                }
-                if (@hasDecl(T, "onRender")) {
-                    try core.registerStageCallback(.render, .wrap(T, T.onRender, self));
-                }
-
-                // Initialize
-                if (@hasDecl(T, "init")) {
-                    const ccore: *const Core = core;
-                    return self.init(ccore);
-                }
-            }
-            fn deinit(pointer: *anyopaque) void {
-                const self: *T = @ptrCast(@alignCast(pointer));
-                if (@hasDecl(T, "deinit")) {
-                    self.deinit();
-                }
-            }
-            fn start(pointer: *anyopaque) !void {
-                const self: *T = @ptrCast(@alignCast(pointer));
-                if (@hasDecl(T, "onStart")) {
-                    try self.onStart();
-                }
-            }
-            fn stop(pointer: *anyopaque) void {
-                const self: *T = @ptrCast(@alignCast(pointer));
-                if (@hasDecl(T, "onStop")) {
-                    self.onStop();
-                }
-            }
-            fn destroy(
-                pointer: *anyopaque,
-                alloc: std.mem.Allocator,
-            ) void {
-                const self: *T = @ptrCast(@alignCast(pointer));
-                alloc.destroy(self);
-            }
-        };
-
-        return .{
-            .state = .created,
-            .allocator = allocator,
-            .name = @typeName(T),
-            .is_component_module = @hasField(T, Component.module_components_field),
-            .v_ptr = mod,
-            .v_init = gen.init,
-            .v_deinit = gen.deinit,
-            .v_start = gen.start,
-            .v_stop = gen.stop,
-            .v_destroy = gen.destroy,
-            .functions = .init(allocator),
-            .enums = .init(allocator),
-        };
-    }
-    pub fn destroy(self: *@This()) void {
-        if (self.state == .created) {
-            self.v_destroy(self.v_ptr, self.allocator);
-            self.functions.deinit();
-            self.enums.deinit();
-        }
-    }
-    pub fn init(self: *@This(), core: *Core) !void {
-        std.log.info("INIT {s}", .{self.name});
-        std.debug.assert(self.state == .created);
-        if (self.v_init) |call| {
-            try call(self.v_ptr, core);
-        }
-        self.state = .initialized;
-    }
-    pub fn deinit(self: *@This()) void {
-        std.log.info("DEINIT {s}", .{self.name});
-        if (self.state == .initialized) {
-            if (self.v_deinit) |call| {
-                call(self.v_ptr);
-            }
-            self.state = .created;
-        }
-    }
-    pub fn start(self: *@This()) !void {
-        std.log.info("START {s}", .{self.name});
-        std.debug.assert(self.state == .initialized);
-        if (self.v_start) |call| {
-            try call(self.v_ptr);
-        }
-        self.state = .started;
-    }
-    pub fn stop(self: *@This()) void {
-        std.log.info("STOP {s}", .{self.name});
-        if (self.state == .started) {
-            if (self.v_stop) |call| {
-                call(self.v_ptr);
-            }
-            self.state = .initialized;
-        }
-    }
-};
-
 pub const Core = struct {
     platform: Platform,
-    modules: std.StringHashMap(Module),
+    module: *Module,
     running: bool = false,
     stages: std.EnumMap(Stage, std.ArrayList(Callable)),
 
@@ -287,7 +130,6 @@ pub const Core = struct {
     pub fn init(platform: Platform) !*Core {
         var core = try platform.allocator.create(@This());
         core.platform = platform;
-        core.modules = try .initCapacity(platform.allocator, 32);
         core.stages = .{};
         inline for (std.meta.fields(Stage)) |field| {
             core.stages.put(@field(Stage, field.name), .empty);
@@ -297,50 +139,12 @@ pub const Core = struct {
         // Create modules
         inline for (@typeInfo(modules).@"struct".decls) |mod| {
             const ModuleInfo = @field(modules, mod.name);
-            const ModuleType = @field(ModuleInfo, "module");
-            const module = try core.modules.addOne(core.platform.allocator);
-            module.* = try .create(ModuleType, core.platform.allocator);
-
-            // Register functions
-            const Functions = @field(ModuleInfo, "Functions");
-            inline for (@typeInfo(Functions).@"struct".decls) |func_decl| {
-                const FunctionInfo = @field(Functions, func_decl.name);
-                const FunctionType = @field(FunctionInfo, "function");
-                const name = @field(FunctionInfo, "name");
-                try module.functions.put(name, .wrap(
-                    ModuleType,
-                    FunctionType,
-                    @ptrCast(@alignCast(module.v_ptr)),
-                ));
-            }
-
-            // Register enums
-            const Enums = @field(ModuleInfo, "Enums");
-            inline for (@typeInfo(Enums).@"struct".decls) |enum_decl| {
-                const EnumInfo = @field(Enums, enum_decl.name);
-                const EnumValues = @field(EnumInfo, "Values");
-                inline for (@typeInfo(EnumValues).@"struct".decls) |value_decl| {
-                    const EnumValue = @field(EnumValues, value_decl.name);
-                    const value = @field(EnumValue, "value");
-                    const name = @field(EnumValue, "name");
-                    if (EnumInfo.is_bitfield) {
-                        try module.enums.put(name, @as(u32, @bitCast(value)));
-                    } else {
-                        try module.enums.put(name, @intFromEnum(value));
-                    }
-                }
-            }
+            try core.module.register(ModuleInfo);
         }
 
-        // Init modules
-        for (core.modules.items) |*module| {
-            try module.init(core);
-        }
-
-        // Start modules
-        for (core.modules.items) |*module| {
-            try module.start();
-        }
+        // Start sequence
+        core.module.initAll();
+        core.module.startAll();
 
         // Handle command
         switch (core.platform.config.command) {
@@ -363,21 +167,10 @@ pub const Core = struct {
 
     pub fn deinit(self: *Core) void {
 
-        // Stop modules
-        for (self.modules.items) |*module| {
-            module.stop();
-        }
-
-        // Deinit modules
-        for (self.modules.items) |*module| {
-            module.deinit();
-        }
-
-        // Destroy modues
-        for (self.modules.items) |*module| {
-            module.destroy();
-        }
-        self.modules.deinit(self.platform.allocator);
+        // Stop sequence
+        self.module.stopAll();
+        self.module.deinitAll();
+        self.module.deinit();
 
         // Deinit stages
         var it = self.stages.iterator();
@@ -403,22 +196,13 @@ pub const Core = struct {
     }
 
     pub fn pushEvent(self: *Core, event: Platform.Event) void {
-        const input = self.findModule(Input) orelse return;
-        const window = self.findModule(Window) orelse return;
+        const input = self.module.getByType(Input);
+        const window = self.module.getByType(Window);
         switch (event) {
             .requestExit => self.running = false,
             else => {},
         }
         input.onEvent(&event);
         window.onEvent(&event);
-    }
-
-    pub fn findModule(self: *const @This(), comptime T: type) ?*T {
-        for (self.modules.items) |*module| {
-            if (std.mem.eql(u8, @typeName(T), module.name)) {
-                return @ptrCast(@alignCast(module.v_ptr));
-            }
-        }
-        return null;
     }
 };

@@ -64,6 +64,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.config = .init(self.allocator);
     self.ini_files = .empty;
+
     // Load default configuration
     try self.parse(default_ini);
 }

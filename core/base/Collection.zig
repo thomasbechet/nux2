@@ -7,8 +7,8 @@ const Node = struct {
     parent: ?usize, // null if root node
     name_start: usize,
     name_end: usize,
-    component_indices_start: usize,
-    component_indices_end: usize,
+    module_indices_start: usize,
+    module_indices_end: usize,
     component_data_start: usize,
     component_data_end: usize,
 };
@@ -16,15 +16,15 @@ const Collection = struct {
     path: []const u8 = "",
     nodes: std.ArrayList(Node) = .empty,
     references: std.ArrayList([]const u8) = .empty,
-    component_ids: std.ArrayList(nux.ModuleID) = .empty,
-    component_indices: std.ArrayList(usize) = .empty,
+    module_ids: std.ArrayList(nux.ModuleID) = .empty,
+    module_indices: std.ArrayList(usize) = .empty,
     data: std.ArrayList(u8) = .empty,
 
     pub fn deinit(self: *Collection, mod: *Self) void {
         self.nodes.deinit(mod.allocator);
         self.references.deinit(mod.allocator);
-        self.component_ids.deinit(mod.allocator);
-        self.component_indices.deinit(mod.allocator);
+        self.module_ids.deinit(mod.allocator);
+        self.module_indices.deinit(mod.allocator);
         self.data.deinit(mod.allocator);
     }
 };
@@ -33,8 +33,7 @@ allocator: std.mem.Allocator,
 components: nux.Components(Collection),
 node: *nux.Node,
 file: *nux.File,
-logger: *nux.Logger,
-component: *nux.Component,
+module: *nux.Module,
 ids: std.ArrayList(nux.ID), // Temporary id pool for node_index <> id mapping
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -55,11 +54,11 @@ pub fn exportNode(self: *Self, parent: nux.ID, root: nux.ID) !nux.ID {
     var entries: std.ArrayList(Node) = try .initCapacity(self.allocator, self.ids.items.len);
     errdefer entries.deinit(self.allocator);
 
-    var component_ids: std.ArrayList(nux.ComponentID) = try .initCapacity(self.allocator, 256);
-    errdefer component_ids.deinit(self.allocator);
+    var module_ids: std.ArrayList(nux.ComponentID) = try .initCapacity(self.allocator, 256);
+    errdefer module_ids.deinit(self.allocator);
 
-    var component_indices: std.ArrayList(usize) = try .initCapacity(self.allocator, 256);
-    errdefer component_indices.deinit(self.allocator);
+    var module_indices: std.ArrayList(usize) = try .initCapacity(self.allocator, 256);
+    errdefer module_indices.deinit(self.allocator);
 
     var data: std.ArrayList(u8) = try .initCapacity(self.allocator, 256);
     errdefer data.deinit(self.allocator);
@@ -91,12 +90,12 @@ pub fn exportNode(self: *Self, parent: nux.ID, root: nux.ID) !nux.ID {
 
         // Collect components
         var it = try self.node.iterComponents(node_id);
-        node.component_indices_start = component_indices.items.len;
+        node.module_indices_start = module_indices.items.len;
         while (it.next()) |cid| {
 
             // Find component index from component ids
             var component_index: ?usize = null;
-            for (component_ids.items, 0..) |component_id, index| {
+            for (module_ids.items, 0..) |component_id, index| {
                 if (component_id == cid) {
                     component_index = index;
                     break;
@@ -105,14 +104,14 @@ pub fn exportNode(self: *Self, parent: nux.ID, root: nux.ID) !nux.ID {
 
             // Component not found, append id to list
             if (component_index == null) {
-                component_index = component_ids.items.len;
-                try component_ids.append(self.allocator, cid);
+                component_index = module_ids.items.len;
+                try module_ids.append(self.allocator, cid);
             }
 
             // Append component index
-            try component_indices.append(self.allocator, component_index.?);
+            try module_indices.append(self.allocator, component_index.?);
         }
-        node.component_indices_end = component_indices.items.len;
+        node.module_indices_end = module_indices.items.len;
     }
 
     // Prepare data writer
@@ -139,8 +138,8 @@ pub fn exportNode(self: *Self, parent: nux.ID, root: nux.ID) !nux.ID {
     const id = try self.node.create(parent);
     try self.components.addWith(id, .{
         .path = undefined,
-        .component_ids = component_ids,
-        .component_indices = component_indices,
+        .module_ids = module_ids,
+        .module_indices = module_indices,
         .data = data_writer.toArrayList(),
         .nodes = entries,
         .references = undefined,
@@ -177,12 +176,12 @@ pub fn instantiate(self: *Self, id: nux.ID, parent: nux.ID) !nux.ID {
         reader.reader = &data_reader;
         // Load components
         const node_id = self.ids.items[index];
-        for (collection.component_indices.items[node.component_indices_start..node.component_indices_end]) |component_index| {
+        for (collection.module_indices.items[node.module_indices_start..node.module_indices_end]) |module_index| {
             // Clear arena
             _ = arena.reset(.retain_capacity);
             // Load component
-            const component_id = collection.component_ids.items[component_index];
-            const typ = try self.component.get(component_id);
+            const module_id = collection.module_ids.items[module_index];
+            const typ = try self.module.get(module_id);
             try typ.v_load(typ.v_ptr, node_id, &reader);
         }
     }

@@ -10,7 +10,7 @@ const PrimitiveType = enum {
     f32,
     string,
     ID,
-    ComponentID,
+    ModuleID,
     Vec2,
     Vec2i,
     Vec3,

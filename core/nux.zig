@@ -59,6 +59,7 @@ pub const SpanAllocator = @import("utils/SpanAllocator.zig");
 pub const Callable = @import("utils/Callable.zig");
 pub const Deque = @import("utils/Deque.zig").Deque; // TODO: wait 0.16.0 for std
 pub const ObjectPool = @import("utils/ObjectPool.zig").ObjectPool;
+pub const hash = @import("utils/hash.zig");
 
 pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;
@@ -103,9 +104,11 @@ const Stage = enum {
 
 pub const Core = struct {
     platform: Platform,
-    module: *Module,
     running: bool = false,
     stages: std.EnumMap(Stage, std.ArrayList(Callable)),
+    modules: std.ArrayList(Module.Module),
+    names: std.StringHashMap(ID),
+    hashes: std.AutoHashMap(u32, ID),
 
     fn log(
         self: *Core,
@@ -126,6 +129,176 @@ pub const Core = struct {
             try callback.call();
         }
     }
+    fn register(self: *Core, comptime ModuleInfo: anytype) !void {
+        const T = @field(ModuleInfo, "module");
+        const module_name = @field(ModuleInfo, "name");
+        const has_components = @hasField(T, Component.module_components_field);
+        const module = try self.modules.addOne(self.platform.allocator);
+        module.name = module_name;
+        module.type_hash = hash.fromType(T);
+        module.v_ptr = try self.platform.allocator.create(T);
+        module.functions = .init(self.platform.allocator);
+        module.enums = .init(self.platform.allocator);
+
+        std.log.info("REGISTER {s}", .{module_name});
+
+        // Register module
+        const module_gen = struct {
+            fn init(pointer: *anyopaque, core: *Core) anyerror!void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+
+                // Dependency injection
+                inline for (@typeInfo(T).@"struct".fields) |field| {
+                    switch (@typeInfo(field.type)) {
+                        .pointer => |info| {
+                            if (info.child != u8) {
+                                if (core.module.findByType(info.child)) |dependency| {
+                                    @field(mod, field.name) = dependency;
+                                }
+                            }
+                        },
+                        else => {},
+                    }
+                }
+
+                // Register callbacks
+                if (@hasDecl(T, "onPreUpdate")) {
+                    try core.registerStageCallback(.pre_update, .wrap(T, T.onPreUpdate, mod));
+                }
+                if (@hasDecl(T, "onUpdate")) {
+                    try core.registerStageCallback(.update, .wrap(T, T.onUpdate, mod));
+                }
+                if (@hasDecl(T, "onPostUpdate")) {
+                    try core.registerStageCallback(.post_update, .wrap(T, T.onPostUpdate, mod));
+                }
+                if (@hasDecl(T, "onRender")) {
+                    try core.registerStageCallback(.render, .wrap(T, T.onRender, mod));
+                }
+                if (@hasDecl(T, "init")) {
+                    const ccore: *const Core = core;
+                    try mod.init(ccore);
+                }
+            }
+            fn deinit(pointer: *anyopaque) void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                if (@hasDecl(T, "deinit")) {
+                    mod.deinit();
+                }
+                if (has_components) {
+                    @field(mod, Component.module_components_field).deinit();
+                }
+            }
+            fn start(pointer: *anyopaque) !void {
+                if (@hasDecl(T, "onStart")) {
+                    const mod: *T = @ptrCast(@alignCast(pointer));
+                    try mod.onStart();
+                }
+            }
+            fn stop(pointer: *anyopaque) void {
+                if (@hasDecl(T, "onStop")) {
+                    const mod: *T = @ptrCast(@alignCast(pointer));
+                    mod.onStop();
+                }
+            }
+            fn destroy(
+                pointer: *anyopaque,
+                alloc: std.mem.Allocator,
+            ) void {
+                const mod: *T = @ptrCast(@alignCast(pointer));
+                alloc.destroy(mod);
+            }
+        };
+        module.v_module.init = module_gen.init;
+        module.v_module.deinit = module_gen.deinit;
+        module.v_module.start = module_gen.start;
+        module.v_module.stop = module_gen.stop;
+        module.v_module.destroy = module_gen.destroy;
+
+        // Register components
+        if (has_components) {
+            const component_gen = struct {
+                fn init(
+                    pointer: *anyopaque,
+                    node: *Node,
+                    allocator: *std.mem.Allocator,
+                ) !void {
+                    const mod: *T = @ptrCast(@alignCast(pointer));
+                    const component_id: ID = @intCast(self.component_types.items.len);
+                    @field(mod, Component.module_components_field) = try .init(
+                        allocator,
+                        node,
+                        component_id,
+                    );
+                }
+                fn deinit(pointer: *anyopaque) void {
+                    const mod: *T = @ptrCast(@alignCast(pointer));
+                    @field(mod, Component.module_components_field).deinit();
+                }
+                fn add(pointer: *anyopaque, id: ID) !void {
+                    const mod: *T = @ptrCast(@alignCast(pointer));
+                    _ = try @field(mod, Component.module_components_field).add(id);
+                }
+                fn remove(pointer: *anyopaque, id: ID) void {
+                    const mod: *T = @ptrCast(@alignCast(pointer));
+                    @field(mod, Component.module_components_field).remove(id);
+                }
+                fn has(pointer: *anyopaque, id: ID) bool {
+                    const mod: *T = @ptrCast(@alignCast(pointer));
+                    return @field(mod, Component.module_components_field).has(id);
+                }
+                fn load(pointer: *anyopaque, id: ID, reader: *Reader) !void {
+                    const mod: *T = @ptrCast(@alignCast(pointer));
+                    try @field(mod, Component.module_components_field).load(id, reader);
+                }
+                fn save(pointer: *anyopaque, id: ID, writer: *Writer) !void {
+                    const mod: *T = @ptrCast(@alignCast(pointer));
+                    try @field(mod, Component.module_components_field).save(id, writer);
+                }
+                fn description(pointer: *anyopaque, id: ID, writer: *std.Io.Writer) !void {
+                    const mod: *T = @ptrCast(@alignCast(pointer));
+                    try @field(mod, Component.module_components_field).description(id, writer);
+                }
+            };
+            module.v_component = .{
+                .add = component_gen.add,
+                .remove = component_gen.remove,
+                .has = component_gen.has,
+                .save = component_gen.save,
+                .load = component_gen.load,
+                .description = component_gen.description,
+            };
+        }
+
+        // Register functions
+        const Functions = @field(ModuleInfo, "Functions");
+        inline for (@typeInfo(Functions).@"struct".decls) |func_decl| {
+            const FunctionInfo = @field(Functions, func_decl.name);
+            const FunctionType = @field(FunctionInfo, "function");
+            const name = @field(FunctionInfo, "name");
+            try module.functions.put(name, .wrap(
+                T,
+                FunctionType,
+                @ptrCast(@alignCast(module.v_ptr)),
+            ));
+        }
+
+        // Register enums
+        const Enums = @field(ModuleInfo, "Enums");
+        inline for (@typeInfo(Enums).@"struct".decls) |enum_decl| {
+            const EnumInfo = @field(Enums, enum_decl.name);
+            const EnumValues = @field(EnumInfo, "Values");
+            inline for (@typeInfo(EnumValues).@"struct".decls) |value_decl| {
+                const EnumValue = @field(EnumValues, value_decl.name);
+                const value = @field(EnumValue, "value");
+                const name = @field(EnumValue, "name");
+                if (EnumInfo.is_bitfield) {
+                    try module.enums.put(name, @as(u32, @bitCast(value)));
+                } else {
+                    try module.enums.put(name, @intFromEnum(value));
+                }
+            }
+        }
+    }
 
     pub fn init(platform: Platform) !*Core {
         var core = try platform.allocator.create(@This());
@@ -134,17 +307,23 @@ pub const Core = struct {
         inline for (std.meta.fields(Stage)) |field| {
             core.stages.put(@field(Stage, field.name), .empty);
         }
+        core.modules = .empty;
+        core.names = .init(platform.allocator);
         errdefer core.deinit();
 
         // Create modules
         inline for (@typeInfo(modules).@"struct".decls) |mod| {
             const ModuleInfo = @field(modules, mod.name);
-            try core.module.register(ModuleInfo);
+            try core.register(ModuleInfo);
         }
 
         // Start sequence
-        core.module.initAll();
-        core.module.startAll();
+        for (core.modules.items) |*module| {
+            try module.init();
+        }
+        for (core.modules.items) |*module| {
+            try module.start();
+        }
 
         // Handle command
         switch (core.platform.config.command) {
@@ -168,9 +347,20 @@ pub const Core = struct {
     pub fn deinit(self: *Core) void {
 
         // Stop sequence
-        self.module.stopAll();
-        self.module.deinitAll();
+        for (self.modules.items) |*module| {
+            module.stop();
+        }
+        for (self.modules.items) |*module| {
+            module.deinit();
+        }
         self.module.deinit();
+
+        // Destroy modules
+        for (self.modules.items) |*module| {
+            module.destroy();
+        }
+        self.modules.deinit(self.allocator);
+        self.names.deinit();
 
         // Deinit stages
         var it = self.stages.iterator();
@@ -196,13 +386,22 @@ pub const Core = struct {
     }
 
     pub fn pushEvent(self: *Core, event: Platform.Event) void {
-        const input = self.module.getByType(Input);
-        const window = self.module.getByType(Window);
+        const input = self.getModule(Input);
+        const window = self.getModule(Window);
         switch (event) {
             .requestExit => self.running = false,
             else => {},
         }
         input.onEvent(&event);
         window.onEvent(&event);
+    }
+
+    pub fn getModule(self: *Core, comptime T: type) *T {
+        for (self.modules.items) |*module| {
+            if (std.mem.eql(u8, @typeName(T), module.name)) {
+                return @ptrCast(@alignCast(module.v_ptr));
+            }
+        }
+        unreachable;
     }
 };

@@ -4,8 +4,18 @@ const nux = @import("../nux.zig");
 const Self = @This();
 
 pub const Index = u32;
-pub const ID = u8;
 pub const module_components_field = "components";
+
+pub const VTable = struct {
+    init: *const fn (*anyopaque) anyerror!void,
+    deinit: *const fn (*anyopaque) void,
+    add: *const fn (*anyopaque, id: nux.ID) anyerror!void,
+    remove: *const fn (*anyopaque, id: nux.ID) void,
+    has: *const fn (*anyopaque, id: nux.ID) bool,
+    load: *const fn (*anyopaque, id: nux.ID, reader: *nux.Reader) anyerror!void,
+    save: *const fn (*anyopaque, id: nux.ID, writer: *nux.Writer) anyerror!void,
+    description: *const fn (*anyopaque, id: nux.ID, w: *std.Io.Writer) anyerror!void,
+};
 
 pub fn Components(T: type) type {
     return struct {
@@ -14,7 +24,7 @@ pub fn Components(T: type) type {
             id: nux.ID,
         };
 
-        id: ID,
+        id: nux.ModuleID,
         allocator: std.mem.Allocator,
         data: nux.ObjectPool(Entry),
         bitset: std.DynamicBitSet,
@@ -55,14 +65,14 @@ pub fn Components(T: type) type {
         fn init(
             allocator: std.mem.Allocator,
             node: *nux.Node,
-            type_index: ID,
+            module_id: nux.ModuleID,
         ) !@This() {
             return .{
                 .allocator = allocator,
                 .node = node,
                 .data = .init(allocator),
                 .bitset = try .initEmpty(allocator, 128),
-                .id = type_index,
+                .id = module_id,
             };
         }
         fn deinit(self: *@This()) void {
@@ -170,11 +180,11 @@ pub fn Components(T: type) type {
 node: *nux.Node,
 module: *nux.Module,
 
-pub fn add(self: *Self, id: nux.ID, comp: nux.ComponentID) !void {
+pub fn add(self: *Self, id: nux.ID, comp: nux.ModuleID) !void {
     const component = try self.get(comp);
     try component.v_add(component.v_ptr, id);
 }
-pub fn remove(self: *Self, id: nux.ID, comp: nux.ComponentID) !void {
+pub fn remove(self: *Self, id: nux.ID, comp: nux.ModuleID) !void {
     const component = try self.get(comp);
     component.v_remove(component.v_ptr, id);
 }

@@ -2,6 +2,10 @@
     "rootpath": "..",
     "modules": [
         {
+            "path": "base/Module.zig",
+            "ignore_all": true
+        },
+        {
             "path": "base/Node.zig",
             "ignore": [
                 "ComponentType",

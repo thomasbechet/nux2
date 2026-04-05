@@ -1,10 +1,10 @@
 const std = @import("std");
+const nux = @import("nux.zig");
 const Ast = std.zig.Ast;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
 const PrimitiveType = enum {
-    void,
     bool,
     u32,
     f32,
@@ -45,7 +45,7 @@ const AstIter = struct {
 
         alloc: Allocator,
         params: []Param,
-        ret: Type,
+        ret: ?Type,
         throw_error: bool,
 
         fn deinit(self: *@This()) void {
@@ -492,7 +492,9 @@ const Modules = struct {
                 const func_name = entry.key_ptr.*;
                 var w = std.Io.Writer.fixed(&source);
                 try w.print("{s}:{s}:return", .{ module.name, func_name });
-                try resolveType(modules.items, &func.ret, source[0..w.end]);
+                if (func.ret) |*ret| {
+                    try resolveType(modules.items, ret, source[0..w.end]);
+                }
                 for (func.params) |*param| {
                     w = std.Io.Writer.fixed(&source);
                     try w.print("{s}:{s}:{s}", .{ module.name, func_name, param.ident });
@@ -532,7 +534,11 @@ const Modules = struct {
                     "!"
                 else
                     "";
-                std.log.info("\t{s}: {s} {s}", .{ entry.key_ptr.*, function.ret.name, exception });
+                var ret_name: []const u8 = "void";
+                if (function.ret) |ret| {
+                    ret_name = ret.name;
+                }
+                std.log.info("\t{s}: {s} {s}", .{ entry.key_ptr.*, ret_name, exception });
                 for (function.params) |*param| {
                     std.log.info("\t\t{s}: {s}", .{ param.ident, param.typ.name });
                 }

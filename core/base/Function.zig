@@ -15,6 +15,11 @@ pub const ArgParser = struct {
     ) anyerror!nux.Primitive.Value,
 };
 
+pub const Type = struct {
+    name: [:0]const u8,
+    args: []const Argument,
+};
+
 pub const Function = struct {
     name: [:0]const u8,
     v_ptr: *anyopaque,
@@ -55,18 +60,17 @@ pub const Function = struct {
                     if (i == 0) continue;
                     const ParamType = param.type.?;
                     const field_name = std.fmt.comptimePrint("{d}", .{i - 1});
-                    @compileLog(field_name);
                     const type_info = @typeInfo(ParamType);
                     if (type_info == .@"enum") {
                         @field(call_args, field_name) = std.enums.fromInt(
                             ParamType,
-                            (try args.next(args, .u32)).u32,
+                            (try args.next(args, .enumeration)).u32,
                         ) orelse return error.InvalidEnumValue;
                     } else {
                         @field(call_args, field_name) = switch (ParamType) {
-                            u8 => (try args.next(args, .u32)).u32,
-                            i32 => (try args.next(args, .u32)).u32,
-                            u32 => (try args.next(args, .u32)).u32,
+                            u8 => (try args.next(args, .number)).into(u8),
+                            i32 => (try args.next(args, .number)).into(i32),
+                            u32 => (try args.next(args, .number)).into(u32),
                             nux.ID => (try args.next(args, .id)).id,
                             nux.Vec2i => (try args.next(args)).vec2,
                             nux.Vec3 => (try args.next(args)).vec3,
@@ -91,11 +95,7 @@ pub const Function = struct {
                 };
                 return switch (@TypeOf(value)) {
                     void => null,
-                    bool => .{ .bool = value },
-                    nux.ID => .{ .id = value },
-                    nux.Vec3 => .{ .vec3 = value },
-                    nux.Quat => .{ .quat = value },
-                    else => @compileError("Unsupported return type " ++ @typeName(@TypeOf(value))),
+                    else => nux.Primitive.Value.from(@TypeOf(value)),
                 };
             }
         };

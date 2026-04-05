@@ -3,47 +3,59 @@ const std = @import("std");
 
 pub const MultiArray = std.MultiArrayList(Value);
 
-/// Represents the fundamental value types supported by the system.
-///
-/// This enum is intentionally kept minimal. It defines only the core set
-/// of types required to ensure simple, stable, and predictable data exchange
-/// between scripts and function interfaces.
-///
-/// By limiting the number of types, we avoid unnecessary complexity,
-/// reduce conversion overhead, and make interoperability easier across
-/// different parts of the system (e.g., scripting layers, modules, and APIs).
-///
-/// Additional or more specialized types should be built on top of these
-/// primitives rather than added here.
 pub const Type = enum(u32) {
     bool,
-    number,
+    u8,
+    i32,
+    u32,
+    f32,
+    f64,
     vec2,
+    vec2i,
     vec3,
     vec4,
+    vec4i,
+    quat,
     mat3,
     mat4,
+    box2,
+    box2i,
+    box3,
+    box3i,
     string,
     id,
+    color,
     module,
     function,
-    enumeration,
 };
 
 pub const Value = union(Type) {
     bool: bool,
-    number: f64,
+    u8: u8,
+    i32: i32,
+    u32: u32,
+    f32: f32,
+    f64: f64,
     vec2: nux.Vec2,
+    vec2i: nux.Vec2i,
     vec3: nux.Vec3,
     vec4: nux.Vec4,
+    vec4i: nux.Vec4i,
+    quat: nux.Quat,
     mat3: nux.Mat3,
     mat4: nux.Mat4,
+    box2: nux.Box2,
+    box2i: nux.Box2i,
+    box3: nux.Box3,
+    box3i: nux.Box3i,
     string: []const u8,
     id: nux.ID,
+    color: nux.Color,
     module: nux.ModuleID,
-    function: nux.FunctionID,
+    function: nux.Function,
+    @"enum": nux.Enum,
 
-    fn from(comptime T: type, value: T) Value {
+    pub fn from(comptime T: type, value: T) Value {
         switch (T) {
             bool => return .{ .bool = value },
             u8 => return .{ .number = @floatFromInt(value) },
@@ -68,16 +80,15 @@ pub const Value = union(Type) {
     }
 
     fn into(comptime T: type, value: Value) T {
+        _ = value;
         switch (T) {
             else => @compileError("Unsupported type " ++ @typeName(T)),
         }
     }
-};
-
-pub const Field = enum(u32) {
-    x,
-    y,
-    z,
-    w,
-    h,
+    pub fn intoEnum(comptime T: type, value: Value) !T {
+        std.enums.fromInt(
+            T,
+            value.number,
+        ) orelse return error.InvalidEnumValue;
+    }
 };

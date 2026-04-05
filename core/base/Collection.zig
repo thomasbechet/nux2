@@ -33,7 +33,7 @@ allocator: std.mem.Allocator,
 components: nux.Components(Collection),
 node: *nux.Node,
 file: *nux.File,
-module: *nux.Module,
+component: *nux.Component,
 ids: std.ArrayList(nux.ID), // Temporary id pool for node_index <> id mapping
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -54,7 +54,7 @@ pub fn exportNode(self: *Self, parent: nux.ID, root: nux.ID) !nux.ID {
     var entries: std.ArrayList(Node) = try .initCapacity(self.allocator, self.ids.items.len);
     errdefer entries.deinit(self.allocator);
 
-    var module_ids: std.ArrayList(nux.ComponentID) = try .initCapacity(self.allocator, 256);
+    var module_ids: std.ArrayList(nux.ModuleID) = try .initCapacity(self.allocator, 256);
     errdefer module_ids.deinit(self.allocator);
 
     var module_indices: std.ArrayList(usize) = try .initCapacity(self.allocator, 256);
@@ -129,8 +129,8 @@ pub fn exportNode(self: *Self, parent: nux.ID, root: nux.ID) !nux.ID {
         entries.items[index].component_data_start = data_writer.writer.end;
         var it = try self.node.iterComponents(node);
         while (it.next()) |cid| {
-            const typ = try self.component.get(cid);
-            try typ.v_save(typ.v_ptr, node, &writer);
+            const module = try self.component.getModule(cid);
+            try module.v_component.?.save(module.v_ptr, node, &writer);
         }
         entries.items[index].component_data_end = data_writer.writer.end;
     }
@@ -181,8 +181,8 @@ pub fn instantiate(self: *Self, id: nux.ID, parent: nux.ID) !nux.ID {
             _ = arena.reset(.retain_capacity);
             // Load component
             const module_id = collection.module_ids.items[module_index];
-            const typ = try self.module.get(module_id);
-            try typ.v_load(typ.v_ptr, node_id, &reader);
+            const module = try self.component.getModule(module_id);
+            try module.v_component.?.load(module.v_ptr, node_id, &reader);
         }
     }
 

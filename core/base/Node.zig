@@ -288,7 +288,7 @@ const ComponentIterator = struct {
             .current = 0,
         };
     }
-    pub fn next(it: *@This()) ?nux.ComponentID {
+    pub fn next(it: *@This()) ?nux.ModuleID {
         while (it.current < it.entry.components.len) {
             const index = it.current;
             it.current += 1;
@@ -376,9 +376,10 @@ pub fn onStop(self: *Self) void {
 }
 
 fn addEntry(self: *Self, parent: ID) !ID {
+
     // Check parent
     if (!self.exists(parent)) {
-        return error.invalidParent;
+        return error.InvalidParent;
     }
 
     // Find free entry
@@ -487,8 +488,8 @@ pub fn delete(self: *Self, id: ID) !void {
     // Remove components
     var cit = try self.iterComponents(id);
     while (cit.next()) |cid| {
-        const typ = try self.component.get(@intCast(cid));
-        typ.v_remove(typ.v_ptr, id);
+        const module = try self.component.getModule(@intCast(cid));
+        module.v_component.?.remove(module.v_ptr, id);
     }
 
     // Delete entry

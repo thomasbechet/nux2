@@ -7,7 +7,12 @@ pub const Index = u32;
 pub const module_components_field = "components";
 
 pub const VTable = struct {
-    init: *const fn (*anyopaque) anyerror!void,
+    init: *const fn (
+        pointer: *anyopaque,
+        node: *nux.Node,
+        allocator: std.mem.Allocator,
+        module_id: nux.ModuleID,
+    ) anyerror!void,
     deinit: *const fn (*anyopaque) void,
     add: *const fn (*anyopaque, id: nux.ID) anyerror!void,
     remove: *const fn (*anyopaque, id: nux.ID) void,
@@ -62,7 +67,7 @@ pub fn Components(T: type) type {
             }
         };
 
-        fn init(
+        pub fn init(
             allocator: std.mem.Allocator,
             node: *nux.Node,
             module_id: nux.ModuleID,
@@ -75,7 +80,7 @@ pub fn Components(T: type) type {
                 .id = module_id,
             };
         }
-        fn deinit(self: *@This()) void {
+        pub fn deinit(self: *@This()) void {
             self.data.deinit();
             self.bitset.deinit();
         }
@@ -178,13 +183,20 @@ pub fn Components(T: type) type {
 }
 
 node: *nux.Node,
-module: *nux.Module,
+core: *nux.Core,
 
+pub fn getModule(self: *Self, id: nux.ModuleID) !*nux.Module.Module {
+    const module = try self.core.getModule(id);
+    if (module.v_component != null) {
+        return module;
+    }
+    return error.NotAComponentModule;
+}
 pub fn add(self: *Self, id: nux.ID, comp: nux.ModuleID) !void {
-    const component = try self.get(comp);
-    try component.v_add(component.v_ptr, id);
+    const module = try self.getModule(comp);
+    try module.v_component.?.add(module.v_ptr, id);
 }
 pub fn remove(self: *Self, id: nux.ID, comp: nux.ModuleID) !void {
-    const component = try self.get(comp);
-    component.v_remove(component.v_ptr, id);
+    const module = try self.getModule(comp);
+    module.v_component.?.remove(module.v_ptr, id);
 }

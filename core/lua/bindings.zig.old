@@ -1,0 +1,1231 @@
+const std = @import("std");
+pub fn Bindings(c: anytype, nux: anytype, Lua: anytype) type {
+	return struct {
+        fn context(lua: ?*c.lua_State) *@This() {
+            var ud: ?*anyopaque = undefined;
+            _ = c.lua_getallocf(lua, &ud);
+            const self: *Lua = @ptrCast(@alignCast(ud));
+            return &@field(self, "bindings");
+        }
+        fn checkID(lua: ?*c.lua_State, index: c_int) nux.ID {
+            var ud: ?*anyopaque = undefined;
+            _ = c.lua_getallocf(lua, &ud);
+            const self: *Lua = @ptrCast(@alignCast(ud));
+            if (c.lua_isinteger(lua, index) != 0) {
+                return @as(nux.ID, @bitCast(@as(u32, @intCast(c.luaL_checkinteger(lua, index)))));
+            }
+            const path: []const u8 = std.mem.span(c.luaL_checklstring(lua, index, null));
+            return self.node.findGlobal(path) catch |err| {
+                _ = c.luaL_error(lua, @errorName(err));
+                return .null;
+            };
+        }
+        fn checkComponentID(lua: ?*c.lua_State, index: c_int) nux.ComponentID {
+            if (c.lua_isinteger(lua, index) != 0) {
+                return @as(nux.ComponentID, @bitCast(@as(u8, @intCast(c.luaL_checkinteger(lua, index)))));
+            } else if (c.lua_istable(lua, index)) {
+                _ = c.lua_getfield(lua, index, "id");  
+                return @as(nux.ComponentID, @bitCast(@as(u8, @intCast(c.luaL_checkinteger(lua, -1)))));
+            }
+            _ = c.luaL_error(lua, "invalid component id value");
+            return 0;
+        }       
+		const Collection = struct {
+			const Module = @import("../base/Collection.zig");
+			fn instantiate(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkID(lua, 2);
+				const ret = self.mod0.instantiate(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn exportNode(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkID(lua, 2);
+				const ret = self.mod0.exportNode(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+		};
+		const Node = struct {
+			const Module = @import("../base/Node.zig");
+			fn createPath(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				const ret = self.mod1.createPath(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn delete(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				self.mod1.delete(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn exists(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const ret = self.mod1.exists(p1);
+				c.lua_pushboolean(lua, @intFromBool(ret));
+				return 1;
+			}
+			fn setName(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				self.mod1.setName(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn dump(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				self.mod1.dump(p1);
+				return 0;
+			}
+			fn findGlobal(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = std.mem.span(c.luaL_checklstring(lua, 1, null));
+				const ret = self.mod1.findGlobal(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn create(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const ret = self.mod1.create(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn createNamed(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				const ret = self.mod1.createNamed(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn find(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				const ret = self.mod1.find(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn createInstanceOf(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkID(lua, 2);
+				const ret = self.mod1.createInstanceOf(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn getRoot(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const ret = self.mod1.getRoot();
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn getParent(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const ret = self.mod1.getParent(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn findChild(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				const ret = self.mod1.findChild(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+		};
+		const Component = struct {
+			const Module = @import("../base/Component.zig");
+			fn add(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkComponentID(lua, 2);
+				self.mod2.add(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn remove(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkComponentID(lua, 2);
+				self.mod2.remove(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		const Signal = struct {
+			const Module = @import("../base/Signal.zig");
+			fn emit(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkID(lua, 2);
+				self.mod3.emit(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		const File = struct {
+			const Module = @import("../base/File.zig");
+			fn logGlob(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = std.mem.span(c.luaL_checklstring(lua, 1, null));
+				self.mod4.logGlob(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn mount(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = std.mem.span(c.luaL_checklstring(lua, 1, null));
+				self.mod4.mount(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		const Cart = struct {
+			const Module = @import("../base/Cart.zig");
+			fn writeGlob(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = std.mem.span(c.luaL_checklstring(lua, 1, null));
+				self.mod5.writeGlob(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn write(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = std.mem.span(c.luaL_checklstring(lua, 1, null));
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				self.mod5.write(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn begin(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = std.mem.span(c.luaL_checklstring(lua, 1, null));
+				self.mod5.begin(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		const Transform = struct {
+			const Module = @import("../base/Transform.zig");
+			fn setPosition(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = Lua.checkUserData(lua, .vec3, 2).vec3;
+				self.mod6.setPosition(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn getScale(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const ret = self.mod6.getScale(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				Lua.pushUserData(lua, .vec3, ret);
+				return 1;
+			}
+			fn setParent(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkID(lua, 2);
+				self.mod6.setParent(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setRotation(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = Lua.checkUserData(lua, .quat, 2).quat;
+				self.mod6.setRotation(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn getParent(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const ret = self.mod6.getParent(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn setScale(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = Lua.checkUserData(lua, .vec3, 2).vec3;
+				self.mod6.setScale(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn getPosition(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const ret = self.mod6.getPosition(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				Lua.pushUserData(lua, .vec3, ret);
+				return 1;
+			}
+			fn getRotation(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const ret = self.mod6.getRotation(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				Lua.pushUserData(lua, .quat, ret);
+				return 1;
+			}
+		};
+		const Input = struct {
+			const Module = @import("../input/Input.zig");
+			fn isPressed(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = @as(u32, @intCast(c.luaL_checkinteger(lua, 1)));
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				const ret = self.mod7.isPressed(p1, p2);
+				c.lua_pushboolean(lua, @intFromBool(ret));
+				return 1;
+			}
+			fn isReleased(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = @as(u32, @intCast(c.luaL_checkinteger(lua, 1)));
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				const ret = self.mod7.isReleased(p1, p2);
+				c.lua_pushboolean(lua, @intFromBool(ret));
+				return 1;
+			}
+			fn isJustPressed(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = @as(u32, @intCast(c.luaL_checkinteger(lua, 1)));
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				const ret = self.mod7.isJustPressed(p1, p2);
+				c.lua_pushboolean(lua, @intFromBool(ret));
+				return 1;
+			}
+			fn isJustReleased(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = @as(u32, @intCast(c.luaL_checkinteger(lua, 1)));
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				const ret = self.mod7.isJustReleased(p1, p2);
+				c.lua_pushboolean(lua, @intFromBool(ret));
+				return 1;
+			}
+		};
+		const InputMap = struct {
+			const Module = @import("../input/InputMap.zig");
+			fn bindKey(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				const p3 = std.enums.fromInt(@typeInfo(@TypeOf(Module.bindKey)).@"fn".params[3].type.?, c.luaL_checkinteger(lua, 3)) orelse return c.luaL_error(lua, "invalid enum value");
+				self.mod8.bindKey(p1, p2, p3) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		const Texture = struct {
+			const Module = @import("../graphics/Texture.zig");
+			fn addFromData(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				self.mod9.addFromData(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn blit(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = Lua.checkUserData(lua, .vec2, 2).vec2.as(nux.Vec2i);
+				self.mod9.blit(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn addFromFile(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				self.mod9.addFromFile(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn addTransparent(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = @as(u32, @intCast(c.luaL_checkinteger(lua, 2)));
+				const p3 = @as(u32, @intCast(c.luaL_checkinteger(lua, 3)));
+				self.mod9.addTransparent(p1, p2, p3) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		const Material = struct {
+			const Module = @import("../graphics/Material.zig");
+		};
+		const Mesh = struct {
+			const Module = @import("../graphics/Mesh.zig");
+			fn resize(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = @as(u32, @intCast(c.luaL_checkinteger(lua, 2)));
+				self.mod11.resize(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		const Gltf = struct {
+			const Module = @import("../graphics/Gltf.zig");
+			fn loadGltf(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				const ret = self.mod12.loadGltf(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+		};
+		const Vertex = struct {
+			const Module = @import("../graphics/Vertex.zig");
+		};
+		const StaticMesh = struct {
+			const Module = @import("../graphics/StaticMesh.zig");
+			fn setTexture(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkID(lua, 2);
+				self.mod14.setTexture(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn getMesh(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const ret = self.mod14.getMesh(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn setTransform(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkID(lua, 2);
+				self.mod14.setTransform(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setMesh(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkID(lua, 2);
+				self.mod14.setMesh(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn getTexture(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const ret = self.mod14.getTexture(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+			fn getTransform(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const ret = self.mod14.getTransform(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(ret))));
+				return 1;
+			}
+		};
+		const Viewport = struct {
+			const Module = @import("../ui/Viewport.zig");
+			fn setWidget(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkID(lua, 2);
+				self.mod15.setWidget(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setCamera(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = checkID(lua, 2);
+				self.mod15.setCamera(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		const Widget = struct {
+			const Module = @import("../ui/Widget.zig");
+			fn setAlignX(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.enums.fromInt(@typeInfo(@TypeOf(Module.setAlignX)).@"fn".params[2].type.?, c.luaL_checkinteger(lua, 2)) orelse return c.luaL_error(lua, "invalid enum value");
+				self.mod16.setAlignX(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setPadding(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = Lua.checkUserData(lua, .vec4, 2).vec4.as(nux.Vec4i);
+				self.mod16.setPadding(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setSizeY(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.enums.fromInt(@typeInfo(@TypeOf(Module.setSizeY)).@"fn".params[2].type.?, c.luaL_checkinteger(lua, 2)) orelse return c.luaL_error(lua, "invalid enum value");
+				const p3 = @as(u32, @intCast(c.luaL_checkinteger(lua, 3)));
+				const p4 = @as(u32, @intCast(c.luaL_checkinteger(lua, 4)));
+				self.mod16.setSizeY(p1, p2, p3, p4) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setBorder(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = Lua.checkUserData(lua, .vec4, 2).vec4.as(nux.Vec4i);
+				self.mod16.setBorder(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setAlignY(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.enums.fromInt(@typeInfo(@TypeOf(Module.setAlignY)).@"fn".params[2].type.?, c.luaL_checkinteger(lua, 2)) orelse return c.luaL_error(lua, "invalid enum value");
+				self.mod16.setAlignY(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setDirection(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.enums.fromInt(@typeInfo(@TypeOf(Module.setDirection)).@"fn".params[2].type.?, c.luaL_checkinteger(lua, 2)) orelse return c.luaL_error(lua, "invalid enum value");
+				self.mod16.setDirection(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setBackgroundColor(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = nux.Color.fromVec(Lua.checkUserData(lua, .vec4, 2).vec4);
+				self.mod16.setBackgroundColor(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setBorderRadius(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = Lua.checkUserData(lua, .vec4, 2).vec4.as(nux.Vec4i);
+				self.mod16.setBorderRadius(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setChildGap(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = @as(u32, @intCast(c.luaL_checkinteger(lua, 2)));
+				self.mod16.setChildGap(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setSizeX(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.enums.fromInt(@typeInfo(@TypeOf(Module.setSizeX)).@"fn".params[2].type.?, c.luaL_checkinteger(lua, 2)) orelse return c.luaL_error(lua, "invalid enum value");
+				const p3 = @as(u32, @intCast(c.luaL_checkinteger(lua, 3)));
+				const p4 = @as(u32, @intCast(c.luaL_checkinteger(lua, 4)));
+				self.mod16.setSizeX(p1, p2, p3, p4) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setBorderColor(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = nux.Color.fromVec(Lua.checkUserData(lua, .vec4, 2).vec4);
+				self.mod16.setBorderColor(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		const Button = struct {
+			const Module = @import("../ui/Button.zig");
+			fn click(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				self.mod17.click(p1) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		const Label = struct {
+			const Module = @import("../ui/Label.zig");
+			fn setColor(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = nux.Color.fromVec(Lua.checkUserData(lua, .vec4, 2).vec4);
+				self.mod18.setColor(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+			fn setText(lua: ?*c.lua_State) callconv(.c) c_int {
+				const self = context(lua);
+				const p1 = checkID(lua, 1);
+				const p2 = std.mem.span(c.luaL_checklstring(lua, 2, null));
+				self.mod18.setText(p1, p2) catch |err| {
+					return c.luaL_error(lua, @errorName(err));
+				};
+				return 0;
+			}
+		};
+		mod0: *Collection.Module,
+		mod1: *Node.Module,
+		mod2: *Component.Module,
+		mod3: *Signal.Module,
+		mod4: *File.Module,
+		mod5: *Cart.Module,
+		mod6: *Transform.Module,
+		mod7: *Input.Module,
+		mod8: *InputMap.Module,
+		mod9: *Texture.Module,
+		mod10: *Material.Module,
+		mod11: *Mesh.Module,
+		mod12: *Gltf.Module,
+		mod13: *Vertex.Module,
+		mod14: *StaticMesh.Module,
+		mod15: *Viewport.Module,
+		mod16: *Widget.Module,
+		mod17: *Button.Module,
+		mod18: *Label.Module,
+		pub fn openModules(self: *@This(), lua: *c.lua_State, core: *const nux.Core) void {
+			if (core.findModule(Collection.Module)) |module| {
+				self.mod0 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const Collection_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "instantiate", .func = Collection.instantiate },
+					.{ .name = "exportNode", .func = Collection.exportNode },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Collection_lib, 0);
+				c.lua_setglobal(lua, "Collection");
+			}
+			if (core.findModule(Node.Module)) |module| {
+				self.mod1 = module;
+				c.lua_newtable(lua);
+				const Node_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "createPath", .func = Node.createPath },
+					.{ .name = "delete", .func = Node.delete },
+					.{ .name = "exists", .func = Node.exists },
+					.{ .name = "setName", .func = Node.setName },
+					.{ .name = "dump", .func = Node.dump },
+					.{ .name = "findGlobal", .func = Node.findGlobal },
+					.{ .name = "create", .func = Node.create },
+					.{ .name = "createNamed", .func = Node.createNamed },
+					.{ .name = "find", .func = Node.find },
+					.{ .name = "createInstanceOf", .func = Node.createInstanceOf },
+					.{ .name = "getRoot", .func = Node.getRoot },
+					.{ .name = "getParent", .func = Node.getParent },
+					.{ .name = "findChild", .func = Node.findChild },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Node_lib, 0);
+				c.lua_setglobal(lua, "Node");
+			}
+			if (core.findModule(Component.Module)) |module| {
+				self.mod2 = module;
+				c.lua_newtable(lua);
+				const Component_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "add", .func = Component.add },
+					.{ .name = "remove", .func = Component.remove },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Component_lib, 0);
+				c.lua_setglobal(lua, "Component");
+			}
+			if (core.findModule(Signal.Module)) |module| {
+				self.mod3 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const Signal_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "emit", .func = Signal.emit },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Signal_lib, 0);
+				c.lua_setglobal(lua, "Signal");
+			}
+			if (core.findModule(File.Module)) |module| {
+				self.mod4 = module;
+				c.lua_newtable(lua);
+				const File_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "logGlob", .func = File.logGlob },
+					.{ .name = "mount", .func = File.mount },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, File_lib, 0);
+				c.lua_setglobal(lua, "File");
+			}
+			if (core.findModule(Cart.Module)) |module| {
+				self.mod5 = module;
+				c.lua_newtable(lua);
+				const Cart_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "writeGlob", .func = Cart.writeGlob },
+					.{ .name = "write", .func = Cart.write },
+					.{ .name = "begin", .func = Cart.begin },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Cart_lib, 0);
+				c.lua_setglobal(lua, "Cart");
+			}
+			if (core.findModule(Transform.Module)) |module| {
+				self.mod6 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const Transform_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "setPosition", .func = Transform.setPosition },
+					.{ .name = "getScale", .func = Transform.getScale },
+					.{ .name = "setParent", .func = Transform.setParent },
+					.{ .name = "setRotation", .func = Transform.setRotation },
+					.{ .name = "getParent", .func = Transform.getParent },
+					.{ .name = "setScale", .func = Transform.setScale },
+					.{ .name = "getPosition", .func = Transform.getPosition },
+					.{ .name = "getRotation", .func = Transform.getRotation },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Transform_lib, 0);
+				c.lua_setglobal(lua, "Transform");
+			}
+			if (core.findModule(Input.Module)) |module| {
+				self.mod7 = module;
+				c.lua_newtable(lua);
+				const Input_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "isPressed", .func = Input.isPressed },
+					.{ .name = "isReleased", .func = Input.isReleased },
+					.{ .name = "isJustPressed", .func = Input.isJustPressed },
+					.{ .name = "isJustReleased", .func = Input.isJustReleased },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Input_lib, 0);
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.space));
+				c.lua_setfield(lua, -2, "KEY_SPACE");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.apostrophe));
+				c.lua_setfield(lua, -2, "KEY_APOSTROPHE");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.comma));
+				c.lua_setfield(lua, -2, "KEY_COMMA");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.minus));
+				c.lua_setfield(lua, -2, "KEY_MINUS");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.period));
+				c.lua_setfield(lua, -2, "KEY_PERIOD");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.slash));
+				c.lua_setfield(lua, -2, "KEY_SLASH");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num0));
+				c.lua_setfield(lua, -2, "KEY_NUM0");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num1));
+				c.lua_setfield(lua, -2, "KEY_NUM1");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num2));
+				c.lua_setfield(lua, -2, "KEY_NUM2");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num3));
+				c.lua_setfield(lua, -2, "KEY_NUM3");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num4));
+				c.lua_setfield(lua, -2, "KEY_NUM4");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num5));
+				c.lua_setfield(lua, -2, "KEY_NUM5");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num6));
+				c.lua_setfield(lua, -2, "KEY_NUM6");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num7));
+				c.lua_setfield(lua, -2, "KEY_NUM7");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num8));
+				c.lua_setfield(lua, -2, "KEY_NUM8");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num9));
+				c.lua_setfield(lua, -2, "KEY_NUM9");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.semicolon));
+				c.lua_setfield(lua, -2, "KEY_SEMICOLON");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.equal));
+				c.lua_setfield(lua, -2, "KEY_EQUAL");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.a));
+				c.lua_setfield(lua, -2, "KEY_A");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.b));
+				c.lua_setfield(lua, -2, "KEY_B");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.c));
+				c.lua_setfield(lua, -2, "KEY_C");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.d));
+				c.lua_setfield(lua, -2, "KEY_D");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.e));
+				c.lua_setfield(lua, -2, "KEY_E");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f));
+				c.lua_setfield(lua, -2, "KEY_F");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.g));
+				c.lua_setfield(lua, -2, "KEY_G");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.h));
+				c.lua_setfield(lua, -2, "KEY_H");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.i));
+				c.lua_setfield(lua, -2, "KEY_I");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.j));
+				c.lua_setfield(lua, -2, "KEY_J");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.k));
+				c.lua_setfield(lua, -2, "KEY_K");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.l));
+				c.lua_setfield(lua, -2, "KEY_L");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.m));
+				c.lua_setfield(lua, -2, "KEY_M");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.n));
+				c.lua_setfield(lua, -2, "KEY_N");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.o));
+				c.lua_setfield(lua, -2, "KEY_O");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.p));
+				c.lua_setfield(lua, -2, "KEY_P");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.q));
+				c.lua_setfield(lua, -2, "KEY_Q");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.r));
+				c.lua_setfield(lua, -2, "KEY_R");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.s));
+				c.lua_setfield(lua, -2, "KEY_S");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.t));
+				c.lua_setfield(lua, -2, "KEY_T");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.u));
+				c.lua_setfield(lua, -2, "KEY_U");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.v));
+				c.lua_setfield(lua, -2, "KEY_V");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.w));
+				c.lua_setfield(lua, -2, "KEY_W");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.x));
+				c.lua_setfield(lua, -2, "KEY_X");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.y));
+				c.lua_setfield(lua, -2, "KEY_Y");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.z));
+				c.lua_setfield(lua, -2, "KEY_Z");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.left_bracket));
+				c.lua_setfield(lua, -2, "KEY_LEFT_BRACKET");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.backslash));
+				c.lua_setfield(lua, -2, "KEY_BACKSLASH");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.right_bracket));
+				c.lua_setfield(lua, -2, "KEY_RIGHT_BRACKET");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.grave_accent));
+				c.lua_setfield(lua, -2, "KEY_GRAVE_ACCENT");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.escape));
+				c.lua_setfield(lua, -2, "KEY_ESCAPE");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.enter));
+				c.lua_setfield(lua, -2, "KEY_ENTER");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.tab));
+				c.lua_setfield(lua, -2, "KEY_TAB");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.backspace));
+				c.lua_setfield(lua, -2, "KEY_BACKSPACE");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.insert));
+				c.lua_setfield(lua, -2, "KEY_INSERT");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.delete));
+				c.lua_setfield(lua, -2, "KEY_DELETE");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.right));
+				c.lua_setfield(lua, -2, "KEY_RIGHT");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.left));
+				c.lua_setfield(lua, -2, "KEY_LEFT");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.down));
+				c.lua_setfield(lua, -2, "KEY_DOWN");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.up));
+				c.lua_setfield(lua, -2, "KEY_UP");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.page_up));
+				c.lua_setfield(lua, -2, "KEY_PAGE_UP");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.page_down));
+				c.lua_setfield(lua, -2, "KEY_PAGE_DOWN");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.home));
+				c.lua_setfield(lua, -2, "KEY_HOME");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.end));
+				c.lua_setfield(lua, -2, "KEY_END");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.caps_lock));
+				c.lua_setfield(lua, -2, "KEY_CAPS_LOCK");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.scroll_lock));
+				c.lua_setfield(lua, -2, "KEY_SCROLL_LOCK");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.num_lock));
+				c.lua_setfield(lua, -2, "KEY_NUM_LOCK");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.print_screen));
+				c.lua_setfield(lua, -2, "KEY_PRINT_SCREEN");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.pause));
+				c.lua_setfield(lua, -2, "KEY_PAUSE");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f1));
+				c.lua_setfield(lua, -2, "KEY_F1");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f2));
+				c.lua_setfield(lua, -2, "KEY_F2");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f3));
+				c.lua_setfield(lua, -2, "KEY_F3");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f4));
+				c.lua_setfield(lua, -2, "KEY_F4");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f5));
+				c.lua_setfield(lua, -2, "KEY_F5");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f6));
+				c.lua_setfield(lua, -2, "KEY_F6");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f7));
+				c.lua_setfield(lua, -2, "KEY_F7");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f8));
+				c.lua_setfield(lua, -2, "KEY_F8");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f9));
+				c.lua_setfield(lua, -2, "KEY_F9");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f10));
+				c.lua_setfield(lua, -2, "KEY_F10");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f11));
+				c.lua_setfield(lua, -2, "KEY_F11");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f12));
+				c.lua_setfield(lua, -2, "KEY_F12");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f13));
+				c.lua_setfield(lua, -2, "KEY_F13");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f14));
+				c.lua_setfield(lua, -2, "KEY_F14");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f15));
+				c.lua_setfield(lua, -2, "KEY_F15");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f16));
+				c.lua_setfield(lua, -2, "KEY_F16");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f17));
+				c.lua_setfield(lua, -2, "KEY_F17");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f18));
+				c.lua_setfield(lua, -2, "KEY_F18");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f19));
+				c.lua_setfield(lua, -2, "KEY_F19");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f20));
+				c.lua_setfield(lua, -2, "KEY_F20");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f21));
+				c.lua_setfield(lua, -2, "KEY_F21");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f22));
+				c.lua_setfield(lua, -2, "KEY_F22");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f23));
+				c.lua_setfield(lua, -2, "KEY_F23");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f24));
+				c.lua_setfield(lua, -2, "KEY_F24");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.f25));
+				c.lua_setfield(lua, -2, "KEY_F25");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_0));
+				c.lua_setfield(lua, -2, "KEY_KP_0");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_1));
+				c.lua_setfield(lua, -2, "KEY_KP_1");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_2));
+				c.lua_setfield(lua, -2, "KEY_KP_2");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_3));
+				c.lua_setfield(lua, -2, "KEY_KP_3");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_4));
+				c.lua_setfield(lua, -2, "KEY_KP_4");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_5));
+				c.lua_setfield(lua, -2, "KEY_KP_5");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_6));
+				c.lua_setfield(lua, -2, "KEY_KP_6");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_7));
+				c.lua_setfield(lua, -2, "KEY_KP_7");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_8));
+				c.lua_setfield(lua, -2, "KEY_KP_8");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_9));
+				c.lua_setfield(lua, -2, "KEY_KP_9");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_decimal));
+				c.lua_setfield(lua, -2, "KEY_KP_DECIMAL");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_divide));
+				c.lua_setfield(lua, -2, "KEY_KP_DIVIDE");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_multiply));
+				c.lua_setfield(lua, -2, "KEY_KP_MULTIPLY");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_subtract));
+				c.lua_setfield(lua, -2, "KEY_KP_SUBTRACT");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_add));
+				c.lua_setfield(lua, -2, "KEY_KP_ADD");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_enter));
+				c.lua_setfield(lua, -2, "KEY_KP_ENTER");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.kp_equal));
+				c.lua_setfield(lua, -2, "KEY_KP_EQUAL");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.left_shift));
+				c.lua_setfield(lua, -2, "KEY_LEFT_SHIFT");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.left_control));
+				c.lua_setfield(lua, -2, "KEY_LEFT_CONTROL");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.left_alt));
+				c.lua_setfield(lua, -2, "KEY_LEFT_ALT");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.left_super));
+				c.lua_setfield(lua, -2, "KEY_LEFT_SUPER");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.right_shift));
+				c.lua_setfield(lua, -2, "KEY_RIGHT_SHIFT");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.right_control));
+				c.lua_setfield(lua, -2, "KEY_RIGHT_CONTROL");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.right_alt));
+				c.lua_setfield(lua, -2, "KEY_RIGHT_ALT");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.right_super));
+				c.lua_setfield(lua, -2, "KEY_RIGHT_SUPER");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.Key.menu));
+				c.lua_setfield(lua, -2, "KEY_MENU");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.State.pressed));
+				c.lua_setfield(lua, -2, "STATE_PRESSED");
+				c.lua_pushinteger(lua, @intFromEnum(Input.Module.State.released));
+				c.lua_setfield(lua, -2, "STATE_RELEASED");
+				c.lua_setglobal(lua, "Input");
+			}
+			if (core.findModule(InputMap.Module)) |module| {
+				self.mod8 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const InputMap_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "bindKey", .func = InputMap.bindKey },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, InputMap_lib, 0);
+				c.lua_setglobal(lua, "InputMap");
+			}
+			if (core.findModule(Texture.Module)) |module| {
+				self.mod9 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const Texture_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "addFromData", .func = Texture.addFromData },
+					.{ .name = "blit", .func = Texture.blit },
+					.{ .name = "addFromFile", .func = Texture.addFromFile },
+					.{ .name = "addTransparent", .func = Texture.addTransparent },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Texture_lib, 0);
+				c.lua_pushinteger(lua, @intFromEnum(Texture.Module.Type.image_rgba));
+				c.lua_setfield(lua, -2, "TYPE_IMAGE_RGBA");
+				c.lua_pushinteger(lua, @intFromEnum(Texture.Module.Type.image_indexed));
+				c.lua_setfield(lua, -2, "TYPE_IMAGE_INDEXED");
+				c.lua_pushinteger(lua, @intFromEnum(Texture.Module.Type.render_target));
+				c.lua_setfield(lua, -2, "TYPE_RENDER_TARGET");
+				c.lua_pushinteger(lua, @intFromEnum(Texture.Module.Filtering.nearest));
+				c.lua_setfield(lua, -2, "FILTERING_NEAREST");
+				c.lua_pushinteger(lua, @intFromEnum(Texture.Module.Filtering.linear));
+				c.lua_setfield(lua, -2, "FILTERING_LINEAR");
+				c.lua_setglobal(lua, "Texture");
+			}
+			if (core.findModule(Material.Module)) |module| {
+				self.mod10 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const Material_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Material_lib, 0);
+				c.lua_setglobal(lua, "Material");
+			}
+			if (core.findModule(Mesh.Module)) |module| {
+				self.mod11 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const Mesh_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "resize", .func = Mesh.resize },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Mesh_lib, 0);
+				c.lua_setglobal(lua, "Mesh");
+			}
+			if (core.findModule(Gltf.Module)) |module| {
+				self.mod12 = module;
+				c.lua_newtable(lua);
+				const Gltf_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "loadGltf", .func = Gltf.loadGltf },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Gltf_lib, 0);
+				c.lua_setglobal(lua, "Gltf");
+			}
+			if (core.findModule(Vertex.Module)) |module| {
+				self.mod13 = module;
+				c.lua_newtable(lua);
+				const Vertex_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Vertex_lib, 0);
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(Vertex.Module.Attributes{.position = true }))));
+				c.lua_setfield(lua, -2, "ATTRIBUTES_POSITION");
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(Vertex.Module.Attributes{.texcoord = true }))));
+				c.lua_setfield(lua, -2, "ATTRIBUTES_TEXCOORD");
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(Vertex.Module.Attributes{.color = true }))));
+				c.lua_setfield(lua, -2, "ATTRIBUTES_COLOR");
+				c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(Vertex.Module.Attributes{.normal = true }))));
+				c.lua_setfield(lua, -2, "ATTRIBUTES_NORMAL");
+				c.lua_pushinteger(lua, @intFromEnum(Vertex.Module.Primitive.triangles));
+				c.lua_setfield(lua, -2, "PRIMITIVE_TRIANGLES");
+				c.lua_pushinteger(lua, @intFromEnum(Vertex.Module.Primitive.lines));
+				c.lua_setfield(lua, -2, "PRIMITIVE_LINES");
+				c.lua_pushinteger(lua, @intFromEnum(Vertex.Module.Primitive.points));
+				c.lua_setfield(lua, -2, "PRIMITIVE_POINTS");
+				c.lua_setglobal(lua, "Vertex");
+			}
+			if (core.findModule(StaticMesh.Module)) |module| {
+				self.mod14 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const StaticMesh_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "setTexture", .func = StaticMesh.setTexture },
+					.{ .name = "getMesh", .func = StaticMesh.getMesh },
+					.{ .name = "setTransform", .func = StaticMesh.setTransform },
+					.{ .name = "setMesh", .func = StaticMesh.setMesh },
+					.{ .name = "getTexture", .func = StaticMesh.getTexture },
+					.{ .name = "getTransform", .func = StaticMesh.getTransform },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, StaticMesh_lib, 0);
+				c.lua_setglobal(lua, "StaticMesh");
+			}
+			if (core.findModule(Viewport.Module)) |module| {
+				self.mod15 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const Viewport_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "setWidget", .func = Viewport.setWidget },
+					.{ .name = "setCamera", .func = Viewport.setCamera },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Viewport_lib, 0);
+				c.lua_setglobal(lua, "Viewport");
+			}
+			if (core.findModule(Widget.Module)) |module| {
+				self.mod16 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const Widget_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "setAlignX", .func = Widget.setAlignX },
+					.{ .name = "setPadding", .func = Widget.setPadding },
+					.{ .name = "setSizeY", .func = Widget.setSizeY },
+					.{ .name = "setBorder", .func = Widget.setBorder },
+					.{ .name = "setAlignY", .func = Widget.setAlignY },
+					.{ .name = "setDirection", .func = Widget.setDirection },
+					.{ .name = "setBackgroundColor", .func = Widget.setBackgroundColor },
+					.{ .name = "setBorderRadius", .func = Widget.setBorderRadius },
+					.{ .name = "setChildGap", .func = Widget.setChildGap },
+					.{ .name = "setSizeX", .func = Widget.setSizeX },
+					.{ .name = "setBorderColor", .func = Widget.setBorderColor },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Widget_lib, 0);
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.Direction.left_to_right));
+				c.lua_setfield(lua, -2, "DIRECTION_LEFT_TO_RIGHT");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.Direction.top_to_bottom));
+				c.lua_setfield(lua, -2, "DIRECTION_TOP_TO_BOTTOM");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.AlignmentY.top));
+				c.lua_setfield(lua, -2, "ALIGNMENT_Y_TOP");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.AlignmentY.bottom));
+				c.lua_setfield(lua, -2, "ALIGNMENT_Y_BOTTOM");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.AlignmentY.center));
+				c.lua_setfield(lua, -2, "ALIGNMENT_Y_CENTER");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.Sizing.fit));
+				c.lua_setfield(lua, -2, "SIZING_FIT");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.Sizing.grow));
+				c.lua_setfield(lua, -2, "SIZING_GROW");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.Sizing.percent));
+				c.lua_setfield(lua, -2, "SIZING_PERCENT");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.Sizing.fixed));
+				c.lua_setfield(lua, -2, "SIZING_FIXED");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.AlignmentX.left));
+				c.lua_setfield(lua, -2, "ALIGNMENT_X_LEFT");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.AlignmentX.right));
+				c.lua_setfield(lua, -2, "ALIGNMENT_X_RIGHT");
+				c.lua_pushinteger(lua, @intFromEnum(Widget.Module.AlignmentX.center));
+				c.lua_setfield(lua, -2, "ALIGNMENT_X_CENTER");
+				c.lua_setglobal(lua, "Widget");
+			}
+			if (core.findModule(Button.Module)) |module| {
+				self.mod17 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const Button_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "click", .func = Button.click },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Button_lib, 0);
+				c.lua_setglobal(lua, "Button");
+			}
+			if (core.findModule(Label.Module)) |module| {
+				self.mod18 = module;
+				c.lua_newtable(lua);
+				c.lua_pushinteger(lua, module.components.id);
+				c.lua_setfield(lua, -2, "id");
+				const Label_lib: [*]const c.luaL_Reg = &.{
+					.{ .name = "setColor", .func = Label.setColor },
+					.{ .name = "setText", .func = Label.setText },
+					.{ .name = null, .func = null },
+				};
+				c.luaL_setfuncs(lua, Label_lib, 0);
+				c.lua_setglobal(lua, "Label");
+			}
+		}
+	};
+}

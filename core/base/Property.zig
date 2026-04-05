@@ -7,30 +7,6 @@ pub const ID = u8;
 /// Use cases:
 /// - Bind property to a widget
 /// - Bind property to animation
-pub const Primitive = enum {
-    bool,
-    u32,
-    f32,
-    vec2,
-    vec3,
-    vec4,
-    quat,
-    string,
-    id,
-};
-
-pub const Value = union(Primitive) {
-    bool: bool,
-    u32: u32,
-    f32: f32,
-    vec2: nux.Vec2,
-    vec3: nux.Vec3,
-    vec4: nux.Vec4,
-    quat: nux.Quat,
-    string: []const u8,
-    id: nux.ID,
-};
-
 pub const Ref = struct {
     id: nux.ID,
     component: nux.ComponentID,
@@ -40,8 +16,8 @@ pub const Ref = struct {
 
 pub const Type = struct {
     name: []const u8,
-    v_get: *const fn (*anyopaque, id: nux.ID) anyerror!Value,
-    v_set: *const fn (*anyopaque, id: nux.ID, value: Value) anyerror!void,
+    v_get: *const fn (*anyopaque, id: nux.ID) anyerror!nux.Primitive.Value,
+    v_set: *const fn (*anyopaque, id: nux.ID, value: nux.Primitive.Value) anyerror!void,
 
     pub fn init(
         comptime T: type,
@@ -54,12 +30,12 @@ pub const Type = struct {
         _ = getter;
 
         const gen = struct {
-            fn get(module: *anyopaque, id: nux.ID) anyerror!Value {
+            fn get(module: *anyopaque, id: nux.ID) anyerror!nux.Primitive.Value {
                 _ = module;
                 _ = id;
                 return undefined;
             }
-            fn set(module: *anyopaque, id: nux.ID, value: Value) anyerror!void {
+            fn set(module: *anyopaque, id: nux.ID, value: nux.Primitive.Value) anyerror!void {
                 _ = module;
                 _ = id;
                 _ = value;

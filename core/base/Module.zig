@@ -20,27 +20,33 @@ pub const VTable = struct {
 };
 
 pub const Module = struct {
-    name: []const u8,
+    name: [:0]const u8,
     type_hash: u32,
     state: State = .created,
     v_ptr: *anyopaque,
     v_module: VTable,
     v_component: ?nux.Component.VTable = null,
-    functions: std.StringHashMap(nux.Function.Function),
-    enums: std.StringHashMap(u64),
+    functions: std.ArrayList(nux.Function.Function),
+    enums: std.ArrayList(nux.Enum.Enum),
 
-    pub fn destroy(self: *@This()) void {
+    pub fn destroy(self: *@This(), allocator: std.mem.Allocator) void {
         if (self.state == .created) {
-            self.v_module.destroy(self.v_ptr, self.allocator);
-            self.functions.deinit();
-            self.enums.deinit();
+            self.v_module.destroy(self.v_ptr, allocator);
+            self.functions.deinit(allocator);
+            self.enums.deinit(allocator);
         }
     }
-    pub fn init(self: *@This(), core: *nux.Core) !void {
+    pub fn init(self: *@This(), core: *nux.Core, id: nux.ModuleID) !void {
         std.log.info("INIT {s}", .{self.name});
         std.debug.assert(self.state == .created);
         if (self.v_component) |v_component| {
-            try v_component.init(self.v_ptr);
+            const node = core.getModuleByType(nux.Node) orelse unreachable;
+            try v_component.init(
+                self.v_ptr,
+                node,
+                core.platform.allocator,
+                id,
+            );
         }
         try self.v_module.init(self.v_ptr, core);
         self.state = .initialized;
@@ -50,7 +56,7 @@ pub const Module = struct {
         if (self.state == .initialized) {
             self.v_module.deinit(self.v_ptr);
             if (self.v_component) |v_component| {
-                try v_component.deinit(self.v_ptr);
+                v_component.deinit(self.v_ptr);
             }
             self.state = .created;
         }
@@ -64,7 +70,7 @@ pub const Module = struct {
     pub fn stop(self: *@This()) void {
         std.log.info("STOP {s}", .{self.name});
         if (self.state == .started) {
-            try self.v_module.stop(self.v_ptr);
+            self.v_module.stop(self.v_ptr);
             self.state = .initialized;
         }
     }

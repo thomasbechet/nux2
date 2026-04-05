@@ -130,22 +130,6 @@ fn configCore(b: *std.Build, config: Config) void {
     const codegen_step = b.step("codegen", "Reflect API");
     codegen_step.dependOn(&codegen_copy.step);
 
-    // bindings
-    const bindgen = b.addExecutable(.{ .name = "bindgen", .root_module = b.createModule(.{
-        .target = config.target,
-        .optimize = .Debug,
-        .root_source_file = b.path("core/lua/bindgen.zig"),
-    }) });
-    const bindgen_run = b.addRunArtifact(bindgen);
-    bindgen_run.has_side_effects = true;
-    const bindings_output_tmp = bindgen_run.addOutputFileArg("bindings.zig");
-    bindgen_run.addFileArg(b.path("core/lua/bindings.json"));
-    const bindings_copy = b.addUpdateSourceFiles();
-    bindings_copy.step.dependOn(&bindgen_run.step);
-    bindings_copy.addCopyFileToSource(bindings_output_tmp, "core/lua/bindings.zig");
-    const bindgen_step = b.step("bindgen", "Generate bindings");
-    bindgen_step.dependOn(&bindings_copy.step);
-
     // core
     const core = b.addModule("nux", .{
         .target = config.target,

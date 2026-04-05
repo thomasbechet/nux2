@@ -7,7 +7,9 @@ pub const Collection = @import("base/Collection.zig");
 pub const Module = @import("base/Module.zig");
 pub const Node = @import("base/Node.zig");
 pub const Component = @import("base/Component.zig");
+pub const Primitive = @import("base/Primitive.zig");
 pub const Function = @import("base/Function.zig");
+pub const Enum = @import("base/Enum.zig");
 pub const Property = @import("base/Property.zig");
 pub const Signal = @import("base/Signal.zig");
 pub const File = @import("base/File.zig");
@@ -36,7 +38,6 @@ pub const Gltf = @import("graphics/Gltf.zig");
 
 pub const ID = Node.ID;
 pub const ModuleID = Module.ID;
-pub const FunctionID = Function.ID;
 pub const Components = Component.Components;
 pub const Writer = Node.Writer;
 pub const Reader = Node.Reader;
@@ -54,6 +55,9 @@ pub const Box2 = box.Box2;
 pub const Box3 = box.Box3;
 pub const Box2i = box.Box2i;
 pub const Box3i = box.Box3i;
+pub const mat = @import("math/mat.zig");
+pub const Mat3 = mat.Mat3;
+pub const Mat4 = mat.Mat4;
 pub const Color = @import("math/color.zig").Color;
 pub const SpanAllocator = @import("utils/SpanAllocator.zig");
 pub const Callable = @import("utils/Callable.zig");
@@ -107,8 +111,6 @@ pub const Core = struct {
     running: bool = false,
     stages: std.EnumMap(Stage, std.ArrayList(Callable)),
     modules: std.ArrayList(Module.Module),
-    names: std.StringHashMap(ID),
-    hashes: std.AutoHashMap(u32, ID),
 
     fn log(
         self: *Core,
@@ -137,8 +139,10 @@ pub const Core = struct {
         module.name = module_name;
         module.type_hash = hash.fromType(T);
         module.v_ptr = try self.platform.allocator.create(T);
-        module.functions = .init(self.platform.allocator);
-        module.enums = .init(self.platform.allocator);
+        module.functions = .empty;
+        module.enums = .empty;
+        module.state = .created;
+        module.v_component = null;
 
         std.log.info("REGISTER {s}", .{module_name});
 
@@ -152,7 +156,7 @@ pub const Core = struct {
                     switch (@typeInfo(field.type)) {
                         .pointer => |info| {
                             if (info.child != u8) {
-                                if (core.module.findByType(info.child)) |dependency| {
+                                if (core.getModuleByType(info.child)) |dependency| {
                                     @field(mod, field.name) = dependency;
                                 }
                             }
@@ -220,14 +224,14 @@ pub const Core = struct {
                 fn init(
                     pointer: *anyopaque,
                     node: *Node,
-                    allocator: *std.mem.Allocator,
+                    allocator: std.mem.Allocator,
+                    module_id: ModuleID,
                 ) !void {
                     const mod: *T = @ptrCast(@alignCast(pointer));
-                    const component_id: ID = @intCast(self.component_types.items.len);
                     @field(mod, Component.module_components_field) = try .init(
                         allocator,
                         node,
-                        component_id,
+                        module_id,
                     );
                 }
                 fn deinit(pointer: *anyopaque) void {
@@ -260,6 +264,8 @@ pub const Core = struct {
                 }
             };
             module.v_component = .{
+                .init = component_gen.init,
+                .deinit = component_gen.deinit,
                 .add = component_gen.add,
                 .remove = component_gen.remove,
                 .has = component_gen.has,
@@ -275,7 +281,8 @@ pub const Core = struct {
             const FunctionInfo = @field(Functions, func_decl.name);
             const FunctionType = @field(FunctionInfo, "function");
             const name = @field(FunctionInfo, "name");
-            try module.functions.put(name, .wrap(
+            try module.functions.append(self.platform.allocator, .wrap(
+                name,
                 T,
                 FunctionType,
                 @ptrCast(@alignCast(module.v_ptr)),
@@ -292,9 +299,15 @@ pub const Core = struct {
                 const value = @field(EnumValue, "value");
                 const name = @field(EnumValue, "name");
                 if (EnumInfo.is_bitfield) {
-                    try module.enums.put(name, @as(u32, @bitCast(value)));
+                    try module.enums.append(self.platform.allocator, .{
+                        .name = name,
+                        .value = @as(u32, @bitCast(value)),
+                    });
                 } else {
-                    try module.enums.put(name, @intFromEnum(value));
+                    try module.enums.append(self.platform.allocator, .{
+                        .name = name,
+                        .value = @intFromEnum(value),
+                    });
                 }
             }
         }
@@ -308,7 +321,6 @@ pub const Core = struct {
             core.stages.put(@field(Stage, field.name), .empty);
         }
         core.modules = .empty;
-        core.names = .init(platform.allocator);
         errdefer core.deinit();
 
         // Create modules
@@ -318,8 +330,8 @@ pub const Core = struct {
         }
 
         // Start sequence
-        for (core.modules.items) |*module| {
-            try module.init();
+        for (core.modules.items, 0..) |*module, id| {
+            try module.init(core, id);
         }
         for (core.modules.items) |*module| {
             try module.start();
@@ -328,13 +340,13 @@ pub const Core = struct {
         // Handle command
         switch (core.platform.config.command) {
             .run => {
-                var lua = core.findModule(Lua) orelse unreachable;
+                var lua = core.getModuleByType(Lua) orelse unreachable;
                 _ = try lua.loadModule("init.lua");
                 core.running = true;
             },
             .build => |build| {
-                var cart = core.findModule(Cart) orelse unreachable;
-                var logger = core.findModule(Logger) orelse unreachable;
+                var cart = core.getModuleByType(Cart) orelse unreachable;
+                var logger = core.getModuleByType(Logger) orelse unreachable;
                 try cart.begin(build.path);
                 try cart.writeGlob(build.glob);
                 logger.info("out {s} ({s})", .{ build.path, build.glob });
@@ -353,14 +365,12 @@ pub const Core = struct {
         for (self.modules.items) |*module| {
             module.deinit();
         }
-        self.module.deinit();
 
         // Destroy modules
         for (self.modules.items) |*module| {
-            module.destroy();
+            module.destroy(self.platform.allocator);
         }
-        self.modules.deinit(self.allocator);
-        self.names.deinit();
+        self.modules.deinit(self.platform.allocator);
 
         // Deinit stages
         var it = self.stages.iterator();
@@ -386,8 +396,8 @@ pub const Core = struct {
     }
 
     pub fn pushEvent(self: *Core, event: Platform.Event) void {
-        const input = self.getModule(Input);
-        const window = self.getModule(Window);
+        const input = self.getModuleByType(Input) orelse unreachable;
+        const window = self.getModuleByType(Window) orelse unreachable;
         switch (event) {
             .requestExit => self.running = false,
             else => {},
@@ -396,12 +406,20 @@ pub const Core = struct {
         window.onEvent(&event);
     }
 
-    pub fn getModule(self: *Core, comptime T: type) *T {
+    pub fn getModule(self: *Core, id: ModuleID) !*Module.Module {
+        if (id >= self.modules.items.len) {
+            return error.InvalidModuleID;
+        }
+        return &self.modules.items[id];
+    }
+
+    pub fn getModuleByType(self: *Core, comptime T: type) ?*T {
+        const type_hash = hash.fromType(T);
         for (self.modules.items) |*module| {
-            if (std.mem.eql(u8, @typeName(T), module.name)) {
+            if (module.type_hash == type_hash) {
                 return @ptrCast(@alignCast(module.v_ptr));
             }
         }
-        unreachable;
+        return null;
     }
 };

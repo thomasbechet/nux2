@@ -8,31 +8,30 @@ const Argument = struct {
     typ: nux.Property.Primitive,
 };
 
-const ArgParser = struct {
-    nextU8: *const fn (self: *ArgParser) anyerror!u8,
-    nextI32: *const fn (self: *ArgParser) anyerror!i32,
-    nextU32: *const fn (self: *ArgParser) anyerror!u32,
-    nextID: *const fn (self: *ArgParser) anyerror!nux.ID,
-    nextVec3: *const fn (self: *ArgParser) anyerror!nux.Vec3,
-    nextQuat: *const fn (self: *ArgParser) anyerror!nux.Quat,
-    nextString: *const fn (self: *ArgParser) anyerror![]const u8,
+pub const ArgParser = struct {
+    next: *const fn (
+        self: *ArgParser,
+        typ: nux.Primitive.Type,
+    ) anyerror!nux.Primitive.Value,
 };
 
 pub const Function = struct {
+    name: [:0]const u8,
     v_ptr: *anyopaque,
-    v_call: *const fn (*anyopaque, args: *ArgParser) anyerror!?nux.Property.Value,
+    v_call: *const fn (*anyopaque, args: *ArgParser) anyerror!?nux.Primitive.Value,
 
-    pub fn call(self: *Self, args: *ArgParser) !?nux.Property.Value {
+    pub fn call(self: *Function, args: *ArgParser) !?nux.Primitive.Value {
         return self.v_call(self.v_ptr, args);
     }
 
     pub fn wrap(
+        name: [:0]const u8,
         comptime T: type,
         comptime method: anytype,
         module: *T,
     ) Function {
         const Wrapper = struct {
-            fn call(ptr: *anyopaque, args: *ArgParser) anyerror!?nux.Property.Value {
+            fn call(ptr: *anyopaque, args: *ArgParser) anyerror!?nux.Primitive.Value {
                 const self: *T = @ptrCast(@alignCast(ptr));
                 const fn_info = @typeInfo(@TypeOf(method)).@"fn";
                 const params = fn_info.params;
@@ -56,21 +55,24 @@ pub const Function = struct {
                     if (i == 0) continue;
                     const ParamType = param.type.?;
                     const field_name = std.fmt.comptimePrint("{d}", .{i - 1});
+                    @compileLog(field_name);
                     const type_info = @typeInfo(ParamType);
                     if (type_info == .@"enum") {
                         @field(call_args, field_name) = std.enums.fromInt(
                             ParamType,
-                            try args.nextU32(args),
+                            (try args.next(args, .u32)).u32,
                         ) orelse return error.InvalidEnumValue;
-                    } else if (type_info == .type) {
-                        @field(call_args, field_name) = switch (type_info.type) {
-                            u8 => try args.nextU8(args),
-                            i32 => try args.nextI32(args),
-                            u32 => try args.nextU32(args),
-                            nux.ID => try args.nextID(args),
-                            nux.Vec3 => try args.nextVec3(args),
-                            nux.Quat => try args.nextQuat(args),
-                            []const u8 => try args.nextString(args),
+                    } else {
+                        @field(call_args, field_name) = switch (ParamType) {
+                            u8 => (try args.next(args, .u32)).u32,
+                            i32 => (try args.next(args, .u32)).u32,
+                            u32 => (try args.next(args, .u32)).u32,
+                            nux.ID => (try args.next(args, .id)).id,
+                            nux.Vec2i => (try args.next(args)).vec2,
+                            nux.Vec3 => (try args.next(args)).vec3,
+                            nux.Quat => (try args.next(args)).quat,
+                            []const u8 => (try args.next(args, .string)).string,
+                            nux.Color => (try args.next(args, .color)).color,
                             else => {
                                 @compileError("Unsupported argument type " ++ @typeName(ParamType));
                             },
@@ -98,6 +100,7 @@ pub const Function = struct {
             }
         };
         return Function{
+            .name = name,
             .v_ptr = module,
             .v_call = Wrapper.call,
         };

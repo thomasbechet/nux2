@@ -29,7 +29,7 @@
             "path": "base/Component.zig",
             "ignore": [
                 "Components",
-                "Type",
+                "VTable",
                 "registerModule",
                 "get",
                 "find"
@@ -56,6 +56,10 @@
                 "FileList",
                 "readAligned"
             ]
+        },
+        {
+            "path": "base/Logger.zig",
+            "ignore_all": true
         },
         {
             "path": "base/Cart.zig",

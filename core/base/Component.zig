@@ -98,10 +98,11 @@ pub fn Components(T: type) type {
             }
         }
         fn addUninitialized(self: *@This(), id: nux.ID) !*T {
+
             // Check node entry
             const entry = try self.node.getEntry(id);
             var index: Index = undefined;
-            if (entry.components[self.id]) |previous_index| { // Reuse index
+            if (entry.components[self.id.index]) |previous_index| { // Reuse index
                 index = previous_index;
                 const data = &self.data.get(previous_index).data;
                 // Deinit previous component
@@ -112,12 +113,13 @@ pub fn Components(T: type) type {
                     .id = id,
                 }));
             }
+
             // Resize bitset
             if (index >= self.bitset.unmanaged.bit_length) {
                 try self.bitset.resize((index + 1) * 2, false);
             }
             self.bitset.set(@intCast(index));
-            entry.components[@intCast(self.id)] = index;
+            entry.components[@intCast(self.id.index)] = index;
             return &self.data.get(index).data;
         }
 
@@ -135,14 +137,14 @@ pub fn Components(T: type) type {
         }
         pub fn remove(self: *@This(), id: nux.ID) void {
             const entry = self.node.getEntry(id) catch return;
-            const index = entry.components[self.id] orelse return;
+            const index = entry.components[self.id.index] orelse return;
             // Deinit component
             const data = &self.data.get(index).data;
             self.deinitComponent(data);
             // Remove from pool
             self.data.remove(index);
             self.bitset.unset(@intCast(index));
-            entry.components[self.id] = null;
+            entry.components[self.id.index] = null;
         }
         pub fn has(self: *@This(), id: nux.ID) bool {
             return self.getOptional(id) != null;
@@ -155,7 +157,7 @@ pub fn Components(T: type) type {
         }
         pub fn getOptional(self: *@This(), id: nux.ID) ?*T {
             const entry = self.node.getEntry(id) catch return null;
-            const index = entry.components[@intCast(self.id)] orelse return null;
+            const index = entry.components[@intCast(self.id.index)] orelse return null;
             return &self.data.get(index).data;
         }
         pub fn get(self: *@This(), id: nux.ID) !*T {

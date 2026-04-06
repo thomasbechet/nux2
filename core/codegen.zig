@@ -4,23 +4,6 @@ const Ast = std.zig.Ast;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const PrimitiveType = enum {
-    bool,
-    u32,
-    f32,
-    string,
-    ID,
-    ModuleID,
-    Vec2,
-    Vec2i,
-    Vec3,
-    Vec3i,
-    Vec4,
-    Vec4i,
-    Quat,
-    Color,
-};
-
 const AstIter = struct {
     alloc: Allocator,
     ast: *const Ast,
@@ -31,8 +14,11 @@ const AstIter = struct {
     const Type = struct {
         name: []const u8,
         resolved: ?union(enum) {
-            primitive: PrimitiveType,
-            @"enum": *Enum,
+            primitive: nux.Primitive.Type,
+            @"enum": struct {
+                module: *Module,
+                name: []const u8,
+            },
         } = null,
     };
 
@@ -377,9 +363,40 @@ const Modules = struct {
         }
 
         // Try resolve primitive
-
-        if (std.meta.stringToEnum(PrimitiveType, name)) |primitive| {
-            typ.resolved = .{ .primitive = primitive };
+        const Primitive = enum {
+            bool,
+            u32,
+            f32,
+            string,
+            ID,
+            ModuleID,
+            Vec2,
+            Vec2i,
+            Vec3,
+            Vec3i,
+            Vec4,
+            Vec4i,
+            Quat,
+            Color,
+        };
+        if (std.meta.stringToEnum(Primitive, name)) |primitive| {
+            const primitive_type: nux.Primitive.Type = switch (primitive) {
+                Primitive.bool => .bool,
+                Primitive.u32 => .int,
+                Primitive.f32 => .real,
+                Primitive.string => .string,
+                Primitive.ID => .id,
+                Primitive.ModuleID => .module,
+                Primitive.Vec2 => .vec2,
+                Primitive.Vec2i => .vec2,
+                Primitive.Vec3 => .vec3,
+                Primitive.Vec3i => .vec3,
+                Primitive.Vec4 => .vec4,
+                Primitive.Vec4i => .vec4,
+                Primitive.Quat => .quat,
+                Primitive.Color => .color,
+            };
+            typ.resolved = .{ .primitive = primitive_type };
             return;
         }
 
@@ -389,8 +406,11 @@ const Modules = struct {
             if (parts.next()) |decl_name| {
                 for (modules) |*module| {
                     if (std.mem.eql(u8, module.name, module_name)) {
-                        if (module.enums.getPtr(decl_name)) |enu| {
-                            typ.resolved = .{ .@"enum" = enu };
+                        if (module.enums.getPtr(decl_name) != null) {
+                            typ.resolved = .{ .@"enum" = .{
+                                .module = module,
+                                .name = decl_name,
+                            } };
                             return;
                         }
                     }
@@ -629,9 +649,19 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
                 module.name,
                 function.key_ptr.*,
             });
-            try writer.print("\t\t\tpub const params: []const nux.Function.Parameter = &.{{\n", .{});
+            try writer.print("\t\t\tpub const Params = struct {{\n", .{});
             for (function.value_ptr.params) |param| {
-                try writer.print("\t\t\t\t.{{ .name = \"{s}\", .typ = .int }},\n", .{param.ident});
+                try writer.print("\t\t\t\tpub const {s} = struct {{\n", .{param.ident});
+                try writer.print("\t\t\t\t\tpub const name = \"{s}\";\n", .{param.ident});
+                switch (param.typ.resolved.?) {
+                    .primitive => |primitive| {
+                        try writer.print("\t\t\t\t\tpub const primitive = nux.Primitive.Type.{s};\n", .{@tagName(primitive)});
+                    },
+                    .@"enum" => |enu| {
+                        try writer.print("\t\t\t\t\tpub const enu = {s}.Enums.{s};\n", .{ enu.module.name, enu.name });
+                    },
+                }
+                try writer.print("\t\t\t\t}};\n", .{});
             }
             try writer.print("\t\t\t}};\n", .{});
             try writer.print("\t\t}};\n", .{});

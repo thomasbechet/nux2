@@ -277,20 +277,6 @@ pub const Core = struct {
             };
         }
 
-        // Register functions
-        const Functions = @field(ModuleInfo, "Functions");
-        inline for (@typeInfo(Functions).@"struct".decls) |func_decl| {
-            const FunctionInfo = @field(Functions, func_decl.name);
-            const FunctionType = @field(FunctionInfo, "function");
-            const name = @field(FunctionInfo, "name");
-            try module.functions.append(self.platform.allocator, .wrap(
-                name,
-                T,
-                FunctionType,
-                @ptrCast(@alignCast(module.v_ptr)),
-            ));
-        }
-
         // Register enums
         const Enums = @field(ModuleInfo, "Enums");
         inline for (@typeInfo(Enums).@"struct".decls) |enum_decl| {
@@ -312,6 +298,22 @@ pub const Core = struct {
                     });
                 }
             }
+        }
+
+        // Register functions
+        const Functions = @field(ModuleInfo, "Functions");
+        inline for (@typeInfo(Functions).@"struct".decls) |func_decl| {
+            const FunctionInfo = @field(Functions, func_decl.name);
+            const FunctionMethod = @field(FunctionInfo, "function");
+            const name = @field(FunctionInfo, "name");
+            const params = comptime Function.getParameters(FunctionInfo.Params);
+            try module.functions.append(self.platform.allocator, .wrap(
+                name,
+                T,
+                FunctionMethod,
+                params,
+                @ptrCast(@alignCast(module.v_ptr)),
+            ));
         }
     }
 

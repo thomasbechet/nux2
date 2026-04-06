@@ -293,7 +293,7 @@ const ComponentIterator = struct {
             const index = it.current;
             it.current += 1;
             if (it.entry.components[index] != null) {
-                return @intCast(index);
+                return .{ .index = @intCast(index) };
             }
         }
         return null;
@@ -488,7 +488,7 @@ pub fn delete(self: *Self, id: ID) !void {
     // Remove components
     var cit = try self.iterComponents(id);
     while (cit.next()) |cid| {
-        const module = try self.component.getModule(@intCast(cid));
+        const module = try self.component.getModule(cid);
         module.v_component.?.remove(module.v_ptr, id);
     }
 

@@ -88,28 +88,28 @@ pub fn exportNode(self: *Self, parent: nux.ID, root: nux.ID) !nux.ID {
             std.debug.assert(node.parent != null);
         }
 
-        // Collect components
+        // Collect modules
         var it = try self.node.iterComponents(node_id);
         node.module_indices_start = module_indices.items.len;
         while (it.next()) |cid| {
 
-            // Find component index from component ids
-            var component_index: ?usize = null;
-            for (module_ids.items, 0..) |component_id, index| {
-                if (component_id == cid) {
-                    component_index = index;
+            // Find module index from module ids
+            var module_index: ?usize = null;
+            for (module_ids.items, 0..) |module_id, index| {
+                if (module_id.index == cid.index) {
+                    module_index = index;
                     break;
                 }
             }
 
-            // Component not found, append id to list
-            if (component_index == null) {
-                component_index = module_ids.items.len;
+            // Module not found, append id to list
+            if (module_index == null) {
+                module_index = module_ids.items.len;
                 try module_ids.append(self.allocator, cid);
             }
 
-            // Append component index
-            try module_indices.append(self.allocator, component_index.?);
+            // Append module index
+            try module_indices.append(self.allocator, module_index.?);
         }
         node.module_indices_end = module_indices.items.len;
     }

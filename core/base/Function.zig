@@ -21,6 +21,24 @@ pub const Parameter = struct {
     @"enum": ?nux.EnumID = null,
 };
 
+pub fn getParameters(comptime T: type) []const Parameter {
+    const decls = @typeInfo(T).@"struct".decls;
+
+    comptime var tmp: [decls.len]Parameter = undefined;
+
+    inline for (decls, 0..) |decl, i| {
+        const param = @field(T, decl.name);
+        tmp[i] = .{
+            .name = param.name,
+            .typ = param.primitive,
+        };
+    }
+
+    const result = tmp; // <- copy into a const
+
+    return &result;
+}
+
 pub const Type = struct {
     name: [:0]const u8,
     params: []const Parameter,
@@ -35,25 +53,11 @@ pub const Type = struct {
         name: [:0]const u8,
         comptime T: type,
         comptime method: anytype,
+        comptime params: []const Parameter,
         module: *T,
     ) Type {
         const fn_info = @typeInfo(@TypeOf(method)).@"fn";
-        const params = fn_info.params;
-
-        const function_args = blk: {
-            var tmp: [params.len - 1]Parameter = undefined;
-            var count: usize = 0;
-            inline for (params, 0..) |param, i| {
-                if (i == 0) continue; // skip self
-                const ParamType = param.type.?;
-                tmp[count] = Parameter{
-                    .name = param.name orelse std.fmt.comptimePrint("arg{d}", .{count}),
-                    .typ = comptime nux.Primitive.Type.fromType(ParamType),
-                };
-                count += 1;
-            }
-            break :blk tmp[0..count];
-        };
+        const fn_params = fn_info.params;
 
         const Wrapper = struct {
             fn call(ptr: *anyopaque, args: *ArgParser) anyerror!?nux.Primitive.Value {
@@ -61,9 +65,9 @@ pub const Type = struct {
 
                 // Build tuple type (excluding self)
                 const ArgTuple = std.meta.Tuple(blk: {
-                    var tmp: [params.len - 1]type = undefined;
+                    var tmp: [fn_params.len - 1]type = undefined;
                     var count: usize = 0;
-                    inline for (params, 0..) |param, i| {
+                    inline for (fn_params, 0..) |param, i| {
                         if (i == 0) continue;
                         tmp[count] = param.type.?;
                         count += 1;
@@ -74,7 +78,7 @@ pub const Type = struct {
 
                 // Fetch arguments
                 var call_args: ArgTuple = undefined;
-                inline for (params, 0..) |param, i| {
+                inline for (fn_params, 0..) |param, i| {
                     if (i == 0) continue;
                     const ParamType = param.type.?;
                     const field_name = std.fmt.comptimePrint("{d}", .{i - 1});
@@ -122,7 +126,7 @@ pub const Type = struct {
         };
         return Type{
             .name = name,
-            .params = function_args,
+            .params = params,
             .v_ptr = module,
             .v_call = Wrapper.call,
         };

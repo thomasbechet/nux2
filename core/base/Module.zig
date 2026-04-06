@@ -6,7 +6,6 @@ const Self = @This();
 pub const ID = struct {
     index: usize,
 };
-
 pub const State = enum(u32) {
     created,
     initialized,

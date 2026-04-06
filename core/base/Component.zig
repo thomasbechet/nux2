@@ -119,7 +119,7 @@ pub fn Components(T: type) type {
                 try self.bitset.resize((index + 1) * 2, false);
             }
             self.bitset.set(@intCast(index));
-            entry.components[@intCast(self.id.index)] = index;
+            entry.components[self.id.index] = index;
             return &self.data.get(index).data;
         }
 

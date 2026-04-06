@@ -93,10 +93,38 @@ pub const Value = union(Type) {
             nux.Vec4i => return .{ .vec4 = value.as(nux.Vec4) },
             nux.Quat => return .{ .quat = value },
             []const u8 => return .{ .string = value },
+            nux.Color => return .{ .color = value },
             nux.ID => return .{ .id = value },
             nux.ModuleID => return .{ .module = value },
             nux.FunctionID => return .{ .function = value },
             nux.EnumID => return .{ .enumeration = value },
+            else => @compileError("Unsupported type " ++ @typeName(T)),
+        }
+    }
+
+    pub fn into(value: Value, comptime T: type) T {
+        switch (T) {
+            bool => return value.bool,
+            u8 => return @intCast(value.int),
+            i32 => return @intCast(value.int),
+            u32 => return @intCast(value.int),
+            i64 => return @intCast(value.int),
+            u64 => return @intCast(value.int),
+            f32 => return @intCast(value.real),
+            f64 => return @intCast(value.real),
+            nux.Vec2 => return value.vec2.as(nux.Vec2),
+            nux.Vec2i => return value.vec2.as(nux.Vec2i),
+            nux.Vec3 => return value.vec3.as(nux.Vec3),
+            nux.Vec3i => return value.vec3.as(nux.Vec3i),
+            nux.Vec4 => return value.vec4.as(nux.Vec4),
+            nux.Vec4i => return value.vec4.as(nux.Vec4i),
+            nux.Quat => return value.quat,
+            []const u8 => return value.string,
+            nux.Color => return value.color,
+            nux.ID => return value.id,
+            nux.ModuleID => return value.module,
+            nux.FunctionID => return value.function,
+            nux.EnumID => return value.enumeration,
             else => @compileError("Unsupported type " ++ @typeName(T)),
         }
     }

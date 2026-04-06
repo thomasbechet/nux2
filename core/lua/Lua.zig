@@ -445,55 +445,42 @@ fn checkID(self: *Self, index: c_int) nux.ID {
         return .null;
     };
 }
-fn checkModuleID(lua: ?*c.lua_State, index: c_int) nux.ModuleID {
-    if (c.lua_isinteger(lua, index) != 0) {
-        return @as(nux.ModuleID, @bitCast(@as(u8, @intCast(c.luaL_checkinteger(lua, index)))));
-    } else if (c.lua_istable(lua, index)) {
-        _ = c.lua_getfield(lua, index, "id");
-        return @as(nux.ModuleID, @bitCast(@as(u8, @intCast(c.luaL_checkinteger(lua, -1)))));
+fn checkModuleID(self: *Self, index: c_int) nux.ModuleID {
+    if (c.lua_isinteger(self.L, index) != 0) {
+        return .{ .index = @intCast(c.luaL_checkinteger(self.L, index)) };
+    } else if (c.lua_istable(self.L, index)) {
+        _ = c.lua_getfield(self.L, index, "id");
+        return .{ .index = @intCast(c.luaL_checkinteger(self.L, -1)) };
     }
-    _ = c.luaL_error(lua, "invalid component id value");
-    return 0;
+    _ = c.luaL_error(self.L, "invalid component id value");
+    unreachable;
 }
 
 const LuaArgParser = struct {
     lua: *Self,
     interface: nux.Function.ArgParser,
-    index: c_int = 0,
-
-    // fn next(comptime T: anytype) type {
-    //     return struct {
-    //         fn inner(args: *nux.Function.ArgParser) anyerror!T {
-    //             const self: *LuaArgParser = @fieldParentPtr("interface", args);
-    //             const index = self.index;
-    //             self.index += 1;
-    //             switch (T) {
-    //                 nux.ID => return self.lua.checkID(index),
-    //                 u8 => return @as(u8, @intCast(c.luaL_checkinteger(self.lua.L, index))),
-    //                 i32 => return @as(i32, @intCast(c.luaL_checkinteger(self.lua.L, index))),
-    //                 u32 => return @as(u32, @intCast(c.luaL_checkinteger(self.lua.L, index))),
-    //                 f32 => return @as(f32, @floatCast(c.luaL_checknumber(self.lua.L, index))),
-    //                 nux.Vec3 => return Self.checkUserData(self.lua.L, .vec3, index).vec3,
-    //                 nux.Quat => return Self.checkUserData(self.lua.L, .quat, index).quat,
-    //                 []const u8 => return std.mem.span(c.luaL_checklstring(self.lua.L, index, null)),
-    //                 else => @compileError("Not supported type"),
-    //             }
-    //         }
-    //     };
-    // }
+    index: c_int = 1,
 
     fn next(
         args: *nux.Function.ArgParser,
-        primitive: nux.Property.Primitive,
-    ) anyerror!nux.Property.Value {
+        primitive: nux.Primitive.Type,
+    ) anyerror!nux.Primitive.Value {
         const self: *LuaArgParser = @fieldParentPtr("interface", args);
         const index = self.index;
         self.index += 1;
         return switch (primitive) {
+            .int => .{ .int = @as(u32, @intCast(c.luaL_checkinteger(self.lua.L, index))) },
+            .real => .{ .real = @as(f32, @floatCast(c.luaL_checknumber(self.lua.L, index))) },
+            .vec2 => .{ .vec2 = Self.checkUserData(self.lua.L, .vec2, index).vec2 },
+            .vec3 => .{ .vec3 = Self.checkUserData(self.lua.L, .vec3, index).vec3 },
+            .vec4 => .{ .vec4 = Self.checkUserData(self.lua.L, .vec4, index).vec4 },
+            .quat => .{ .quat = Self.checkUserData(self.lua.L, .quat, index).quat },
+            .string => .{ .string = std.mem.span(c.luaL_checklstring(self.lua.L, index, null)) },
+            .color => .{ .color = .fromVec(Self.checkUserData(self.lua.L, .vec4, index).vec4) },
             .id => .{ .id = self.lua.checkID(index) },
-            .u32 => .{ .u32 = @as(u32, @intCast(c.luaL_checkinteger(self.lua.L, index))) },
-            .f32 => .{ .f32 = @as(f32, @floatCast(c.luaL_checknumber(self.lua.L, index))) },
-            else => .{ .u32 = 0 },
+            .module => .{ .module = self.lua.checkModuleID(index) },
+            .enumeration => .{ .enumeration = @as(u64, @intCast(c.luaL_checkinteger(self.lua.L, index))) },
+            else => .{ .int = 0 },
         };
     }
 
@@ -511,7 +498,7 @@ fn apiCall(lua: ?*c.lua_State) callconv(.c) c_int {
     const self = context(lua);
 
     // Get function handle from up value
-    const func = @as(*nux.Function.Function, @ptrCast(@alignCast(c.lua_touserdata(
+    const func = @as(*nux.Function.Type, @ptrCast(@alignCast(c.lua_touserdata(
         self.L,
         c.lua_upvalueindex(1),
     ))));
@@ -526,15 +513,22 @@ fn apiCall(lua: ?*c.lua_State) callconv(.c) c_int {
     if (ret) |value| {
         switch (value) {
             .bool => |v| c.lua_pushboolean(self.L, @intFromBool(v)),
-            .u32 => |v| c.lua_pushinteger(self.L, v),
-            .f32 => |v| c.lua_pushnumber(self.L, v),
+            .int => |v| c.lua_pushinteger(self.L, v),
+            .real => |v| c.lua_pushnumber(self.L, v),
             .vec2 => |v| pushUserData(lua, .vec2, v),
             .vec3 => |v| pushUserData(lua, .vec3, v),
             .vec4 => |v| pushUserData(lua, .vec4, v),
             .quat => |v| pushUserData(lua, .quat, v),
-            .color => |v| pushUserData(lua, .vec4, v.rgba),
+            .mat3 => |_| {},
+            .mat4 => |_| {},
+            .box2 => |_| {},
+            .box3 => |_| {},
             .string => |v| _ = c.lua_pushlstring(lua, v.ptr, v.len),
+            .color => |v| pushUserData(lua, .vec4, v.rgba),
             .id => |v| c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(v)))),
+            .module => |v| c.lua_pushinteger(lua, @intCast(v.index)),
+            .function => |v| c.lua_pushinteger(lua, @intCast(v.index)),
+            .enumeration => |v| c.lua_pushinteger(lua, @intCast(v)),
         }
         return 1;
     } else {
@@ -567,8 +561,10 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
             c.lua_setfield(self.L, -2, func.name);
         }
         for (module.enums.items) |*enu| {
-            c.lua_pushinteger(self.L, @intCast(enu.value));
-            c.lua_setfield(self.L, -2, enu.name);
+            for (enu.values) |value| {
+                c.lua_pushinteger(self.L, @intCast(value.value));
+                c.lua_setfield(self.L, -2, value.name);
+            }
         }
         c.lua_setglobal(self.L, module.name);
     }

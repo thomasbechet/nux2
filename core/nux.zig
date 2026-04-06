@@ -157,7 +157,9 @@ pub const Core = struct {
                 inline for (@typeInfo(T).@"struct".fields) |field| {
                     switch (@typeInfo(field.type)) {
                         .pointer => |info| {
-                            if (info.child != u8) {
+                            if (info.child == Core) {
+                                @field(mod, field.name) = core;
+                            } else if (info.child != u8) {
                                 if (core.getModuleByType(info.child)) |dependency| {
                                     @field(mod, field.name) = dependency;
                                 }
@@ -278,25 +280,20 @@ pub const Core = struct {
         }
 
         // Register enums
-        const Enums = @field(ModuleInfo, "Enums");
+        const Enums = ModuleInfo.Enums;
         inline for (@typeInfo(Enums).@"struct".decls) |enum_decl| {
             const EnumInfo = @field(Enums, enum_decl.name);
-            const EnumValues = @field(EnumInfo, "Values");
-            inline for (@typeInfo(EnumValues).@"struct".decls) |value_decl| {
-                const EnumValue = @field(EnumValues, value_decl.name);
-                const value = @field(EnumValue, "value");
-                const name = @field(EnumValue, "name");
-                if (EnumInfo.is_bitfield) {
-                    try module.enums.append(self.platform.allocator, .{
-                        .name = name,
-                        .value = @as(u32, @bitCast(value)),
-                    });
-                } else {
-                    try module.enums.append(self.platform.allocator, .{
-                        .name = name,
-                        .value = @intFromEnum(value),
-                    });
-                }
+            const values = comptime Enum.getValues(EnumInfo);
+            if (EnumInfo.is_bitfield) {
+                try module.enums.append(self.platform.allocator, .{
+                    .name = EnumInfo.name,
+                    .values = values,
+                });
+            } else {
+                try module.enums.append(self.platform.allocator, .{
+                    .name = EnumInfo.name,
+                    .values = values,
+                });
             }
         }
 
@@ -334,8 +331,8 @@ pub const Core = struct {
         }
 
         // Start sequence
-        for (core.modules.items, 0..) |*module, id| {
-            try module.init(core, id);
+        for (core.modules.items, 0..) |*module, index| {
+            try module.init(core, .{ .index = index });
         }
         for (core.modules.items) |*module| {
             try module.start();
@@ -411,10 +408,10 @@ pub const Core = struct {
     }
 
     pub fn getModule(self: *Core, id: ModuleID) !*Module.Module {
-        if (id >= self.modules.items.len) {
+        if (id.index >= self.modules.items.len) {
             return error.InvalidModuleID;
         }
-        return &self.modules.items[id];
+        return &self.modules.items[id.index];
     }
 
     pub fn getModuleByType(self: *Core, comptime T: type) ?*T {

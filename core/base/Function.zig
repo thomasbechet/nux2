@@ -23,19 +23,22 @@ pub const Parameter = struct {
 
 pub fn getParameters(comptime T: type) []const Parameter {
     const decls = @typeInfo(T).@"struct".decls;
-
     comptime var tmp: [decls.len]Parameter = undefined;
-
     inline for (decls, 0..) |decl, i| {
         const param = @field(T, decl.name);
-        tmp[i] = .{
-            .name = param.name,
-            .typ = param.primitive,
-        };
+        if (@hasDecl(param, "primitive")) {
+            tmp[i] = .{
+                .name = param.name,
+                .typ = param.primitive,
+            };
+        } else {
+            tmp[i] = .{
+                .name = param.name,
+                .typ = .enumeration,
+            };
+        }
     }
-
-    const result = tmp; // <- copy into a const
-
+    const result = tmp;
     return &result;
 }
 
@@ -86,26 +89,13 @@ pub const Type = struct {
                     if (type_info == .@"enum") {
                         @field(call_args, field_name) = std.enums.fromInt(
                             ParamType,
-                            (try args.next(args, .enumeration)).u32,
+                            (try args.next(args, .enumeration)).enumeration,
                         ) orelse return error.InvalidEnumValue;
                     } else {
-                        @field(call_args, field_name) = switch (ParamType) {
-                            u8 => @intCast((try args.next(args, .int)).int),
-                            i32 => @intCast((try args.next(args, .int)).int),
-                            u32 => @intCast((try args.next(args, .int)).int),
-                            f32 => @floatCast((try args.next(args, .real)).real),
-                            f64 => @floatCast((try args.next(args, .real)).real),
-                            nux.Vec2i => (try args.next(args, .vec2)).vec2,
-                            nux.Vec3 => (try args.next(args, .vec3)).vec3,
-                            nux.Quat => (try args.next(args, .quat)).quat,
-                            []const u8 => (try args.next(args, .string)).string,
-                            nux.Color => (try args.next(args, .color)).color,
-                            nux.ID => (try args.next(args, .id)).id,
-                            nux.ModuleID => (try args.next(args, .module)).module,
-                            else => {
-                                @compileError("Unsupported argument type " ++ @typeName(ParamType));
-                            },
-                        };
+                        @field(call_args, field_name) = (try args.next(
+                            args,
+                            params[i - 1].typ,
+                        )).into(ParamType);
                     }
                 }
 

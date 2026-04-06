@@ -5,55 +5,68 @@ pub const MultiArray = std.MultiArrayList(Value);
 
 pub const Type = enum(u32) {
     bool,
-    u8,
-    i32,
-    u32,
-    f32,
-    f64,
+    int,
+    real,
     vec2,
-    vec2i,
     vec3,
     vec4,
-    vec4i,
     quat,
     mat3,
     mat4,
     box2,
-    box2i,
     box3,
-    box3i,
     string,
-    id,
     color,
+    id,
     module,
     function,
+    enumeration,
+
+    fn fromType(comptime T: type) Type {
+        return switch(T) {
+            bool => .bool, 
+            u8 => .int,
+            i32 => .int,
+            u32 => .int,
+            i64 => .int,
+            u64 => .int,
+            f32 => .real,
+            f64 => .real,
+            nux.Vec2 => .vec2,
+            nux.Vec2i => .vec2,
+            nux.Vec3 => .vec3,
+            nux.Vec3i => .vec3,
+            nux.Vec4 => .vec4,
+            nux.Vec4i => .vec4,
+            nux.Quat => .quat,
+            []const u8 => .string,
+            nux.ID => .id,
+            nux.ModuleID => .module,
+            nux.FunctionID => .function,
+            nux.EnumID => .enumeration,
+            else => @compileError("Unsupported type " ++ @typeName(T)),
+        };
+    }
 };
 
 pub const Value = union(Type) {
     bool: bool,
-    u8: u8,
-    i32: i32,
-    u32: u32,
-    f32: f32,
-    f64: f64,
+    int: i64,
+    real: f64,
     vec2: nux.Vec2,
-    vec2i: nux.Vec2i,
     vec3: nux.Vec3,
     vec4: nux.Vec4,
-    vec4i: nux.Vec4i,
     quat: nux.Quat,
     mat3: nux.Mat3,
     mat4: nux.Mat4,
     box2: nux.Box2,
-    box2i: nux.Box2i,
     box3: nux.Box3,
-    box3i: nux.Box3i,
     string: []const u8,
-    id: nux.ID,
     color: nux.Color,
+    id: nux.ID,
     module: nux.ModuleID,
-    function: nux.Function,
-    @"enum": nux.Enum,
+    function: nux.FunctionID,
+    enumeration: nux.EnumID,
 
     pub fn from(comptime T: type, value: T) Value {
         switch (T) {
@@ -71,24 +84,13 @@ pub const Value = union(Type) {
             nux.Vec3i => return .{ .vec3 = value.as(nux.Vec3) },
             nux.Vec4 => return .{ .vec4 = value.as(nux.Vec4) },
             nux.Vec4i => return .{ .vec4 = value.as(nux.Vec4) },
+            nux.Quat => return .{ .quat = value },
             []const u8 => return .{ .string = value },
             nux.ID => return .{ .id = value },
             nux.ModuleID => return .{ .module = value },
             nux.FunctionID => return .{ .function = value },
+            nux.EnumID => return .{ .enumeration = value },
             else => @compileError("Unsupported type " ++ @typeName(T)),
         }
-    }
-
-    fn into(comptime T: type, value: Value) T {
-        _ = value;
-        switch (T) {
-            else => @compileError("Unsupported type " ++ @typeName(T)),
-        }
-    }
-    pub fn intoEnum(comptime T: type, value: Value) !T {
-        std.enums.fromInt(
-            T,
-            value.number,
-        ) orelse return error.InvalidEnumValue;
     }
 };

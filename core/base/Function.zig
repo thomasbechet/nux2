@@ -3,9 +3,9 @@ const std = @import("std");
 
 const Self = @This();
 
-const Argument = struct {
-    name: []const u8,
-    typ: nux.Property.Primitive,
+pub const ID = struct {
+    module: nux.ModuleID,
+    index: usize,
 };
 
 pub const ArgParser = struct {
@@ -15,17 +15,18 @@ pub const ArgParser = struct {
     ) anyerror!nux.Primitive.Value,
 };
 
+const Argument = struct {
+    name: []const u8,
+    typ: nux.Property.Type,
+};
+
 pub const Type = struct {
     name: [:0]const u8,
     args: []const Argument,
-};
-
-pub const Function = struct {
-    name: [:0]const u8,
     v_ptr: *anyopaque,
     v_call: *const fn (*anyopaque, args: *ArgParser) anyerror!?nux.Primitive.Value,
 
-    pub fn call(self: *Function, args: *ArgParser) !?nux.Primitive.Value {
+    pub fn call(self: *Type, args: *ArgParser) !?nux.Primitive.Value {
         return self.v_call(self.v_ptr, args);
     }
 
@@ -34,12 +35,28 @@ pub const Function = struct {
         comptime T: type,
         comptime method: anytype,
         module: *T,
-    ) Function {
+    ) Type {
+        const fn_info = @typeInfo(@TypeOf(method)).@"fn";
+        const params = fn_info.params;
+
+        const function_args = blk: {
+            var tmp: [params.len - 1]Argument = undefined;
+            var count: usize = 0;
+            inline for (params, 0..) |param, i| {
+                if (i == 0) continue; // skip self
+                const ParamType = param.type.?;
+                tmp[count] = Argument{
+                    .name = param.name orelse std.fmt.comptimePrint("arg{d}", .{count}),
+                    .typ = comptime nux.Primitive.Type.fromType(ParamType),
+                };
+                count += 1;
+            }
+            break :blk tmp[0..count];
+        };
+
         const Wrapper = struct {
             fn call(ptr: *anyopaque, args: *ArgParser) anyerror!?nux.Primitive.Value {
                 const self: *T = @ptrCast(@alignCast(ptr));
-                const fn_info = @typeInfo(@TypeOf(method)).@"fn";
-                const params = fn_info.params;
 
                 // Build tuple type (excluding self)
                 const ArgTuple = std.meta.Tuple(blk: {
@@ -68,15 +85,18 @@ pub const Function = struct {
                         ) orelse return error.InvalidEnumValue;
                     } else {
                         @field(call_args, field_name) = switch (ParamType) {
-                            u8 => (try args.next(args, .number)).into(u8),
-                            i32 => (try args.next(args, .number)).into(i32),
-                            u32 => (try args.next(args, .number)).into(u32),
-                            nux.ID => (try args.next(args, .id)).id,
-                            nux.Vec2i => (try args.next(args)).vec2,
-                            nux.Vec3 => (try args.next(args)).vec3,
-                            nux.Quat => (try args.next(args)).quat,
+                            u8 => @intCast((try args.next(args, .int)).int),
+                            i32 => @intCast((try args.next(args, .int)).int),
+                            u32 => @intCast((try args.next(args, .int)).int),
+                            f32 => @floatCast((try args.next(args, .real)).real),
+                            f64 => @floatCast((try args.next(args, .real)).real),
+                            nux.Vec2i => (try args.next(args, .vec2)).vec2,
+                            nux.Vec3 => (try args.next(args, .vec3)).vec3,
+                            nux.Quat => (try args.next(args, .quat)).quat,
                             []const u8 => (try args.next(args, .string)).string,
                             nux.Color => (try args.next(args, .color)).color,
+                            nux.ID => (try args.next(args, .id)).id,
+                            nux.ModuleID => (try args.next(args, .module)).module,
                             else => {
                                 @compileError("Unsupported argument type " ++ @typeName(ParamType));
                             },
@@ -95,12 +115,13 @@ pub const Function = struct {
                 };
                 return switch (@TypeOf(value)) {
                     void => null,
-                    else => nux.Primitive.Value.from(@TypeOf(value)),
+                    else => nux.Primitive.Value.from(@TypeOf(value), value),
                 };
             }
         };
-        return Function{
+        return Type{
             .name = name,
+            .args = function_args,
             .v_ptr = module,
             .v_call = Wrapper.call,
         };

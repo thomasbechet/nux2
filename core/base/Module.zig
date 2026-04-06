@@ -3,7 +3,9 @@ const std = @import("std");
 
 const Self = @This();
 
-pub const ID = usize;
+pub const ID = struct {
+    index: usize,
+};
 
 pub const State = enum(u32) {
     created,
@@ -26,8 +28,8 @@ pub const Module = struct {
     v_ptr: *anyopaque,
     v_module: VTable,
     v_component: ?nux.Component.VTable = null,
-    functions: std.ArrayList(nux.Function.Function),
-    enums: std.ArrayList(nux.Enum.Enum),
+    functions: std.ArrayList(nux.Function.Type),
+    enums: std.ArrayList(nux.Enum.Type),
 
     pub fn destroy(self: *@This(), allocator: std.mem.Allocator) void {
         if (self.state == .created) {

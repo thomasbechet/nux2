@@ -13,8 +13,6 @@ pub const Type = enum(u32) {
     quat,
     mat3,
     mat4,
-    box2,
-    box3,
     string,
     color,
     id,
@@ -23,29 +21,32 @@ pub const Type = enum(u32) {
     enumeration,
 
     fn fromType(comptime T: type) Type {
-        return switch(T) {
-            bool => .bool, 
-            u8 => .int,
-            i32 => .int,
-            u32 => .int,
-            i64 => .int,
-            u64 => .int,
-            f32 => .real,
-            f64 => .real,
-            nux.Vec2 => .vec2,
-            nux.Vec2i => .vec2,
-            nux.Vec3 => .vec3,
-            nux.Vec3i => .vec3,
-            nux.Vec4 => .vec4,
-            nux.Vec4i => .vec4,
-            nux.Quat => .quat,
-            []const u8 => .string,
-            nux.ID => .id,
-            nux.ModuleID => .module,
-            nux.FunctionID => .function,
-            nux.EnumID => .enumeration,
-            else => @compileError("Unsupported type " ++ @typeName(T)),
-        };
+        if (@typeInfo(T) == .@"enum") {
+            return .enumeration;
+        } else {
+            return switch (T) {
+                bool => .bool,
+                u8 => .int,
+                i32 => .int,
+                u32 => .int,
+                i64 => .int,
+                u64 => .int,
+                f32 => .real,
+                f64 => .real,
+                nux.Vec2 => .vec2,
+                nux.Vec2i => .vec2,
+                nux.Vec3 => .vec3,
+                nux.Vec3i => .vec3,
+                nux.Vec4 => .vec4,
+                nux.Vec4i => .vec4,
+                nux.Quat => .quat,
+                []const u8 => .string,
+                nux.ID => .id,
+                nux.ModuleID => .module,
+                nux.FunctionID => .function,
+                else => @compileError("Unsupported type " ++ @typeName(T)),
+            };
+        }
     }
 };
 
@@ -66,7 +67,7 @@ pub const Value = union(Type) {
     id: nux.ID,
     module: nux.ModuleID,
     function: nux.FunctionID,
-    enumeration: nux.EnumID,
+    enumeration: u64,
 
     pub fn from(comptime T: type, value: T) Value {
         switch (T) {

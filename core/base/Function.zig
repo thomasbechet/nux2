@@ -15,14 +15,15 @@ pub const ArgParser = struct {
     ) anyerror!nux.Primitive.Value,
 };
 
-const Argument = struct {
+pub const Parameter = struct {
     name: []const u8,
-    typ: nux.Property.Type,
+    typ: nux.Primitive.Type,
+    @"enum": ?nux.EnumID = null,
 };
 
 pub const Type = struct {
     name: [:0]const u8,
-    args: []const Argument,
+    params: []const Parameter,
     v_ptr: *anyopaque,
     v_call: *const fn (*anyopaque, args: *ArgParser) anyerror!?nux.Primitive.Value,
 
@@ -40,12 +41,12 @@ pub const Type = struct {
         const params = fn_info.params;
 
         const function_args = blk: {
-            var tmp: [params.len - 1]Argument = undefined;
+            var tmp: [params.len - 1]Parameter = undefined;
             var count: usize = 0;
             inline for (params, 0..) |param, i| {
                 if (i == 0) continue; // skip self
                 const ParamType = param.type.?;
-                tmp[count] = Argument{
+                tmp[count] = Parameter{
                     .name = param.name orelse std.fmt.comptimePrint("arg{d}", .{count}),
                     .typ = comptime nux.Primitive.Type.fromType(ParamType),
                 };
@@ -121,7 +122,7 @@ pub const Type = struct {
         };
         return Type{
             .name = name,
-            .args = function_args,
+            .params = function_args,
             .v_ptr = module,
             .v_call = Wrapper.call,
         };

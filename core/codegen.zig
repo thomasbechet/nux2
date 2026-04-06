@@ -19,7 +19,6 @@ const PrimitiveType = enum {
     Vec4i,
     Quat,
     Color,
-    Self,
 };
 
 const AstIter = struct {
@@ -63,21 +62,17 @@ const AstIter = struct {
         }
     };
 
-    const Constant = struct {};
-
     const Declaration = struct {
         name: []const u8,
         data: union(enum) {
             function: Function,
             @"enum": Enum,
-            constant: Constant,
         },
 
         fn deinit(self: *Declaration) void {
             switch (self.data) {
                 .function => |*function| function.deinit(),
                 .@"enum" => |*enu| enu.deinit(),
-                else => {},
             }
         }
     };
@@ -165,23 +160,26 @@ const AstIter = struct {
         const name = self.ast.tokenSlice(proto.name_token.?);
 
         // Parse params
-        var params = try self.alloc.alloc(Function.Param, proto.ast.params.len);
+        var params = try self.alloc.alloc(Function.Param, proto.ast.params.len - 1);
         errdefer self.alloc.free(params);
 
         // Iterate params
         var param_it = proto.iterate(self.ast);
+        _ = param_it.next(); // Skip self
         var i: usize = 0;
-        while (param_it.next()) |param| : (i += 1) {
+        while (param_it.next()) |param| {
             const param_name = self.ast.tokenSlice(param.name_token.?);
             if (param.type_expr == null) continue;
             const param_node = self.ast.nodes.get(@intFromEnum(param.type_expr.?));
             switch (param_node.tag) {
                 .identifier => {
                     const param_type = self.ast.tokenSlice(param_node.main_token);
+                    std.debug.print("{s} {d}\n", .{ param_type, proto.ast.params.len });
                     params[i] = .{
                         .ident = param_name,
                         .typ = .{ .name = param_type },
                     };
+                    i += 1;
                 },
                 .ptr_type_aligned => {
                     _, const rhs = param_node.data.opt_node_and_node;
@@ -199,6 +197,7 @@ const AstIter = struct {
                         .ident = ptr_name,
                         .typ = .{ .name = ptr_type },
                     };
+                    i += 1;
                 },
                 .field_access => {
                     const typ = try self.fullFieldAccessName(param_node);
@@ -206,6 +205,7 @@ const AstIter = struct {
                         .ident = param_name,
                         .typ = .{ .name = typ },
                     };
+                    i += 1;
                 },
                 else => {
                     return error.Unimplemented;
@@ -237,7 +237,10 @@ const AstIter = struct {
                 .function = .{
                     .alloc = self.alloc,
                     .params = params,
-                    .ret = .{ .name = return_type },
+                    .ret = if (std.mem.eql(u8, return_type, "void"))
+                        null
+                    else
+                        .{ .name = return_type },
                     .throw_error = throw_error,
                 },
             },
@@ -284,10 +287,6 @@ const AstIter = struct {
             },
             else => {},
         }
-        return error.Unsupported;
-    }
-    fn parseConstant(self: *AstIter) !Constant {
-        _ = self;
         return error.Unsupported;
     }
 
@@ -371,13 +370,14 @@ const Modules = struct {
 
     fn resolveType(modules: []Module, typ: *AstIter.Type, source: []const u8) !void {
 
-        // Remove nux.
+        // Remove "nux."
         var name = typ.name;
         if (std.mem.startsWith(u8, typ.name, "nux.")) {
             name = typ.name[4..];
         }
 
         // Try resolve primitive
+
         if (std.meta.stringToEnum(PrimitiveType, name)) |primitive| {
             typ.resolved = .{ .primitive = primitive };
             return;
@@ -463,7 +463,6 @@ const Modules = struct {
                 switch (next.data) {
                     .function => |*func| try functions.putNoClobber(next.name, func.*),
                     .@"enum" => |*enu| try enums.putNoClobber(next.name, enu.*),
-                    else => {},
                 }
             }
 
@@ -630,6 +629,11 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
                 module.name,
                 function.key_ptr.*,
             });
+            try writer.print("\t\t\tpub const params: []const nux.Function.Parameter = &.{{\n", .{});
+            for (function.value_ptr.params) |param| {
+                try writer.print("\t\t\t\t.{{ .name = \"{s}\", .typ = .int }},\n", .{param.ident});
+            }
+            try writer.print("\t\t\t}};\n", .{});
             try writer.print("\t\t}};\n", .{});
         }
         try writer.print("\t}};\n", .{});

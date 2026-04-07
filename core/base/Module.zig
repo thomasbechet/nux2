@@ -38,7 +38,6 @@ pub const Module = struct {
         }
     }
     pub fn init(self: *@This(), core: *nux.Core, id: nux.ModuleID) !void {
-        std.log.info("INIT {s}", .{self.name});
         std.debug.assert(self.state == .created);
         if (self.v_component) |v_component| {
             const node = core.getModuleByType(nux.Node) orelse unreachable;
@@ -53,7 +52,6 @@ pub const Module = struct {
         self.state = .initialized;
     }
     pub fn deinit(self: *@This()) void {
-        std.log.info("DEINIT {s}", .{self.name});
         if (self.state == .initialized) {
             self.v_module.deinit(self.v_ptr);
             if (self.v_component) |v_component| {
@@ -63,13 +61,11 @@ pub const Module = struct {
         }
     }
     pub fn start(self: *@This()) !void {
-        std.log.info("START {s}", .{self.name});
         std.debug.assert(self.state == .initialized);
         try self.v_module.start(self.v_ptr);
         self.state = .started;
     }
     pub fn stop(self: *@This()) void {
-        std.log.info("STOP {s}", .{self.name});
         if (self.state == .started) {
             self.v_module.stop(self.v_ptr);
             self.state = .initialized;
@@ -77,12 +73,15 @@ pub const Module = struct {
     }
 };
 
-core: *const nux.Core,
-
-pub fn init(self: *Self, core: *const nux.Core) !void {
-    self.core = core;
-}
+core: *nux.Core,
 
 pub fn find(self: *Self, name: []const u8) ?ID {
     return self.core.names.get(name);
+}
+pub fn count(self: *Self) u32 {
+    return @intCast(self.core.modules.items.len);
+}
+pub fn getName(self: *Self, index: u32) ![]const u8 {
+    const module = try self.core.getModuleByIndex(@intCast(index));
+    return module.name;
 }

@@ -119,7 +119,7 @@ pub const Core = struct {
         comptime format: []const u8,
         args: anytype,
     ) void {
-        if (self.findModule(Logger)) |logger| {
+        if (self.getModuleByType(Logger)) |logger| {
             logger.info(format, args);
         }
     }
@@ -145,8 +145,6 @@ pub const Core = struct {
         module.enums = .empty;
         module.state = .created;
         module.v_component = null;
-
-        std.log.info("CREATE {s}", .{module_name});
 
         // Register module
         const module_gen = struct {
@@ -323,15 +321,18 @@ pub const Core = struct {
 
         // Create modules
         inline for (@typeInfo(modules).@"struct".decls) |mod| {
+            core.log("CREATE {s}", .{mod.name});
             const ModuleInfo = @field(modules, mod.name);
             try core.register(ModuleInfo);
         }
 
         // Start sequence
         for (core.modules.items, 0..) |*module, index| {
+            core.log("INIT {s}", .{module.name});
             try module.init(core, .{ .index = index });
         }
         for (core.modules.items) |*module| {
+            core.log("START {s}", .{module.name});
             try module.start();
         }
 
@@ -360,12 +361,16 @@ pub const Core = struct {
         var i: usize = self.modules.items.len;
         while (i > 0) {
             i -= 1;
-            self.modules.items[i].stop();
+            const module = &self.modules.items[i];
+            self.log("STOP {s}", .{module.name});
+            module.stop();
         }
         i = self.modules.items.len;
         while (i > 0) {
             i -= 1;
-            self.modules.items[i].deinit();
+            const module = &self.modules.items[i];
+            self.log("DEINIT {s}", .{module.name});
+            module.deinit();
         }
 
         // Destroy modules
@@ -409,10 +414,14 @@ pub const Core = struct {
     }
 
     pub fn getModule(self: *Core, id: ModuleID) !*Module.Module {
-        if (id.index >= self.modules.items.len) {
+        return self.getModuleByIndex(id.index);
+    }
+
+    pub fn getModuleByIndex(self: *Core, index: usize) !*Module.Module {
+        if (index >= self.modules.items.len) {
             return error.InvalidModuleID;
         }
-        return &self.modules.items[id.index];
+        return &self.modules.items[index];
     }
 
     pub fn getModuleByType(self: *Core, comptime T: type) ?*T {

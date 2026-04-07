@@ -19,8 +19,24 @@
             "ignore_all": true
         },
         {
+            "path": "base/Primitive.zig",
+            "ignore": [
+                "Value"
+            ]
+        },
+        {
             "path": "base/Module.zig",
-            "ignore_all": true
+            "ignore": [
+                "Module",
+                "VTable"
+            ]
+        },
+        {
+            "path": "base/Function.zig",
+            "ignore": [
+                "Type",
+                "Parameter"
+            ]
         },
         {
             "path": "base/Node.zig",

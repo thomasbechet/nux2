@@ -76,15 +76,18 @@ pub const Value = union(Type) {
     enumeration: u64,
 
     pub fn from(comptime T: type, value: T) Value {
+        if (@typeInfo(T) == .@"enum") {
+            return .{ .int = @intFromEnum(value) };
+        }
         switch (T) {
             bool => return .{ .bool = value },
-            u8 => return .{ .number = @floatFromInt(value) },
-            i32 => return .{ .number = @floatFromInt(value) },
-            u32 => return .{ .number = @floatFromInt(value) },
-            i64 => return .{ .number = @floatFromInt(value) },
-            u64 => return .{ .number = @floatFromInt(value) },
-            f32 => return .{ .number = @floatCast(value) },
-            f64 => return .{ .number = @floatCast(value) },
+            u8 => return .{ .int = @intCast(value) },
+            i32 => return .{ .int = @intCast(value) },
+            u32 => return .{ .int = @intCast(value) },
+            i64 => return .{ .int = @intCast(value) },
+            u64 => return .{ .int = @intCast(value) },
+            f32 => return .{ .real = @floatCast(value) },
+            f64 => return .{ .real = @floatCast(value) },
             nux.Vec2 => return .{ .vec2 = value.as(nux.Vec2) },
             nux.Vec2i => return .{ .vec2 = value.as(nux.Vec2) },
             nux.Vec3 => return .{ .vec3 = value.as(nux.Vec3) },
@@ -97,12 +100,14 @@ pub const Value = union(Type) {
             nux.ID => return .{ .id = value },
             nux.ModuleID => return .{ .module = value },
             nux.FunctionID => return .{ .function = value },
-            nux.EnumID => return .{ .enumeration = value },
             else => @compileError("Unsupported type " ++ @typeName(T)),
         }
     }
 
     pub fn into(value: Value, comptime T: type) T {
+        if (@typeInfo(T) == .@"enum") {
+            return .int;
+        }
         switch (T) {
             bool => return value.bool,
             u8 => return @intCast(value.int),
@@ -124,7 +129,6 @@ pub const Value = union(Type) {
             nux.ID => return value.id,
             nux.ModuleID => return value.module,
             nux.FunctionID => return value.function,
-            nux.EnumID => return value.enumeration,
             else => @compileError("Unsupported type " ++ @typeName(T)),
         }
     }

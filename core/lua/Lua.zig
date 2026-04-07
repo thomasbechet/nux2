@@ -452,7 +452,14 @@ fn checkModuleID(self: *Self, index: c_int) nux.ModuleID {
         _ = c.lua_getfield(self.L, index, "id");
         return .{ .index = @intCast(c.luaL_checkinteger(self.L, -1)) };
     }
-    _ = c.luaL_error(self.L, "invalid component id value");
+    _ = c.luaL_error(self.L, "invalid module id value");
+    unreachable;
+}
+fn checkFunctionID(self: *Self, index: c_int) nux.FunctionID {
+    if (c.lua_isinteger(self.L, index) != 0) {
+        return .{ .index = @intCast(c.luaL_checkinteger(self.L, index)) };
+    }
+    _ = c.luaL_error(self.L, "invalid function id value");
     unreachable;
 }
 
@@ -479,6 +486,7 @@ const LuaArgParser = struct {
             .color => .{ .color = .fromVec(Self.checkUserData(self.lua.L, .vec4, index).vec4) },
             .id => .{ .id = self.lua.checkID(index) },
             .module => .{ .module = self.lua.checkModuleID(index) },
+            .function => .{ .function = self.lua.checkFunctionID(index) },
             .enumeration => .{ .enumeration = @as(u64, @intCast(c.luaL_checkinteger(self.lua.L, index))) },
             else => .{ .int = 0 },
         };
@@ -573,12 +581,14 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.modules = .init(self.allocator);
 }
 pub fn deinit(self: *Self) void {
+
     // Deinitialize modules
     var it = self.modules.valueIterator();
     while (it.next()) |module| {
         self.unloadModule(module.*);
     }
     self.modules.deinit();
+
     // Delete VM
     c.lua_close(self.L);
 }
@@ -595,31 +605,43 @@ pub fn logModules(self: *Self) !void {
     }
 }
 pub fn loadModule(self: *Self, path: []const u8) !*Module {
+
     // Setup module
     const module = try self.allocator.create(Module);
     module.path = try self.allocator.dupe(u8, path);
     try self.modules.put(module.path, module);
     module.ref = 0;
     module.signals = .empty;
+    errdefer { // Free resources on error during module loading
+        _ = self.modules.remove(module.path);
+        self.allocator.destroy(module);
+        self.allocator.free(module.path);
+    }
+
     // Load file
     try self.loadModuleFile(module);
+
     // Call init
     // TODO: avoid reentrant function by deferring initialization function
     try self.callModule(module, "onInit", 0);
     return module;
 }
 fn unloadModule(self: *Self, module: *Module) void {
+
     // Call deinit
     self.callModule(module, "onDeinit", 0) catch {};
+
     // Disconnect singals
     for (module.signals.items) |signal| {
         _ = signal;
         // try self.signal.disconnect(signal, .{});
     }
+
     // Unregister lua module
     if (module.ref != 0) {
         c.luaL_unref(self.L, c.LUA_REGISTRYINDEX, module.ref);
     }
+
     // Free path
     self.allocator.free(module.path);
     self.allocator.destroy(module);

@@ -120,8 +120,20 @@ const AstIter = struct {
             .identifier => {
                 return std.mem.trim(u8, self.ast.tokenSlice(node.main_token), " ");
             },
-            else => return error.Unsupported,
+            .ptr_type_aligned => {
+                _, const rhs = node.data.opt_node_and_node;
+                const ptr_node = self.ast.nodes.get(@intFromEnum(rhs));
+                const ptr_type = self.ast.tokenSlice(ptr_node.main_token);
+                const ptr_name = self.ast.tokenSlice(ptr_node.main_token - 3);
+
+                // Patch for strings parameter
+                if (std.mem.eql(u8, ptr_name, "[") and std.mem.eql(u8, ptr_type, "u8")) {
+                    return "string";
+                }
+            },
+            else => {},
         }
+        return error.Unsupported;
     }
 
     fn isIgnored(self: *const AstIter, name: []const u8) bool {
@@ -384,8 +396,6 @@ const Modules = struct {
             u32,
             f32,
             string,
-            ID,
-            ModuleID,
             Vec2,
             Vec2i,
             Vec3,
@@ -394,6 +404,9 @@ const Modules = struct {
             Vec4i,
             Quat,
             Color,
+            ID,
+            ModuleID,
+            FunctionID,
         };
         if (std.meta.stringToEnum(Primitive, name)) |primitive| {
             const primitive_type: nux.Primitive.Type = switch (primitive) {
@@ -401,8 +414,6 @@ const Modules = struct {
                 Primitive.u32 => .int,
                 Primitive.f32 => .real,
                 Primitive.string => .string,
-                Primitive.ID => .id,
-                Primitive.ModuleID => .module,
                 Primitive.Vec2 => .vec2,
                 Primitive.Vec2i => .vec2,
                 Primitive.Vec3 => .vec3,
@@ -411,6 +422,9 @@ const Modules = struct {
                 Primitive.Vec4i => .vec4,
                 Primitive.Quat => .quat,
                 Primitive.Color => .color,
+                Primitive.ID => .id,
+                Primitive.ModuleID => .module,
+                Primitive.FunctionID => .function,
             };
             typ.resolved = .{ .primitive = primitive_type };
             return;
@@ -639,7 +653,6 @@ fn toUpperCase(alloc: Allocator, s: []const u8) !ArrayList(u8) {
 }
 
 fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules) !void {
-    try modules.print();
     try writer.print("const nux = @import(\"nux.zig\");\n", .{});
     for (modules.modules.items) |*module| {
         try writer.print("pub const {s} = struct {{\n", .{module.name});

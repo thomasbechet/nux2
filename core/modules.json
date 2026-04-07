@@ -8,31 +8,21 @@
         {
             "path": "base/Node.zig",
             "ignore": [
-                "ComponentType",
                 "ID",
-                "NodeEntry",
-                "registerComponentModule",
-                "getType",
-                "findType",
                 "iterChildren",
                 "iterComponents",
                 "visit",
-                "collect",
                 "collectInto",
                 "setNameFormat",
                 "Reader",
-                "Writer",
-                "has"
+                "Writer"
             ]
         },
         {
             "path": "base/Component.zig",
             "ignore": [
                 "Components",
-                "VTable",
-                "registerModule",
-                "get",
-                "find"
+                "VTable"
             ]
         },
         {
@@ -48,17 +38,18 @@
         {
             "path": "base/File.zig",
             "ignore": [
-                "read",
                 "stat",
                 "glob",
-                "writeFile",
                 "Writer",
-                "FileList",
-                "readAligned"
+                "FileList"
             ]
         },
         {
             "path": "base/Logger.zig",
+            "ignore_all": true
+        },
+        {
+            "path": "base/Config.zig",
             "ignore_all": true
         },
         {
@@ -69,6 +60,13 @@
         },
         {
             "path": "base/Transform.zig"
+        },
+        {
+            "path": "graphics/Window.zig"
+        },
+        {
+            "path": "graphics/GPU.zig",
+            "ignore_all": true
         },
         {
             "path": "input/Input.zig"
@@ -107,6 +105,9 @@
         },
         {
             "path": "ui/Viewport.zig"
+        },
+        {
+            "path": "ui/Font.zig"
         },
         {
             "path": "ui/Widget.zig",

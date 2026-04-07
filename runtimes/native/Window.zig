@@ -76,7 +76,7 @@ fn close(ctx: *anyopaque) void {
     const self: *Self = @ptrCast(@alignCast(ctx));
     self.deinit();
 }
-fn resize(_: *anyopaque, _: u32, _: u32) anyerror!void {}
+fn resize(_: *anyopaque, _: u32, _: u32) void {}
 
 pub fn init() Self {
     key_map[c.GLFW_KEY_SPACE] = .space;

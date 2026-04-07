@@ -9,6 +9,7 @@ const AstIter = struct {
     ast: *const Ast,
     slice: []const Ast.Node.Index,
     ignore: ?[][]const u8 = null,
+    ignore_counts: ?[]usize = null,
     ignore_all: bool = false,
 
     const Type = struct {
@@ -68,13 +69,28 @@ const AstIter = struct {
         ast: *const Ast,
         module: *const ModuleJson,
     ) !AstIter {
+        const ignore_counts = if (module.ignore != null)
+            try alloc.alloc(usize, module.ignore.?.len)
+        else
+            null;
+        if (ignore_counts) |counts| {
+            for (counts) |*count| {
+                count.* = 0;
+            }
+        }
         return .{
             .alloc = alloc,
             .ast = ast,
             .slice = ast.rootDecls(),
             .ignore = module.ignore,
             .ignore_all = module.ignore_all,
+            .ignore_counts = ignore_counts,
         };
+    }
+    pub fn deinit(self: *AstIter) void {
+        if (self.ignore_counts) |ignore_counts| {
+            self.alloc.free(ignore_counts);
+        }
     }
 
     fn fullFieldAccessName(
@@ -129,8 +145,9 @@ const AstIter = struct {
             }
         }
         if (self.ignore) |ignore_list| {
-            for (ignore_list) |ignore_name| {
+            for (ignore_list, 0..) |ignore_name, i| {
                 if (std.mem.eql(u8, ignore_name, name)) {
+                    self.ignore_counts.?.ptr[i] += 1;
                     ignore = true;
                     break;
                 }
@@ -160,7 +177,6 @@ const AstIter = struct {
             switch (param_node.tag) {
                 .identifier => {
                     const param_type = self.ast.tokenSlice(param_node.main_token);
-                    std.debug.print("{s} {d}\n", .{ param_type, proto.ast.params.len });
                     params[i] = .{
                         .ident = param_name,
                         .typ = .{ .name = param_type },
@@ -473,16 +489,43 @@ const Modules = struct {
 
             // Allocate items
             var functions = std.StringHashMap(AstIter.Function).init(alloc);
-            errdefer functions.deinit();
+            errdefer {
+                var it = functions.valueIterator();
+                while (it.next()) |*function| {
+                    function.*.deinit();
+                }
+                functions.deinit();
+            }
             var enums = std.StringHashMap(AstIter.Enum).init(alloc);
-            errdefer enums.deinit();
+            errdefer {
+                var it = enums.valueIterator();
+                while (it.next()) |*enu| {
+                    enu.*.deinit();
+                }
+                enums.deinit();
+            }
 
             // Filter items
             var it = try AstIter.init(alloc, &ast, &module);
+            defer it.deinit();
             while (try it.next()) |next| {
                 switch (next.data) {
                     .function => |*func| try functions.putNoClobber(next.name, func.*),
                     .@"enum" => |*enu| try enums.putNoClobber(next.name, enu.*),
+                }
+            }
+
+            // Check ignore counts
+            if (it.ignore_counts) |ignore_counts| {
+                var has_useless_ignore = false;
+                for (ignore_counts, 0..) |count, i| {
+                    if (count == 0) {
+                        std.log.err("Useless ignore '{s}' for {s}", .{ it.ignore.?.ptr[i], module.path });
+                        has_useless_ignore = true;
+                    }
+                }
+                if (has_useless_ignore) {
+                    return error.UselessIgnore;
                 }
             }
 

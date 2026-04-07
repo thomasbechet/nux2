@@ -146,7 +146,7 @@ pub const Core = struct {
         module.state = .created;
         module.v_component = null;
 
-        std.log.info("REGISTER {s}", .{module_name});
+        std.log.info("CREATE {s}", .{module_name});
 
         // Register module
         const module_gen = struct {
@@ -191,9 +191,6 @@ pub const Core = struct {
                 const mod: *T = @ptrCast(@alignCast(pointer));
                 if (@hasDecl(T, "deinit")) {
                     mod.deinit();
-                }
-                if (has_components) {
-                    @field(mod, Component.module_components_field).deinit();
                 }
             }
             fn start(pointer: *anyopaque) !void {
@@ -359,12 +356,16 @@ pub const Core = struct {
 
     pub fn deinit(self: *Core) void {
 
-        // Stop sequence
-        for (self.modules.items) |*module| {
-            module.stop();
+        // Stop sequence (in reverse)
+        var i: usize = self.modules.items.len;
+        while (i > 0) {
+            i -= 1;
+            self.modules.items[i].stop();
         }
-        for (self.modules.items) |*module| {
-            module.deinit();
+        i = self.modules.items.len;
+        while (i > 0) {
+            i -= 1;
+            self.modules.items[i].deinit();
         }
 
         // Destroy modules

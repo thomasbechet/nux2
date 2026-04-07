@@ -67,6 +67,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 
     // Load default configuration
     try self.parse(default_ini);
+    try self.loadINI();
 }
 pub fn deinit(self: *Self) void {
     self.config.deinit();
@@ -74,9 +75,6 @@ pub fn deinit(self: *Self) void {
         self.allocator.free(ini);
     }
     self.ini_files.deinit(self.allocator);
-}
-pub fn onStart(self: *Self) !void {
-    try self.loadINI();
 }
 pub fn loadINI(self: *Self) !void {
     const ini = try self.file.read("conf.ini", self.allocator);

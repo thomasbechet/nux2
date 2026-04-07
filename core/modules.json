@@ -2,6 +2,23 @@
     "rootpath": "..",
     "modules": [
         {
+            "path": "base/File.zig",
+            "ignore": [
+                "stat",
+                "glob",
+                "Writer",
+                "FileList"
+            ]
+        },
+        {
+            "path": "base/Logger.zig",
+            "ignore_all": true
+        },
+        {
+            "path": "base/Config.zig",
+            "ignore_all": true
+        },
+        {
             "path": "base/Module.zig",
             "ignore_all": true
         },
@@ -34,23 +51,6 @@
                 "connect",
                 "disconnect"
             ]
-        },
-        {
-            "path": "base/File.zig",
-            "ignore": [
-                "stat",
-                "glob",
-                "Writer",
-                "FileList"
-            ]
-        },
-        {
-            "path": "base/Logger.zig",
-            "ignore_all": true
-        },
-        {
-            "path": "base/Config.zig",
-            "ignore_all": true
         },
         {
             "path": "base/Cart.zig",

@@ -1,6 +1,7 @@
 const std = @import("std");
 const nux = @import("nux");
 const Logger = @import("Logger.zig");
+const File = @import("File.zig");
 
 export fn runtime_init() void {
     var c = nux.Core.init(.{
@@ -13,7 +14,17 @@ export fn runtime_init() void {
         },
         .file = .{
             .ptr = undefined,
-            .vtable = &.{},
+            .vtable = &.{
+                .open = File.open,
+                .close = File.close,
+                .seek = File.seek,
+                .read = File.read,
+                .write = File.write,
+                .stat = File.stat,
+                .open_dir = File.openDir,
+                .close_dir = File.closeDir,
+                .next = File.next,
+            },
         },
     }) catch unreachable;
     defer c.deinit();

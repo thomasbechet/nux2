@@ -87,12 +87,15 @@ const Component = struct {
         return texture;
     }
     fn initFromFile(mod: *Self, path: []const u8) !Component {
+
         // Read file
         const data = try mod.file.read(path, mod.allocator);
         errdefer mod.allocator.free(data);
+
         // Load image
         var image = try zigimg.Image.fromMemory(mod.allocator, data);
         defer image.deinit(mod.allocator);
+
         // Set as source
         return .{
             .data = data,

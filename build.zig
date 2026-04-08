@@ -142,6 +142,7 @@ fn configCore(b: *std.Build, config: Config) void {
             .{ .name = "wren", .module = wren_mod },
             .{ .name = "zclay", .module = zclay_pkg.module("zclay") },
         },
+        // .strip = false,
     });
     core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
     core.addIncludePath(b.path("externals/lua-5.5.0/"));
@@ -158,6 +159,7 @@ fn configNative(b: *std.Build, config: Config) void {
     // glfw
     const glfw_dep = b.dependency("glfw", .{ .target = config.target, .optimize = config.optimize });
     const glfw_lib = glfw_dep.artifact("glfw");
+
     // zigglgen
     const zigglgen = @import("zigglgen").generateBindingsModule(b, .{
         .api = .gl,
@@ -165,6 +167,7 @@ fn configNative(b: *std.Build, config: Config) void {
         .profile = .core,
         .extensions = &.{},
     });
+
     // native
     const artifact = b.addExecutable(.{
         .name = "nux",

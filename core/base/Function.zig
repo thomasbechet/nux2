@@ -44,7 +44,7 @@ pub fn getParameters(comptime T: type) []const Parameter {
 pub const Type = struct {
     name: [:0]const u8,
     params: []const Parameter,
-    return_type: ?nux.Primitive.Type,
+    // return_type: ?nux.Primitive.Type,
     v_ptr: *anyopaque,
     v_call: *const fn (*anyopaque, args: *ArgParser) anyerror!?nux.Primitive.Value,
 

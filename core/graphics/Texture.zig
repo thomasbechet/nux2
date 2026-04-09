@@ -1,7 +1,9 @@
 const std = @import("std");
 const nux = @import("../nux.zig");
-const zigimg = @import("zigimg");
 const zgltf = @import("zgltf");
+const c = @cImport({
+    @cInclude("stb_image.h");
+});
 
 const Self = @This();
 
@@ -93,8 +95,18 @@ const Component = struct {
         errdefer mod.allocator.free(data);
 
         // Load image
-        var image = try zigimg.Image.fromMemory(mod.allocator, data);
-        defer image.deinit(mod.allocator);
+        var x: c_int = undefined;
+        var y: c_int = undefined;
+        var channels_in_file: c_int = undefined;
+        const image = c.stbi_load_from_memory(
+            @ptrCast(data),
+            @intCast(data.len),
+            &x,
+            &y,
+            &channels_in_file,
+            c.STBI_rgb_alpha,
+        );
+        defer c.stbi_image_free(image);
 
         // Set as source
         return .{
@@ -103,12 +115,29 @@ const Component = struct {
         };
     }
     fn initFromData(mod: *Self, data: []const u8) !Component {
+
         // Load image
-        var img = try zigimg.Image.fromMemory(mod.allocator, data);
-        defer img.deinit(mod.allocator);
-        try img.convert(mod.allocator, .rgba32);
+        var x: c_int = undefined;
+        var y: c_int = undefined;
+        var channels_in_file: c_int = undefined;
+        const image = c.stbi_load_from_memory(
+            @ptrCast(data),
+            @intCast(data.len),
+            &x,
+            &y,
+            &channels_in_file,
+            c.STBI_rgb_alpha,
+        );
+        defer c.stbi_image_free(image);
+        const len: usize = @intCast(x * y * channels_in_file);
+
         // Init node
-        return try .initFromRawPixels(mod, @intCast(img.width), @intCast(img.height), img.rawBytes());
+        return try .initFromRawPixels(
+            mod,
+            @intCast(x),
+            @intCast(y),
+            @ptrCast(image[0..len]),
+        );
     }
     fn initFromRawPixels(mod: *Self, width: u32, height: u32, data: []const u8) !Component {
         return .{

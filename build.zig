@@ -11,33 +11,33 @@ const Config = struct {
 };
 
 fn configCore(b: *std.Build, config: Config) void {
-    // wren
-    const wren_mod = b.createModule(.{
-        .target = config.target,
-        .optimize = config.optimize,
-    });
-    const wren = b.addLibrary(.{
-        .name = "wren",
-        .linkage = .static,
-        .root_module = wren_mod,
-    });
-    wren.linkLibC();
-    wren.addIncludePath(b.path("externals/wren-0.4.0/src/vm/"));
-    wren.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
-    wren.addIncludePath(b.path("externals/wren-0.4.0/src/optional/"));
-    wren.addCSourceFiles(.{
-        .root = b.path("externals/wren-0.4.0/src/"),
-        .files = &.{
-            "vm/wren_compiler.c",
-            "vm/wren_core.c",
-            "vm/wren_debug.c",
-            "vm/wren_primitive.c",
-            "vm/wren_utils.c",
-            "vm/wren_value.c",
-            "vm/wren_vm.c",
-        },
-        .flags = &.{},
-    });
+    // // wren
+    // const wren_mod = b.createModule(.{
+    //     .target = config.target,
+    //     .optimize = config.optimize,
+    // });
+    // const wren = b.addLibrary(.{
+    //     .name = "wren",
+    //     .linkage = .static,
+    //     .root_module = wren_mod,
+    // });
+    // wren.linkLibC();
+    // wren.addIncludePath(b.path("externals/wren-0.4.0/src/vm/"));
+    // wren.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
+    // wren.addIncludePath(b.path("externals/wren-0.4.0/src/optional/"));
+    // wren.addCSourceFiles(.{
+    //     .root = b.path("externals/wren-0.4.0/src/"),
+    //     .files = &.{
+    //         "vm/wren_compiler.c",
+    //         "vm/wren_core.c",
+    //         "vm/wren_debug.c",
+    //         "vm/wren_primitive.c",
+    //         "vm/wren_utils.c",
+    //         "vm/wren_value.c",
+    //         "vm/wren_vm.c",
+    //     },
+    //     .flags = &.{},
+    // });
 
     // lua
     const lua_mod = b.createModule(.{
@@ -111,9 +111,6 @@ fn configCore(b: *std.Build, config: Config) void {
     // zgltf
     const zgltf_pkg = b.dependency("zgltf", .{ .target = config.target, .optimize = config.optimize });
 
-    // zigimg
-    const zigimg_pkg = b.dependency("zigimg", .{ .target = config.target, .optimize = config.optimize });
-
     // codegen
     const codegen = b.addExecutable(.{ .name = "codegen", .root_module = b.createModule(.{
         .target = config.target,
@@ -137,15 +134,18 @@ fn configCore(b: *std.Build, config: Config) void {
         .root_source_file = b.path("core/nux.zig"),
         .imports = &.{
             .{ .name = "zgltf", .module = zgltf_pkg.module("zgltf") },
-            .{ .name = "zigimg", .module = zigimg_pkg.module("zigimg") },
             .{ .name = "lua", .module = lua_mod },
-            .{ .name = "wren", .module = wren_mod },
+            // .{ .name = "wren", .module = wren_mod },
             .{ .name = "zclay", .module = zclay_pkg.module("zclay") },
         },
         .strip = false,
     });
     core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
     core.addIncludePath(b.path("externals/lua-5.5.0/"));
+    core.addIncludePath(b.path("externals/stb/"));
+
+    // stb
+    core.addCSourceFiles(.{ .files = &[_][]const u8{"externals/stb/stb_image.c"}, .flags = &.{"-g"} });
 
     // tests
     const tests = b.addTest(.{ .root_module = core });
@@ -245,7 +245,10 @@ fn configWeb(b: *std.Build, config: Config) void {
     // wasm.verbose_cc
     wasm.entry = .disabled;
     wasm.rdynamic = true;
-    wasm.wasi_exec_model = .reactor;
+    // wasm.wasi_exec_model = .reactor;
+    wasm.wasi_exec_model = null;
+    wasm.lto = .full; // required to remove default platform code
+    // wasm.import_symbols = true;
     // wasm.import_symbols = true;
     // wasm.max_memory = (1 << 28);
     // wasm.import_symbols

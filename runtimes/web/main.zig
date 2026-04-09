@@ -3,7 +3,7 @@ const nux = @import("nux");
 const Logger = @import("Logger.zig");
 const File = @import("File.zig");
 
-export fn runtime_init() void {
+export fn main() void {
     var c = nux.Core.init(.{
         .allocator = std.heap.wasm_allocator,
         .logger = .{

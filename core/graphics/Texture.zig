@@ -2,6 +2,8 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 const zgltf = @import("zgltf");
 const c = @cImport({
+    @cDefine("STB_IMAGE_STATIC", "");
+    @cDefine("STBI_NO_STDIO", "");
     @cInclude("stb_image.h");
 });
 

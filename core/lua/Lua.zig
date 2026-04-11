@@ -35,12 +35,17 @@ node: *nux.Node,
 L: *c.lua_State,
 modules: std.StringHashMap(*Module),
 
-export fn lua_print(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
+comptime {
+    @export(&lua_print, .{ .name = "lua_print", .linkage = .strong });
+    @export(&lua_printerror, .{ .name = "lua_printerror", .linkage = .strong });
+}
+
+fn lua_print(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
     const self: *Self = @ptrCast(@alignCast(ud));
     const str: [*:0]const u8 = std.mem.span(s);
     self.logger.info("{s}", .{str});
 }
-export fn lua_printerror(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
+fn lua_printerror(ud: *anyopaque, s: [*c]const u8) callconv(.c) void {
     const self: *Self = @ptrCast(@alignCast(ud));
     const str: [*:0]const u8 = std.mem.span(s);
     self.logger.err("{s}", .{str});

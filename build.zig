@@ -38,18 +38,8 @@ fn configCore(b: *std.Build, config: Config) void {
     //     },
     //     .flags = &.{},
     // });
+    // core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
 
-    // lua
-    const lua_mod = b.createModule(.{
-        .target = config.target,
-        .optimize = config.optimize,
-    });
-    const lua = b.addLibrary(.{
-        .name = "lua",
-        .linkage = .static,
-        .root_module = lua_mod,
-    });
-    lua.addIncludePath(b.path("externals/lua-5.5.0/"));
     var lua_sources = std.ArrayList([]const u8).initCapacity(b.allocator, 32) catch unreachable;
     defer lua_sources.deinit(b.allocator);
     lua_sources.appendSlice(b.allocator, &.{
@@ -97,13 +87,13 @@ fn configCore(b: *std.Build, config: Config) void {
             "-DLUAI_TRY(L,c,a,u)=a(L,u)",
             "-Dluai_jmpbuf=int",
             "-Djmp_buf=int",
+
             // "-mllvm",
             // "-wasm-enable-sjlj",
             // "--trace-symbol=fd_write"
+            "-g",
         }) catch unreachable;
     }
-    lua.addCSourceFiles(.{ .root = b.path("externals/lua-5.5.0/"), .files = lua_sources.items, .flags = lua_flags.items, .language = .c });
-    lua.linkLibC();
 
     // clay
     const zclay_pkg = b.dependency("zclay", .{ .target = config.target, .optimize = config.optimize });
@@ -134,18 +124,29 @@ fn configCore(b: *std.Build, config: Config) void {
         .root_source_file = b.path("core/nux.zig"),
         .imports = &.{
             .{ .name = "zgltf", .module = zgltf_pkg.module("zgltf") },
-            .{ .name = "lua", .module = lua_mod },
-            // .{ .name = "wren", .module = wren_mod },
             .{ .name = "zclay", .module = zclay_pkg.module("zclay") },
         },
-        .strip = false,
     });
-    core.addIncludePath(b.path("externals/wren-0.4.0/src/include/"));
-    core.addIncludePath(b.path("externals/lua-5.5.0/"));
-    core.addIncludePath(b.path("externals/stb/"));
+    // core.link_libc = true;
+    core.strip = false;
+    core.stack_protector = false;
 
     // stb
-    core.addCSourceFiles(.{ .files = &[_][]const u8{"externals/stb/stb_image.c"}, .flags = &.{"-g"} });
+    core.addIncludePath(b.path("externals/stb/"));
+    core.addCSourceFiles(.{
+        .files = &[_][]const u8{"externals/stb/stb_image.c"},
+        .flags = &.{"-g"},
+    });
+
+    // lua
+    core.addIncludePath(b.path("externals/lua-5.5.0/"));
+    core.addCSourceFiles(.{
+        .root = b.path("externals/lua-5.5.0/"),
+        .files = lua_sources.items,
+        .flags = lua_flags.items,
+        .language = .c,
+    });
+    core.single_threaded = true;
 
     // tests
     const tests = b.addTest(.{ .root_module = core });
@@ -231,33 +232,38 @@ fn configNative(b: *std.Build, config: Config) void {
 fn configWeb(b: *std.Build, config: Config) void {
 
     // web
+    const wasm_mod = b.addModule("wasm", .{
+        .root_source_file = b.path("runtimes/web/main.zig"),
+        .target = config.target,
+        .optimize = config.optimize,
+        .imports = &.{
+            .{ .name = "nux", .module = b.modules.get("nux").? },
+        },
+    });
     const wasm = b.addExecutable(.{
         .name = "nux",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("runtimes/web/main.zig"),
-            .target = config.target,
-            .optimize = config.optimize,
-            .imports = &.{
-                .{ .name = "nux", .module = b.modules.get("nux").? },
-            },
-        }),
+        .root_module = wasm_mod,
+        .linkage = .static,
     });
-    // wasm.verbose_cc
+    // wasm.entry = .{ .symbol_name = "main" };
     wasm.entry = .disabled;
     wasm.rdynamic = true;
-    // wasm.wasi_exec_model = .reactor;
-    wasm.wasi_exec_model = null;
-    wasm.lto = .full; // required to remove default platform code
-    // wasm.import_symbols = true;
-    // wasm.import_symbols = true;
-    // wasm.max_memory = (1 << 28);
-    // wasm.import_symbols
-    // wasm.export_memory = true;
-    // wasm.import_memory = true;
-    // wasm.initial_memory = (1 << 28);
+    wasm.link_gc_sections = true;
+    wasm.wasi_exec_model = .reactor;
+    wasm.lto = .full;
+    wasm.dead_strip_dylibs = true;
+    wasm.linkage = .static;
+    wasm.want_lto = true;
+    wasm.import_symbols = false;
+    wasm.root_module.link_libc = true;
+    wasm.root_module.stack_protector = false;
 
     // install to runtimes/web
-    const install = b.addInstallArtifact(wasm, .{ .dest_dir = .{ .override = .{ .custom = "../runtimes/web/" } } });
+    const install = b.addInstallArtifact(wasm, .{
+        .dest_dir = .{
+            .override = .{ .custom = "../runtimes/web/" },
+        },
+    });
     b.default_step.dependOn(&install.step);
 }
 
@@ -270,6 +276,11 @@ pub fn build(b: *std.Build) void {
             .web => b.resolveTargetQuery(.{
                 .cpu_arch = .wasm32,
                 .os_tag = .wasi,
+                .cpu_features_add = std.Target.wasm.featureSet(&.{
+                    // .atomics,
+                    // .bulk_memory,
+                }),
+                .abi = .musl,
             }),
         },
         .optimize = switch (platform) {

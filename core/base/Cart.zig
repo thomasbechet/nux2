@@ -12,11 +12,11 @@ pub const FileSystem = struct {
     };
     const EntryData = extern struct {
         path_len: u32,
-        data_len: u64,
+        data_len: u32,
     };
     const Entry = struct {
-        offset: u64,
-        length: u64,
+        offset: u32,
+        length: u32,
     };
 
     handle: ?nux.Platform.File.Handle,
@@ -33,14 +33,17 @@ pub const FileSystem = struct {
         cart.handle = null;
         cart.platform = platform;
         errdefer cart.deinit();
+
         // Open file
         cart.handle = try platform.vtable.open(platform.ptr, path, .read);
         errdefer platform.vtable.close(platform.ptr, cart.handle.?);
+
         // Get file stat
         const fstat = try platform.vtable.stat(platform.ptr, path);
         if (fstat.size < @sizeOf(HeaderData)) {
             return error.InvalidCartSize;
         }
+
         // Read header
         var buf: [@sizeOf(HeaderData)]u8 = undefined;
         try platform.vtable.read(platform.ptr, cart.handle.?, &buf);
@@ -52,26 +55,32 @@ pub const FileSystem = struct {
         if (header.version != 1) {
             return error.InvalidCartVersion;
         }
+
         // Read entries
         var entry_buf: [@sizeOf(EntryData)]u8 = undefined;
-        var it: u64 = @sizeOf(HeaderData); // start after header
+        var it: u32 = @sizeOf(HeaderData); // start after header
         while (it < fstat.size) {
+
             // Seek to entry
             try platform.vtable.seek(platform.ptr, cart.handle.?, it);
             try platform.vtable.read(platform.ptr, cart.handle.?, &entry_buf);
+
             // Read entry
             reader = std.Io.Reader.fixed(&entry_buf);
             const entry = try reader.takeStruct(EntryData, .little);
+
             // Read path
             const path_data = try allocator.alloc(u8, entry.path_len);
             errdefer allocator.free(path_data);
             try platform.vtable.read(platform.ptr, cart.handle.?, path_data);
+
             // Add entry
             const offset = it + @sizeOf(EntryData) + entry.path_len;
             try cart.entries.put(path_data, .{
                 .offset = offset,
                 .length = entry.data_len,
             });
+
             // Go to next entry
             it += @sizeOf(EntryData) + entry.path_len + entry.data_len;
         }
@@ -186,6 +195,7 @@ pub fn writeGlob(self: *Self, glob: []const u8) !void {
             }
             const data = try self.file.read(path, self.allocator);
             defer self.allocator.free(data);
+            self.logger.info("write '{s}' ({d} bytes)", .{ path, data.len });
             try self.write(path, data);
         }
     }

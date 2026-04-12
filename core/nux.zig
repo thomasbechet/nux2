@@ -80,15 +80,11 @@ pub const Platform = struct {
         requestExit,
     };
     pub const Config = struct {
-        logModuleInitialization: bool = false,
-        command: union(enum) {
-            run,
-            build: struct {
-                path: []const u8 = "cart.bin",
-                glob: []const u8 = "*",
-            },
-        } = .run,
-        mount: ?[]const u8 = null,
+        logModuleInitialization: bool = false, // Core logging
+        build: bool = false, // Build a cartridge
+        glob: []const u8 = "*", // Glob for cartridge building
+        outpout: []const u8 = "cart.bin", // Cartridge output for building
+        mount: []const u8 = ".", // Entrypoint
     };
     allocator: Platform.Allocator = std.heap.page_allocator,
     logger: Platform.Logger = .{},
@@ -119,8 +115,10 @@ pub const Core = struct {
         comptime format: []const u8,
         args: anytype,
     ) void {
-        if (self.getModuleByType(Logger)) |logger| {
-            logger.info(format, args);
+        if (self.platform.config.logModuleInitialization) {
+            if (self.getModuleByType(Logger)) |logger| {
+                logger.info(format, args);
+            }
         }
     }
     fn registerStageCallback(self: *Core, phase: Stage, callable: Callable) !void {
@@ -340,19 +338,19 @@ pub const Core = struct {
         }
 
         // Handle command
-        switch (core.platform.config.command) {
-            .run => {
-                var lua = core.getModuleByType(Lua) orelse unreachable;
-                _ = try lua.loadModule("init.lua");
-                core.running = true;
-            },
-            .build => |build| {
-                var cart = core.getModuleByType(Cart) orelse unreachable;
-                var logger = core.getModuleByType(Logger) orelse unreachable;
-                try cart.begin(build.path);
-                try cart.writeGlob(build.glob);
-                logger.info("out {s} ({s})", .{ build.path, build.glob });
-            },
+        if (core.platform.config.build) {
+            var cart = core.getModuleByType(Cart) orelse unreachable;
+            var logger = core.getModuleByType(Logger) orelse unreachable;
+            try cart.begin(core.platform.config.outpout);
+            try cart.writeGlob(core.platform.config.glob);
+            logger.info("out {s} ({s})", .{
+                core.platform.config.outpout,
+                core.platform.config.glob,
+            });
+        } else {
+            var lua = core.getModuleByType(Lua) orelse unreachable;
+            _ = try lua.loadModule("init.lua");
+            core.running = true;
         }
 
         return core;

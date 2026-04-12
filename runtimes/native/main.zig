@@ -3,7 +3,7 @@ const nux = @import("nux");
 const Window = @import("Window.zig");
 const GPU = @import("GPU.zig");
 
-pub fn parseArgs(args: std.process.ArgIterator, allocator: std.mem.Allocator) !nux.Platform.Config {
+pub fn parseArgs(args: std.process.ArgIterator) !nux.Platform.Config {
     var cfg = nux.Platform.Config{};
 
     var it = args;
@@ -12,27 +12,16 @@ pub fn parseArgs(args: std.process.ArgIterator, allocator: std.mem.Allocator) !n
     while (it.next()) |arg| {
         if (std.mem.eql(u8, arg, "--log")) {
             cfg.logModuleInitialization = true;
-        } else if (std.mem.eql(u8, arg, "--mount")) {
+        } else if (std.mem.eql(u8, arg, "--build")) {
+            cfg.build = true;
+        } else if (std.mem.eql(u8, arg, "--output")) {
             const v = it.next() orelse return error.MissingValue;
-            cfg.mount = v;
-        } else if (std.mem.eql(u8, arg, "run")) {
-            cfg.command = .run;
-        } else if (std.mem.eql(u8, arg, "build")) {
-            cfg.command = .{ .build = .{} };
-        } else if (std.mem.eql(u8, arg, "--path")) {
-            const v = it.next() orelse return error.MissingValue;
-            switch (cfg.command) {
-                .build => |*b| b.path = try allocator.dupe(u8, v),
-                else => return error.WrongCommand,
-            }
+            cfg.outpout = v;
         } else if (std.mem.eql(u8, arg, "--glob")) {
             const v = it.next() orelse return error.MissingValue;
-            switch (cfg.command) {
-                .build => |*b| b.glob = try allocator.dupe(u8, v),
-                else => return error.WrongCommand,
-            }
+            cfg.glob = v;
         } else {
-            return error.UnknownArgument;
+            cfg.mount = arg;
         }
     }
 
@@ -58,7 +47,7 @@ pub fn main() !void {
     // Parse arguments
     var args = try std.process.argsWithAllocator(allocator);
     defer args.deinit();
-    const config = try parseArgs(args, allocator);
+    const config = try parseArgs(args);
 
     // Configure platform
     const platform = nux.Platform{

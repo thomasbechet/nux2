@@ -203,11 +203,8 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.layers = try .initCapacity(core.platform.allocator, 8);
 
     // Mount base file system
-    if (core.platform.config.mount) |entryPoint| {
-        try self.mount(entryPoint);
-    } else {
-        try self.mount(".");
-    }
+    errdefer self.deinit();
+    try self.mount(core.platform.config.mount);
 }
 pub fn deinit(self: *Self) void {
     for (self.layers.items) |*layer| {
@@ -282,6 +279,7 @@ pub fn logGlob(self: *Self, pattern: []const u8) !void {
     var ls = try self.glob(pattern, self.allocator);
     defer ls.deinit();
     for (ls.paths.items) |path| {
-        self.logger.info("- {s}", .{path});
+        const file_stat = try self.stat(path);
+        self.logger.info("- {s} ({d} bytes)", .{ path, file_stat.size });
     }
 }

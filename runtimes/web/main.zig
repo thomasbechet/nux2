@@ -2,9 +2,12 @@ const std = @import("std");
 const nux = @import("nux");
 const Logger = @import("Logger.zig");
 const File = @import("File.zig");
+const Window = @import("Window.zig");
+
+var core: *nux.Core = undefined;
 
 export fn runtime_init() void {
-    var c = nux.Core.init(.{
+    core = nux.Core.init(.{
         .allocator = std.heap.wasm_allocator,
         .logger = .{
             .ptr = undefined,
@@ -26,10 +29,18 @@ export fn runtime_init() void {
                 .next = File.next,
             },
         },
+        .window = .{ .ptr = undefined, .vtable = &.{
+            .open = Window.open,
+            .close = Window.close,
+            .resize = Window.resize,
+        } },
         .config = .{
             .mount = "cart.bin",
+            .logModuleInitialization = true,
         },
     }) catch return;
-    defer c.deinit();
-    c.update() catch {};
+}
+
+export fn runtime_update() void {
+    core.update() catch {};
 }

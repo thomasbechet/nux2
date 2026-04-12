@@ -87,7 +87,6 @@ fn configCore(b: *std.Build, config: Config) void {
             "-DLUAI_TRY(L,c,a,u)=a(L,u)",
             "-Dluai_jmpbuf=int",
             "-Djmp_buf=int",
-
             // "-mllvm",
             // "-wasm-enable-sjlj",
             // "--trace-symbol=fd_write"
@@ -127,9 +126,6 @@ fn configCore(b: *std.Build, config: Config) void {
             .{ .name = "zclay", .module = zclay_pkg.module("zclay") },
         },
     });
-    // core.link_libc = true;
-    core.strip = false;
-    core.stack_protector = false;
 
     // stb
     core.addIncludePath(b.path("externals/stb/"));
@@ -146,7 +142,6 @@ fn configCore(b: *std.Build, config: Config) void {
         .flags = lua_flags.items,
         .language = .c,
     });
-    core.single_threaded = true;
 
     // tests
     const tests = b.addTest(.{ .root_module = core });
@@ -245,7 +240,6 @@ fn configWeb(b: *std.Build, config: Config) void {
         .root_module = wasm_mod,
         .linkage = .static,
     });
-    // wasm.entry = .{ .symbol_name = "main" };
     wasm.entry = .disabled;
     wasm.rdynamic = true;
     wasm.link_gc_sections = true;
@@ -257,6 +251,7 @@ fn configWeb(b: *std.Build, config: Config) void {
     wasm.import_symbols = false;
     wasm.root_module.link_libc = true;
     wasm.root_module.stack_protector = false;
+    wasm.root_module.strip = false;
 
     // install to runtimes/web
     const install = b.addInstallArtifact(wasm, .{

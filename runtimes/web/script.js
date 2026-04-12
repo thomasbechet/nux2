@@ -18,6 +18,7 @@ const importObject = {
     },
     runtime_open: (path, len, mode) => {
       path = decodeString(path, len);
+      console.log(path)
       if (path === "cart.bin") {
         files[slot] = {
           cursor: 0,
@@ -65,20 +66,21 @@ const importObject = {
     // nux_os_stats_update: (userdata, pstats) => { return 1; },
   },
   wasi_snapshot_preview1: {
-    // fd_close: fd => { return 0; },
-    // fd_read: fd => { return 0; },
-    // fd_seek: (fd, offset_low, offset_high, whence, newOffset) => { return 0; },
-    // fd_write(fd, iovsPtr, iovsLength, bytesWrittenPtr) { return 0; },
-    // fd_fdstat_get: (fd, stat) => { return 0; },
-    // clock_time_get: () => { },
-    // fd_fdstat_set_flags: () => { },
-    // fd_filestat_get: () => { },
-    // fd_prestat_get: () => { },
-    // fd_prestat_dir_name: () => { },
-    // fd_pwrite: () => { },
-    // fd_renumber: () => { },
-    // path_open: () => { },
-    // proc_exit: () => { },
+    fd_close: fd => { return 0; },
+    fd_read: fd => { return 0; },
+    fd_seek: (fd, offset_low, offset_high, whence, newOffset) => { return 0; },
+    fd_write(fd, iovsPtr, iovsLength, bytesWrittenPtr) { return 0; },
+    fd_fdstat_get: (fd, stat) => { return 0; },
+    clock_time_get: () => { },
+    fd_fdstat_set_flags: () => { },
+    fd_filestat_get: () => { },
+    fd_prestat_get: () => { },
+    fd_prestat_dir_name: () => { },
+    fd_pwrite: () => { },
+    fd_renumber: () => { },
+    path_open: () => { },
+    proc_exit: () => { },
+    random_get: () => { }
   },
 }
 const init = async () => {
@@ -90,9 +92,9 @@ const init = async () => {
   //     console.log(WebAssembly.Module.exports(module))
   //   })
 
-  // file = await fetch("cart.bin");
+  file = await fetch("cart.bin");
   let runtime = await fetch("nux.wasm");
-  // cart = await file.arrayBuffer();
+  cart = await file.arrayBuffer();
   // console.log(cart)
   let obj = await WebAssembly.instantiateStreaming(runtime, importObject);
   instance = obj.instance

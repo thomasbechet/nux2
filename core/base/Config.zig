@@ -66,6 +66,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.ini_files = .empty;
 
     // Load default configuration
+    errdefer self.deinit();
     try self.parse(default_ini);
     try self.loadINI();
 }

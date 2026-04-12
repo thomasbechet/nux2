@@ -329,7 +329,10 @@ pub const Core = struct {
         // Start sequence
         for (core.modules.items, 0..) |*module, index| {
             core.log("INIT {s}", .{module.name});
-            try module.init(core, .{ .index = index });
+            module.init(core, .{ .index = index }) catch |err| {
+                core.log("Failed to init {s}: {s}", .{ module.name, @errorName(err) });
+                return error.ModuleInit;
+            };
         }
         for (core.modules.items) |*module| {
             core.log("START {s}", .{module.name});
@@ -362,14 +365,12 @@ pub const Core = struct {
         while (i > 0) {
             i -= 1;
             const module = &self.modules.items[i];
-            self.log("STOP {s}", .{module.name});
             module.stop();
         }
         i = self.modules.items.len;
         while (i > 0) {
             i -= 1;
             const module = &self.modules.items[i];
-            self.log("DEINIT {s}", .{module.name});
             module.deinit();
         }
 

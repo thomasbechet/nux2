@@ -40,8 +40,11 @@ pub fn parseArgs(args: std.process.ArgIterator, allocator: std.mem.Allocator) !n
 }
 
 pub fn main() !void {
+
     // Create allocator
-    var gpa: std.heap.DebugAllocator(.{}) = .init;
+    var gpa: std.heap.DebugAllocator(.{
+        .stack_trace_frames = 10,
+    }) = .init;
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 

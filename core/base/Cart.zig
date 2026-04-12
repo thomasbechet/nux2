@@ -160,14 +160,17 @@ pub fn begin(self: *Self, path: []const u8) !void {
 }
 pub fn write(self: *Self, path: []const u8, data: []const u8) !void {
     if (self.cart_writer) |*cart_writer| {
+
         // Write entry
         const w = &cart_writer.writer;
         try w.interface.writeStruct(FileSystem.EntryData{
             .data_len = @intCast(data.len),
             .path_len = @intCast(path.len),
         }, .little);
+
         // Write path
         _ = try w.interface.write(path);
+
         // Write data
         _ = try w.interface.write(data);
         try w.interface.flush();

@@ -2,12 +2,18 @@ const decoder = new TextDecoder()
 const encoder = new TextEncoder()
 const decodeString = (data, len) => decoder.decode(new Int8Array(instance.exports.memory.buffer, data, len))
 const cartFile = "cart.bin";
-const cartSlot = 0;
+let nextHandle = 1;
 let instance
 let files = []
 let cart
+let gl
 let previousTime = 0.0;
 
+function genHandle() {
+  const handle = nextHandle;
+  nextHandle += 1;
+  return handle;
+}
 const setU32 = (ptr, value) => {
   const buf = new Int32Array(instance.exports.memory.buffer, ptr, 4)
   buf[0] = value;
@@ -30,31 +36,31 @@ const importObject = {
     },
 
     // File
-    file_open: (path, len, mode, pslot) => {
+    file_open: (path, len, mode) => {
       path = decodeString(path, len);
       if (path === cartFile) {
-        files[cartSlot] = {
+        const handle = genHandle();
+        files[handle] = {
           cursor: 0,
           data: cart,
         }
-        setU32(pslot, cartSlot);
-        return true;
+        return handle;
       }
-      return false;
+      return 0;
     },
-    file_close: (slot) => {
-      files[slot] = null;
+    file_close: (handle) => {
+      files[handle] = null;
     },
-    file_seek: (slot, cursor) => {
-      files[slot].cursor = cursor;
+    file_seek: (handle, cursor) => {
+      files[handle].cursor = cursor;
       return true;
     },
-    file_read: (slot, p, n) => {
+    file_read: (handle, p, n) => {
       if (n !== 0) {
-        const src = new Uint8Array(files[slot].data, files[slot].cursor, n)
+        const src = new Uint8Array(files[handle].data, files[handle].cursor, n)
         const dst = new Uint8Array(instance.exports.memory.buffer, p, n)
         dst.set(src)
-        files[slot].cursor += n
+        files[handle].cursor += n
       }
       return true;
     },
@@ -69,16 +75,36 @@ const importObject = {
 
     // Window
     window_open: (w, h) => {
-      console.log("OPEN WINDOW", w, h);
+      var canvas = document.createElement('canvas');
+      canvas.id = "canvas";
+      canvas.width = w;
+      canvas.height = h;
+      const container = document.getElementById("container")
+      container.appendChild(canvas);
     },
-    window_close: () => {
+    window_close: () => { },
+    window_resize: (w, h) => { },
 
+    // GPU
+    gpu_create_device: () => { },
+    gpu_delete_device: () => { },
+    gpu_create_pipeline: () => {
+      return 0;
     },
-    window_resize: (w, h) => {
-
+    gpu_delete_pipeline: (handle) => { },
+    gpu_create_texture: (w, h) => {
+      return 0;
     },
+    gpu_delete_texture: (handle) => { },
+    gpu_update_texture: (handle, x, y, w, h, data, len) => { },
+    gpu_create_buffer: (size) => {
+      return 0;
+    },
+    gpu_delete_buffer: (handle) => { },
+    gpu_update_buffer: (handle, offset, size, data, len) => { },
+    gpu_submit_commands: (count, commands) => { },
   },
-  wasi_snapshot_preview1: {
+  wasi_snapshot_preview1: { // Stub wasi interface (never called)
     fd_close: () => { },
     fd_read: () => { },
     fd_seek: () => { },
@@ -112,8 +138,9 @@ const init = async () => {
   instance = obj.instance
   instance.exports.runtime_init();
 
-  const canvas = document.querySelector("#gl-canvas");
-  const gl = canvas.getContext("webgl");
+  // Initialize WebGL context
+  const canvas = document.getElementById("canvas");
+  gl = canvas.getContext("webgl");
   if (gl === null) {
     alert("Unable to initialize WebGL. Your browser or machine may not support it.");
     return;

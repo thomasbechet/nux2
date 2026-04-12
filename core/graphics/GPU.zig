@@ -54,7 +54,7 @@ pub const Buffer = struct {
     handle: GPU.Handle,
     gpu: *Self,
 
-    pub fn init(renderer: *Self, typ: GPU.BufferType, size: u64) !Buffer {
+    pub fn init(renderer: *Self, typ: GPU.BufferType, size: u32) !Buffer {
         return .{
             .gpu = renderer,
             .handle = try renderer.gpu.vtable.create_buffer(renderer.gpu.ptr, typ, size),
@@ -63,7 +63,7 @@ pub const Buffer = struct {
     pub fn deinit(self: *Buffer) void {
         self.gpu.gpu.vtable.delete_buffer(self.gpu.gpu.ptr, self.handle);
     }
-    pub fn update(self: *Buffer, offset: u64, size: u64, data: []const u8) !void {
+    pub fn update(self: *Buffer, offset: u32, size: u32, data: []const u8) !void {
         try self.gpu.gpu.vtable.update_buffer(
             self.gpu.gpu.ptr,
             self.handle,

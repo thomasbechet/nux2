@@ -7,18 +7,19 @@ const FileStat = extern struct {
     size: u32,
 };
 
-extern fn file_open(path: [*c]const u8, len: u32, mode: u32, slot: [*c]u32) bool;
-extern fn file_close(slot: u32) void;
-extern fn file_seek(slot: u32, cursor: u32) bool;
-extern fn file_read(slot: u32, p: [*c]const u8, n: u32) bool;
+extern fn file_open(path: [*c]const u8, len: u32, mode: u32) u32;
+extern fn file_close(handle: u32) void;
+extern fn file_seek(handle: u32, cursor: u32) bool;
+extern fn file_read(handle: u32, p: [*c]const u8, n: u32) bool;
 extern fn file_stat(path: [*c]const u8, len: u32, pstat: [*c]FileStat) bool;
 
 pub fn open(_: *anyopaque, path: []const u8, mode: Platform.Mode) anyerror!Platform.Handle {
-    var slot: u32 = undefined;
-    if (!file_open(path.ptr, @intCast(path.len), @intFromEnum(mode), &slot)) {
+    const handle =
+        file_open(path.ptr, @intCast(path.len), @intFromEnum(mode));
+    if (handle == 0) {
         return error.BackendError;
     }
-    return @ptrFromInt(slot);
+    return @ptrFromInt(handle);
 }
 pub fn close(_: *anyopaque, handle: Platform.Handle) void {
     file_close(@intFromPtr(handle));

@@ -3,6 +3,7 @@ const nux = @import("nux");
 const Logger = @import("Logger.zig");
 const File = @import("File.zig");
 const Window = @import("Window.zig");
+const GPU = @import("GPU.zig");
 
 var core: *nux.Core = undefined;
 
@@ -29,11 +30,30 @@ export fn runtime_init() void {
                 .next = File.next,
             },
         },
-        .window = .{ .ptr = undefined, .vtable = &.{
-            .open = Window.open,
-            .close = Window.close,
-            .resize = Window.resize,
-        } },
+        .window = .{
+            .ptr = undefined,
+            .vtable = &.{
+                .open = Window.open,
+                .close = Window.close,
+                .resize = Window.resize,
+            },
+        },
+        .gpu = .{
+            .ptr = undefined,
+            .vtable = &.{
+                .create_device = GPU.createDevice,
+                .delete_device = GPU.deleteDevice,
+                .create_pipeline = GPU.createPipeline,
+                .delete_pipeline = GPU.deletePipeline,
+                .create_texture = GPU.createTexture,
+                .delete_texture = GPU.deleteTexture,
+                .update_texture = GPU.updateTexture,
+                .create_buffer = GPU.createBuffer,
+                .delete_buffer = GPU.deleteBuffer,
+                .update_buffer = GPU.updateBuffer,
+                .submit_commands = GPU.submitCommands,
+            },
+        },
         .config = .{
             .mount = "cart.bin",
             .logModuleInitialization = true,

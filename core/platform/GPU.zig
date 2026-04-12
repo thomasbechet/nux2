@@ -128,9 +128,9 @@ pub const VTable = struct {
     create_texture: *const fn (*anyopaque, info: TextureInfo) anyerror!Handle = Default.createTexture,
     delete_texture: *const fn (*anyopaque, handle: Handle) void = Default.deleteTexture,
     update_texture: *const fn (*anyopaque, handle: Handle, x: u32, y: u32, w: u32, h: u32, data: []const u8) anyerror!void = Default.updateTexture,
-    create_buffer: *const fn (*anyopaque, type: BufferType, size: u64) anyerror!Handle = Default.createBuffer,
+    create_buffer: *const fn (*anyopaque, type: BufferType, size: u32) anyerror!Handle = Default.createBuffer,
     delete_buffer: *const fn (*anyopaque, handle: Handle) void = Default.deleteBuffer,
-    update_buffer: *const fn (*anyopaque, handle: Handle, offset: u64, size: u64, data: []const u8) anyerror!void = Default.updateBuffer,
+    update_buffer: *const fn (*anyopaque, handle: Handle, offset: u32, size: u32, data: []const u8) anyerror!void = Default.updateBuffer,
     submit_commands: *const fn (*anyopaque, commands: []const Command) anyerror!void = Default.submitCommands,
 };
 
@@ -154,11 +154,11 @@ const Default = struct {
     }
     fn deleteTexture(_: *anyopaque, _: Handle) void {}
     fn updateTexture(_: *anyopaque, _: Handle, _: u32, _: u32, _: u32, _: u32, _: []const u8) anyerror!void {}
-    fn createBuffer(_: *anyopaque, _: BufferType, _: u64) anyerror!Handle {
+    fn createBuffer(_: *anyopaque, _: BufferType, _: u32) anyerror!Handle {
         var handle = GPUHandle{};
         return &handle;
     }
     fn deleteBuffer(_: *anyopaque, _: Handle) void {}
-    fn updateBuffer(_: *anyopaque, _: Handle, _: u64, _: u64, _: []const u8) anyerror!void {}
+    fn updateBuffer(_: *anyopaque, _: Handle, _: u32, _: u32, _: []const u8) anyerror!void {}
     fn submitCommands(_: *anyopaque, _: []const Command) anyerror!void {}
 };

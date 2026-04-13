@@ -251,7 +251,7 @@ fn configWeb(b: *std.Build, config: Config) void {
     wasm.import_symbols = false;
     wasm.root_module.link_libc = true;
     wasm.root_module.stack_protector = false;
-    wasm.root_module.strip = false;
+    wasm.root_module.strip = true;
 
     // install to runtimes/web
     const install = b.addInstallArtifact(wasm, .{

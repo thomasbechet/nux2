@@ -2,6 +2,10 @@
     "rootpath": "..",
     "modules": [
         {
+            "path": "base/Logger.zig",
+            "ignore_all": true
+        },
+        {
             "path": "base/File.zig",
             "ignore": [
                 "stat",
@@ -9,10 +13,6 @@
                 "Writer",
                 "FileList"
             ]
-        },
-        {
-            "path": "base/Logger.zig",
-            "ignore_all": true
         },
         {
             "path": "base/Config.zig",

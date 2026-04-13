@@ -9,6 +9,7 @@ platform: nux.Platform.Logger,
 pub fn init(self: *Self, ctx: *const nux.Core) !void {
     self.platform = ctx.platform.logger;
     self.initialized = true;
+    self.info("logger initialized", .{});
 }
 
 pub fn log(

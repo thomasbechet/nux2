@@ -242,7 +242,7 @@ fn updateTexture(_: *anyopaque, handle: Platform.Handle, x: u32, y: u32, w: u32,
     gl.BindTexture(gl.TEXTURE_2D, 0);
 }
 
-fn createBuffer(ctx: *anyopaque, typ: Platform.BufferType, size: u64) anyerror!Platform.Handle {
+fn createBuffer(ctx: *anyopaque, typ: Platform.BufferType, size: u32) anyerror!Platform.Handle {
     const self: *Self = @ptrCast(@alignCast(ctx));
     const buffer = try self.allocator.create(BufferHandle);
 
@@ -264,7 +264,7 @@ fn deleteBuffer(ctx: *anyopaque, handle: Platform.Handle) void {
     gl.DeleteBuffers(1, @ptrCast(&buffer.handle));
     self.allocator.destroy(buffer);
 }
-fn updateBuffer(_: *anyopaque, handle: Platform.Handle, offset: u64, size: u64, data: []const u8) anyerror!void {
+fn updateBuffer(_: *anyopaque, handle: Platform.Handle, offset: u32, size: u32, data: []const u8) anyerror!void {
     const buffer: *BufferHandle = @ptrCast(@alignCast(handle));
 
     gl.BindBuffer(buffer.type, buffer.handle);

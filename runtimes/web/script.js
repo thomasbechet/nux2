@@ -104,9 +104,9 @@ const importObject = {
       console.log(gl instanceof WebGL2RenderingContext);
       console.log(gl.MAX_UNIFORM_BLOCK_SIZE);
       console.log(gl.getParameter(gl.MAX_UNIFORM_BLOCK_SIZE));
-      console.log(gl.getParameter(gl.MAX_UNIFORM_BUFFER_BINDINGS));
-      console.log(gl.getParameter(gl.MAX_VERTEX_UNIFORM_BLOCKS));
-      console.log(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_BLOCKS));
+      // console.log(gl.getParameter(gl.MAX_UNIFORM_BUFFER_BINDINGS));
+      // console.log(gl.getParameter(gl.MAX_VERTEX_UNIFORM_BLOCKS));
+      // console.log(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_BLOCKS));
       return 0;
     },
     gpu_delete_pipeline: (handle) => { },

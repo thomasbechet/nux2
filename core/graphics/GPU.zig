@@ -63,12 +63,12 @@ pub const Buffer = struct {
     pub fn deinit(self: *Buffer) void {
         self.gpu.gpu.vtable.delete_buffer(self.gpu.gpu.ptr, self.handle);
     }
-    pub fn update(self: *Buffer, offset: u32, size: u32, data: []const u8) !void {
+    pub fn update(self: *Buffer, offset: usize, size: usize, data: []const u8) !void {
         try self.gpu.gpu.vtable.update_buffer(
             self.gpu.gpu.ptr,
             self.handle,
-            offset,
-            size,
+            @intCast(offset),
+            @intCast(size),
             data,
         );
     }
@@ -219,11 +219,11 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     errdefer self.pipelines.canvas.deinit();
 
     // Create buffers
-    const default_quad_size = try self.config.getUint(usize, "GPU.defaultQuadBufferSize");
-    const quad_queue_size = try self.config.getUint(usize, "GPU.quadQueueSize");
-    const default_vertex_buffer_size = try self.config.getUint(usize, "GPU.defaultVertexBufferSize");
-    const default_span_capacity = try self.config.getUint(usize, "GPU.defaultVertexBufferSpanCapacity");
-    const default_batches_capacity = try self.config.getUint(usize, "GPU.batchesCapacity");
+    const default_quad_size = try self.config.getUint(u32, "GPU.defaultQuadBufferSize");
+    const quad_queue_size = try self.config.getUint(u32, "GPU.quadQueueSize");
+    const default_vertex_buffer_size = try self.config.getUint(u32, "GPU.defaultVertexBufferSize");
+    const default_span_capacity = try self.config.getUint(u32, "GPU.defaultVertexBufferSpanCapacity");
+    const default_batches_capacity = try self.config.getUint(u32, "GPU.batchesCapacity");
     self.buffers.constants = try .init(self, .constants, @sizeOf(GPU.Constants));
     errdefer self.buffers.constants.deinit();
     self.buffers.vertices = try .init(self, .vertices, default_vertex_buffer_size);
@@ -268,7 +268,11 @@ pub fn onPostUpdate(self: *Self) !void {
 fn flushQuads(self: *Self) !void {
     const offset = @sizeOf(GPU.Quad) * self.quads_head;
     const size = @sizeOf(GPU.Quad) * self.quads_queue.items.len;
-    try self.buffers.quads.update(offset, size, @ptrCast(self.quads_queue.items));
+    try self.buffers.quads.update(
+        offset,
+        size,
+        @ptrCast(self.quads_queue.items),
+    );
     self.quads_queue.clearRetainingCapacity();
     self.quads_head += self.quads_queue.items.len;
 }

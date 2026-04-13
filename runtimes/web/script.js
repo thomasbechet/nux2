@@ -75,12 +75,24 @@ const importObject = {
 
     // Window
     window_open: (w, h) => {
+
+      // Create canvas
       var canvas = document.createElement('canvas');
       canvas.id = "canvas";
       canvas.width = w;
       canvas.height = h;
       const container = document.getElementById("container")
       container.appendChild(canvas);
+
+      // Initialize WebGL context
+      // const canvas = document.getElementById("canvas");
+      gl = canvas.getContext("webgl2");
+      if (gl === null) {
+        alert("Unable to initialize WebGL. Your browser or machine may not support it.");
+        return;
+      }
+      gl.clearColor(0.2, 0.0, 0.0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
     },
     window_close: () => { },
     window_resize: (w, h) => { },
@@ -89,6 +101,12 @@ const importObject = {
     gpu_create_device: () => { },
     gpu_delete_device: () => { },
     gpu_create_pipeline: () => {
+      console.log(gl instanceof WebGL2RenderingContext);
+      console.log(gl.MAX_UNIFORM_BLOCK_SIZE);
+      console.log(gl.getParameter(gl.MAX_UNIFORM_BLOCK_SIZE));
+      console.log(gl.getParameter(gl.MAX_UNIFORM_BUFFER_BINDINGS));
+      console.log(gl.getParameter(gl.MAX_VERTEX_UNIFORM_BLOCKS));
+      console.log(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_BLOCKS));
       return 0;
     },
     gpu_delete_pipeline: (handle) => { },
@@ -137,17 +155,6 @@ const init = async () => {
   let obj = await WebAssembly.instantiateStreaming(runtime, importObject);
   instance = obj.instance
   instance.exports.runtime_init();
-
-  // Initialize WebGL context
-  const canvas = document.getElementById("canvas");
-  gl = canvas.getContext("webgl");
-  if (gl === null) {
-    alert("Unable to initialize WebGL. Your browser or machine may not support it.");
-    return;
-  }
-
-  gl.clearColor(0.2, 0.0, 0.0, 1.0);
-  gl.clear(gl.COLOR_BUFFER_BIT);
 };
 
 const loop = time => {

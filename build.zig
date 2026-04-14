@@ -228,7 +228,7 @@ fn configWeb(b: *std.Build, config: Config) void {
 
     // web
     const wasm_mod = b.addModule("wasm", .{
-        .root_source_file = b.path("runtimes/web/main.zig"),
+        .root_source_file = b.path("runtimes/web/core/main.zig"),
         .target = config.target,
         .optimize = config.optimize,
         .imports = &.{
@@ -236,7 +236,7 @@ fn configWeb(b: *std.Build, config: Config) void {
         },
     });
     const wasm = b.addExecutable(.{
-        .name = "nux",
+        .name = "core",
         .root_module = wasm_mod,
         .linkage = .static,
     });
@@ -257,7 +257,7 @@ fn configWeb(b: *std.Build, config: Config) void {
     const install = b.addInstallArtifact(wasm, .{
         .dest_dir = .{
             .override = .{
-                .custom = "../runtimes/web/public/binaries/",
+                .custom = "../runtimes/web/frontend/public/",
             },
         },
     });

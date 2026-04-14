@@ -208,9 +208,9 @@ const importObject = {
 	},
 }
 const init = async () => {
-	let file = await fetch("binaries/cart.bin");
+	let file = await fetch("/cart.bin");
 	cart = await file.arrayBuffer();
-	let runtime = await fetch("binaries/nux.wasm");
+	let runtime = await fetch("/core.wasm");
 	let obj = await WebAssembly.instantiateStreaming(runtime, importObject);
 	instance = obj.instance
 	instance.exports.runtime_init();

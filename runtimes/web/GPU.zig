@@ -4,7 +4,12 @@ const Platform = nux.Platform.GPU;
 
 extern fn gpu_create_device() void;
 extern fn gpu_delete_device() void;
-extern fn gpu_create_pipeline() u32;
+extern fn gpu_create_pipeline(
+    typ: u32,
+    primitive: u32,
+    blend: bool,
+    depth_test: bool,
+) u32;
 extern fn gpu_delete_pipeline(handle: u32) void;
 extern fn gpu_create_texture(w: u32, h: u32) u32;
 extern fn gpu_delete_texture(handle: u32) void;
@@ -38,8 +43,13 @@ pub fn deleteDevice(_: *anyopaque) void {
     gpu_delete_device();
 }
 
-pub fn createPipeline(_: *anyopaque, _: Platform.PipelineInfo) !Platform.Handle {
-    const handle = gpu_create_pipeline();
+pub fn createPipeline(_: *anyopaque, info: Platform.PipelineInfo) !Platform.Handle {
+    const handle = gpu_create_pipeline(
+        @intFromEnum(info.type),
+        @intFromEnum(info.primitive),
+        info.blend,
+        info.depth_test,
+    );
     return @ptrFromInt(handle);
 }
 pub fn deletePipeline(_: *anyopaque, handle: Platform.Handle) void {

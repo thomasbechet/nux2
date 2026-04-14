@@ -256,7 +256,9 @@ fn configWeb(b: *std.Build, config: Config) void {
     // install to runtimes/web
     const install = b.addInstallArtifact(wasm, .{
         .dest_dir = .{
-            .override = .{ .custom = "../runtimes/web/" },
+            .override = .{
+                .custom = "../runtimes/web/public/binaries/",
+            },
         },
     });
     b.default_step.dependOn(&install.step);

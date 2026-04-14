@@ -5,7 +5,6 @@
 /build/
 /build-*/
 /docgen_tmp/
-runtimes/web/nux.wasm
-runtimes/web/cart.bin
+runtimes/web/public/binaries/
 core/lua/bindings.zig
 core/modules.zig

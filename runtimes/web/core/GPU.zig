@@ -11,7 +11,12 @@ extern fn gpu_create_pipeline(
     depth_test: bool,
 ) u32;
 extern fn gpu_delete_pipeline(handle: u32) void;
-extern fn gpu_create_texture(w: u32, h: u32) u32;
+extern fn gpu_create_texture(
+    w: u32,
+    h: u32,
+    filtering: nux.Texture.Filtering,
+    type: nux.Texture.Type,
+) u32;
 extern fn gpu_delete_texture(handle: u32) void;
 extern fn gpu_update_texture(
     handle: u32,
@@ -34,6 +39,7 @@ extern fn gpu_update_buffer(
 extern fn gpu_submit_commands(
     count: u32,
     commands: [*]const u8,
+    command_size: u32,
 ) void;
 
 pub fn createDevice(_: *anyopaque) !void {
@@ -57,7 +63,12 @@ pub fn deletePipeline(_: *anyopaque, handle: Platform.Handle) void {
 }
 
 pub fn createTexture(_: *anyopaque, info: Platform.TextureInfo) !Platform.Handle {
-    const handle = gpu_create_texture(info.width, info.height);
+    const handle = gpu_create_texture(
+        info.width,
+        info.height,
+        info.filter,
+        info.type,
+    );
     return @ptrFromInt(handle);
 }
 pub fn deleteTexture(_: *anyopaque, handle: Platform.Handle) void {
@@ -100,5 +111,5 @@ pub fn submitCommands(
     _: *anyopaque,
     commands: []const Platform.Command,
 ) !void {
-    gpu_submit_commands(commands.len, @ptrCast(commands.ptr));
+    gpu_submit_commands(commands.len, @ptrCast(commands.ptr), @sizeOf(Platform.Command));
 }

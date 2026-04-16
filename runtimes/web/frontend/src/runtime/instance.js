@@ -57,6 +57,9 @@ export async function init(cartPath) {
     const buf = new Int8Array(core.memory.buffer, ptr, 1);
     return buf[0];
   }
+  core.memorySlice = function (ptr, len) {
+    return new Uint8Array(core.memory.buffer, ptr, len);
+  }
   const decoder = new TextDecoder();
   core.decodeString = function (data, len) {
     return decoder.decode(new Int8Array(core.memory.buffer, data, len));

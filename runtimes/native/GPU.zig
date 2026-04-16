@@ -274,18 +274,20 @@ fn updateBuffer(_: *anyopaque, handle: Platform.Handle, offset: u32, size: u32, 
 
 fn submitCommands(ctx: *anyopaque, commands: []const Platform.Command) anyerror!void {
     const self: *Self = @ptrCast(@alignCast(ctx));
-    for (commands) |command| {
-        switch (command) {
-            .bind_framebuffer => |cmd| {
-                if (cmd.framebuffer) |handle| {
+    for (commands) |cmd| {
+        switch (cmd.type) {
+            .bind_framebuffer => {
+                const data = &cmd.data.bind_framebuffer;
+                if (data.framebuffer) |handle| {
                     const framebuffer: *FramebufferHandle = @ptrCast(@alignCast(handle));
                     gl.BindFramebuffer(gl.FRAMEBUFFER, framebuffer.handle);
                 } else {
                     gl.BindFramebuffer(gl.FRAMEBUFFER, 0);
                 }
             },
-            .bind_pipeline => |cmd| {
-                const pipeline: *PipelineHandle = @ptrCast(@alignCast(cmd.pipeline));
+            .bind_pipeline => {
+                const data = &cmd.data.bind_pipeline;
+                const pipeline: *PipelineHandle = @ptrCast(@alignCast(data.pipeline));
                 gl.UseProgram(pipeline.program);
                 if (pipeline.depth_test) {
                     gl.Enable(gl.DEPTH_TEST);
@@ -303,52 +305,57 @@ fn submitCommands(ctx: *anyopaque, commands: []const Platform.Command) anyerror!
                 }
                 self.active_pipeline = pipeline;
             },
-            .bind_buffer => |cmd| {
-                const buffer: *BufferHandle = @ptrCast(@alignCast(cmd.buffer));
-                const index = self.active_pipeline.?.indices[@intFromEnum(cmd.descriptor)];
+            .bind_buffer => {
+                const data = &cmd.data.bind_buffer;
+                const buffer: *BufferHandle = @ptrCast(@alignCast(data.buffer));
+                const index = self.active_pipeline.?.indices[@intFromEnum(data.descriptor)];
                 gl.BindBufferBase(buffer.type, index, buffer.handle);
             },
-            .bind_texture => |cmd| {
+            .bind_texture => {
+                const data = &cmd.data.bind_texture;
                 var handle: gl.uint = 0;
-                if (cmd.texture) |t| {
+                if (data.texture) |t| {
                     const texture: *TextureHandle = @ptrCast(@alignCast(t));
                     handle = texture.handle;
                 }
-                const unit = self.active_pipeline.?.units[@intFromEnum(cmd.descriptor)];
-                const location = self.active_pipeline.?.locations[@intFromEnum(cmd.descriptor)];
+                const unit = self.active_pipeline.?.units[@intFromEnum(data.descriptor)];
+                const location = self.active_pipeline.?.locations[@intFromEnum(data.descriptor)];
                 gl.ActiveTexture(gl.TEXTURE0 + unit);
                 gl.BindTexture(gl.TEXTURE_2D, handle);
                 gl.Uniform1i(location, @intCast(unit));
             },
-            .push_u32 => |cmd| {
-                const location = self.active_pipeline.?.locations[@intFromEnum(cmd.descriptor)];
-                gl.Uniform1ui(location, cmd.value);
+            .push_u32 => {
+                const data = &cmd.data.push_u32;
+                const location = self.active_pipeline.?.locations[@intFromEnum(data.descriptor)];
+                gl.Uniform1ui(location, data.value);
             },
-            .push_f32 => |cmd| {
-                const location = self.active_pipeline.?.locations[@intFromEnum(cmd.descriptor)];
-                gl.Uniform1f(location, cmd.value);
+            .push_f32 => {
+                const data = &cmd.data.push_f32;
+                const location = self.active_pipeline.?.locations[@intFromEnum(data.descriptor)];
+                gl.Uniform1f(location, data.value);
             },
-            .draw => |cmd| {
+            .draw => {
+                const data = &cmd.data.draw;
                 gl.BindVertexArray(self.empty_vao);
-                gl.DrawArrays(self.active_pipeline.?.primitive, 0, @intCast(cmd.count));
+                gl.DrawArrays(self.active_pipeline.?.primitive, 0, @intCast(data.count));
                 gl.BindVertexArray(0);
             },
-            .clear_color => |cmd| {
+            .clear_color => {
                 // nux_f32_t clear[4];
                 // hex_to_linear(cmd->clear_color.color, clear);
                 // const clear: [4]f32 = .{ cmd.color}
-                _ = cmd;
                 gl.ClearColor(0, 0, 0, 1);
                 gl.Clear(gl.COLOR_BUFFER_BIT);
             },
             .clear_depth => {
                 gl.Clear(gl.DEPTH_BUFFER_BIT);
             },
-            .viewport => |cmd| {
-                const y = @as(i32, @intCast(cmd.height)) - (cmd.y + @as(i32, @intCast(cmd.height)));
-                gl.Viewport(cmd.x, y, @intCast(cmd.width), @intCast(cmd.height));
+            .viewport => {
+                const data = &cmd.data.viewport;
+                const y = @as(i32, @intCast(data.height)) - (data.y + @as(i32, @intCast(data.height)));
+                gl.Viewport(data.x, y, @intCast(data.width), @intCast(data.height));
                 gl.Enable(gl.SCISSOR_TEST);
-                gl.Scissor(cmd.x, y, @intCast(cmd.width), @intCast(cmd.height));
+                gl.Scissor(data.x, y, @intCast(data.width), @intCast(data.height));
             },
         }
     }

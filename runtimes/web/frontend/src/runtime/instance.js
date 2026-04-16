@@ -53,6 +53,10 @@ export async function init(cartPath) {
     const buf = new Int32Array(core.memory.buffer, ptr, 4);
     return buf[0];
   }
+  core.getU8 = function (ptr) {
+    const buf = new Int8Array(core.memory.buffer, ptr, 1);
+    return buf[0];
+  }
   const decoder = new TextDecoder();
   core.decodeString = function (data, len) {
     return decoder.decode(new Int8Array(core.memory.buffer, data, len));

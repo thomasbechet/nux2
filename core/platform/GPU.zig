@@ -80,41 +80,56 @@ pub const TextureInfo = struct {
     type: nux.Texture.Type = .image_rgba,
 };
 
-pub const Command = union(enum) {
-    bind_framebuffer: struct {
-        framebuffer: ?Handle, // null for default framebuffer
-    },
-    bind_pipeline: struct {
-        pipeline: Handle,
-    },
-    bind_buffer: struct {
-        buffer: Handle,
-        descriptor: Descriptor,
-    },
-    bind_texture: struct {
-        texture: ?Handle,
-        descriptor: Descriptor,
-    },
-    push_u32: struct {
-        value: u32,
-        descriptor: Descriptor,
-    },
-    push_f32: struct {
-        value: f32,
-        descriptor: Descriptor,
-    },
-    draw: struct {
-        count: u32,
-    },
-    clear_color: struct {
-        color: u32,
-    },
-    clear_depth,
-    viewport: struct {
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
+pub const CommandType = enum(u32) {
+    bind_framebuffer = 0,
+    bind_pipeline = 1,
+    bind_buffer = 2,
+    bind_texture = 3,
+    push_u32 = 4,
+    push_f32 = 5,
+    draw = 6,
+    clear_color = 7,
+    clear_depth = 8,
+    viewport = 9,
+};
+
+pub const Command = extern struct {
+    type: CommandType,
+    data: extern union {
+        bind_framebuffer: extern struct {
+            framebuffer: ?Handle, // null for default framebuffer
+        },
+        bind_pipeline: extern struct {
+            pipeline: Handle,
+        },
+        bind_buffer: extern struct {
+            buffer: Handle,
+            descriptor: Descriptor,
+        },
+        bind_texture: extern struct {
+            texture: ?Handle,
+            descriptor: Descriptor,
+        },
+        push_u32: extern struct {
+            value: u32,
+            descriptor: Descriptor,
+        },
+        push_f32: extern struct {
+            value: f32,
+            descriptor: Descriptor,
+        },
+        draw: extern struct {
+            count: u32,
+        },
+        clear_color: extern struct {
+            color: u32,
+        },
+        viewport: extern struct {
+            x: i32,
+            y: i32,
+            width: u32,
+            height: u32,
+        },
     },
 };
 

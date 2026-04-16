@@ -1,7 +1,7 @@
 #version 300 es
 precision highp float;
 
-in vec2 inUV;
+in vec2 outUV;
 out vec4 outColor;
 
 uniform sampler2D texture0;
@@ -13,7 +13,7 @@ void main()
 {
     if (uMode == 1u)
     {
-        outColor = texture(texture0, inUV) * uColor;
+        outColor = texture(texture0, outUV) * uColor;
     }
     else
     {

@@ -100,12 +100,14 @@ const Encoder = struct {
             handle = fb.handle;
         }
         try self.commands.append(self.allocator, .{
-            .bind_framebuffer = .{ .framebuffer = handle },
+            .type = .bind_framebuffer,
+            .data = .{ .bind_framebuffer = .{ .framebuffer = handle } },
         });
     }
     fn bindPipeline(self: *Encoder, pipeline: *const Pipeline) !void {
         try self.commands.append(self.allocator, .{
-            .bind_pipeline = .{ .pipeline = pipeline.handle },
+            .type = .bind_pipeline,
+            .data = .{ .bind_pipeline = .{ .pipeline = pipeline.handle } },
         });
     }
     fn bindTexture(self: *Encoder, descriptor: GPU.Descriptor, texture: ?*const Texture) !void {
@@ -114,45 +116,58 @@ const Encoder = struct {
             handle = t.handle;
         }
         try self.commands.append(self.allocator, .{
-            .bind_texture = .{ .texture = handle, .descriptor = descriptor },
+            .type = .bind_texture,
+            .data = .{ .bind_texture = .{ .texture = handle, .descriptor = descriptor } },
         });
     }
     fn bindBuffer(self: *Encoder, descriptor: GPU.Descriptor, buffer: *const Buffer) !void {
         try self.commands.append(self.allocator, .{
-            .bind_buffer = .{ .buffer = buffer.handle, .descriptor = descriptor },
+            .type = .bind_buffer,
+            .data = .{ .bind_buffer = .{ .buffer = buffer.handle, .descriptor = descriptor } },
         });
     }
     fn pushU32(self: *Encoder, descriptor: GPU.Descriptor, value: u32) !void {
         try self.commands.append(self.allocator, .{
-            .push_u32 = .{ .value = value, .descriptor = descriptor },
+            .type = .push_u32,
+            .data = .{ .push_u32 = .{ .value = value, .descriptor = descriptor } },
         });
     }
     fn pushF32(self: *Encoder, descriptor: GPU.Descriptor, value: f32) !void {
         try self.commands.append(self.allocator, .{
-            .push_f32 = .{ .value = value, .descriptor = descriptor },
+            .type = .push_f32,
+            .data = .{ .push_f32 = .{ .value = value, .descriptor = descriptor } },
         });
     }
     fn draw(self: *Encoder, count: u32) !void {
         try self.commands.append(self.allocator, .{
-            .draw = .{ .count = count },
+            .type = .draw,
+            .data = .{ .draw = .{ .count = count } },
         });
     }
     fn drawFullQuad(self: *Encoder) !void {
         try self.draw(3); // Draw full screen triangle
     }
     fn clearColor(self: *Encoder, color: u32) !void {
-        try self.commands.append(self.allocator, .{ .clear_color = .{ .color = color } });
+        try self.commands.append(self.allocator, .{
+            .type = .clear_color,
+            .data = .{ .clear_color = .{ .color = color } },
+        });
     }
     fn clearDepth(self: *Encoder) !void {
-        try self.commands.append(self.allocator, .{.clear_depth});
+        try self.commands.append(self.allocator, .{
+            .type = .clear_depth,
+        });
     }
     fn viewport(self: *Encoder, x: i32, y: i32, w: u32, h: u32) !void {
-        try self.commands.append(self.allocator, .{ .viewport = .{
-            .x = x,
-            .y = y,
-            .width = w,
-            .height = h,
-        } });
+        try self.commands.append(self.allocator, .{
+            .type = .viewport,
+            .data = .{ .viewport = .{
+                .x = x,
+                .y = y,
+                .width = w,
+                .height = h,
+            } },
+        });
     }
 };
 

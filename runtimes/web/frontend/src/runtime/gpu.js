@@ -104,6 +104,8 @@ export async function init(core) {
   env.gpu_delete_buffer = function (handle) { }
   env.gpu_update_buffer = function (handle, offset, size, data, len) { }
   env.gpu_submit_commands = function (count, commands) {
-    console.log(commands);
+    console.log(core.getU32(commands));
+    for (let i = 0; i < count; ++i) {
+    }
   }
 }

@@ -1,34 +1,22 @@
 #version 300 es
-
-struct Batch
-{
-    uint mode;
-    uint first;
-    uint count;
-    uint textureWidth;
-    uint textureHeight;
-    vec4 color;
-};
-
-buffer BatchBlock
-{
-    Batch batches[];
-};
+precision highp float;
 
 in vec2 inUV;
 out vec4 outColor;
 
 uniform sampler2D texture0;
-uniform uint batchIndex;
+
+uniform uint uMode;
+uniform vec4 uColor;
 
 void main()
 {
-    if (batches[batchIndex].mode == 1)
+    if (uMode == 1u)
     {
-        outColor = texture(texture0, inUV) * batches[batchIndex].color;
+        outColor = texture(texture0, inUV) * uColor;
     }
     else
     {
-        outColor = batches[batchIndex].color;
+        outColor = uColor;
     }
 }

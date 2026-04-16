@@ -1,74 +1,66 @@
 #version 300 es
 
-struct Constants
-{
-    mat4 view;
-    mat4 proj;
-    uvec2 screenSize;
-    float time;
-};
+precision highp float;
+precision highp usampler2D;
 
-struct Batch
-{
-    uint mode;
-    uint first;
-    uint count;
-    uint textureWidth;
-    uint textureHeight;
-    vec4 color;
-};
+uniform mat4 uView;
+uniform mat4 uProj;
+uniform vec2 uScreenSize;
+uniform float uTime;
 
-uniform ConstantBlock
-{
-    Constants constants;
-};
-buffer QuadBlock
-{
-    uint quads[];
-};
-buffer BatchBlock
-{
-    Batch batches[];
-};
+uniform uint uFirst;
+uniform uint uTextureWidth;
+uniform uint uTextureHeight;
+
+uniform usampler2D uQuadTex;
 
 out vec2 outUV;
 
-uniform uint batchIndex;
+const vec2 offsets[6] = vec2[](
+    vec2(0.0, 0.0),
+    vec2(0.0, 1.0),
+    vec2(1.0, 1.0),
+    vec2(1.0, 1.0),
+    vec2(1.0, 0.0),
+    vec2(0.0, 0.0)
+);
 
-void main()
-{
-    const vec2 offsets[6] = vec2[](
-            vec2(0, 0),
-            vec2(0, 1),
-            vec2(1, 1),
-            vec2(1, 1),
-            vec2(1, 0),
-            vec2(0, 0)
-        );
+uvec4 loadQuad(uint index, int component) {
+    // 4 pixels per quad
+    uint texelIndex = index * 4u + uint(component);
 
-    // Extract quad data
-    Batch batch = batches[batchIndex];
-    uint index = batch.first + gl_VertexID / 6;
-    uint pos = quads[index * 4 + 0];
-    uint tex = quads[index * 4 + 1];
-    uint size = quads[index * 4 + 2];
-    uint scale = quads[index * 4 + 3];
+    ivec2 size = textureSize(uQuadTex, 0);
+    uint x = texelIndex % uint(size.x);
+    uint y = texelIndex / uint(size.x);
 
-    // Decode quad data
+    return texelFetch(uQuadTex, ivec2(x, y), 0);
+}
+
+void main() {
+    uint quadIndex = uFirst + uint(gl_VertexID / 6);
+
+    uvec4 posData   = loadQuad(quadIndex, 0);
+    uvec4 texData   = loadQuad(quadIndex, 1);
+    uvec4 sizeData  = loadQuad(quadIndex, 2);
+    uvec4 scaleData = loadQuad(quadIndex, 3);
+
+    uint pos   = posData.r;
+    uint tex   = texData.r;
+    uint size  = sizeData.r;
+    uint scale = scaleData.r;
+
     vec2 vertex_pos = vec2(float(pos & 0xffffu), float(pos >> 16u));
     vec2 vertex_tex = vec2(float(tex & 0xffffu), float(tex >> 16u));
     vec2 vertex_size = vec2(float(size & 0xffffu), float(size >> 16u));
 
-    // Compute vertex offset based on the vertex index
     vec2 vertex_offset = offsets[gl_VertexID % 6];
 
-    // Apply offset and normalize
-    vec2 position = (vertex_pos + vertex_size * scale * vertex_offset) / constants.screenSize;
-    position.y = 1 - position.y;
-    vec2 uv = floor(vertex_tex + vertex_size * vertex_offset) / vec2(batch.textureWidth, batch.textureHeight);
+    vec2 position = (vertex_pos + vertex_size * float(scale) * vertex_offset) / uScreenSize;
+    position.y = 1.0 - position.y;
 
-    // Store output
-    // output.position = float4(position * 2 - 1, depth, 1);
-    gl_Position = vec4(position * 2 - 1, 0, 1);
+    vec2 uv = floor(vertex_tex + vertex_size * vertex_offset) /
+              vec2(float(uTextureWidth), float(uTextureHeight));
+
+    gl_Position = vec4(position * 2.0 - 1.0, 0.0, 1.0);
     outUV = uv;
 }

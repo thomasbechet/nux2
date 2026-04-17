@@ -60,6 +60,7 @@ export async function init(core) {
 
   let gl;
   let textures = {};
+  let buffers = {};
   let programs = {};
 
   function createShader(type, source) {
@@ -179,37 +180,101 @@ export async function init(core) {
       core.memorySlice(data, len),
     );
   }
-  env.gpu_create_buffer = function (size) {
-    // const tex = gl.createTexture();
-    // gl.bindTexture(gl.TEXTURE_2D, tex);
-    // gl.texStorage2D(
-    //   gl.TEXTURE_2D,
-    //   1,
-    //   gl.RGBA32UI,
-    //   width,
-    //   height
-    // );
-    // const handle = core.generateHandle();
-    // buffers[handle] = tex;
-    // return handle;
-    return 0;
+  env.gpu_create_buffer = function (bufferType, size) {
+    let texture;
+    let ubo;
+    switch (bufferType) {
+      case BufferType.CONSTANTS: {
+        // Create UBO
+        break;
+      }
+      case BufferType.BATCHES:
+      case BufferType.QUADS:
+      case BufferType.TRANSFORMS:
+      case BufferType.VERTICES: {
+        // Create texture
+        const widthMax = 16384;
+        let width;
+        let height;
+        if (size < widthMax) {
+          width = size;
+          height = 1;
+        } else {
+          width = widthMax;
+          height = Math.ceil(size / widthMax);
+        }
+        texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texStorage2D(
+          gl.TEXTURE_2D,
+          1,
+          gl.RGBA32UI,
+          width,
+          height
+        );
+        break;
+      }
+    }
+
+    const handle = core.generateHandle();
+    buffers[handle] = {
+      type: bufferType,
+      texture: texture,
+      ubo: ubo,
+    };
+    return handle;
   }
   env.gpu_delete_buffer = function (handle) {
-    // delete buffers[handle];
+    const buffer = buffers[handle];
+    if (buffer.texture) {
+      gl.deleteTexture(buffer.texture);
+    }
+    if (buffer.ubo) {
+      gl.deleteBuffer(buffer.ubo);
+    }
+    delete buffers[handle];
   }
   env.gpu_update_buffer = function (handle, offset, size, data, len) {
-    // gl.texSubImage2D(
-    //   gl.TEXTURE_2D,
-    //   0,
-    //   0,
-    //   0,
-    //   width,
-    //   height,
-    //   gl.RGBA_INTEGER,
-    //   gl.UNSIGNED_BYTE,
-    //   core.memorySlice(data, len),
-    // );
-  }
+    const buffer = buffers[handle];
+
+    if (buffer.texture) {
+      gl.bindTexture(gl.TEXTURE_2D, buffer.texture);
+      const widthMax = 16384;
+
+      // Convert element offset to pixel offset
+      let x = offset % widthMax;
+      let y = Math.floor(offset / widthMax);
+      let remaining = size;
+      let dataOffset = 0;
+      const src = core.memorySlice(data, len);
+      while (remaining > 0) {
+        const rowSpace = widthMax - x;
+        const writeWidth = Math.min(remaining, rowSpace);
+        gl.texSubImage2D(
+          gl.TEXTURE_2D,
+          0,
+          x,
+          y,
+          writeWidth,
+          1,
+          gl.RGBA_INTEGER,
+          gl.UNSIGNED_INT,
+          src.subarray(dataOffset, dataOffset + writeWidth * 4)
+        );
+        remaining -= writeWidth;
+        dataOffset += writeWidth * 4;
+        x = 0;
+        y += 1;
+      }
+    } else if (buffer.ubo) {
+      gl.bindBuffer(gl.UNIFORM_BUFFER, buffer.ubo);
+      gl.bufferSubData(
+        gl.UNIFORM_BUFFER,
+        offset,
+        core.memorySlice(data, len)
+      );
+    }
+  };
   env.gpu_submit_commands = function (count, commands, command_size) {
     gl.clearColor(0.0, 0.5, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);

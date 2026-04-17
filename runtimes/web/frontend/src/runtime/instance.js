@@ -53,12 +53,19 @@ export async function init(cartPath) {
     const buf = new Int32Array(core.memory.buffer, ptr, 4);
     return buf[0];
   }
+  core.getF32 = function (ptr) {
+    const buf = new Float32Array(core.memory.buffer, ptr, 4);
+    return buf[0];
+  }
   core.getU8 = function (ptr) {
     const buf = new Int8Array(core.memory.buffer, ptr, 1);
     return buf[0];
   }
   core.memorySlice = function (ptr, len) {
     return new Uint8Array(core.memory.buffer, ptr, len);
+  }
+  core.memorySliceU32 = function (ptr, len) {
+    return new Uint32Array(core.memory.buffer, ptr, len);
   }
   const decoder = new TextDecoder();
   core.decodeString = function (data, len) {

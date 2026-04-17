@@ -61,7 +61,10 @@ export async function init(core) {
   let gl;
   let textures = {};
   let buffers = {};
-  let programs = {};
+  let pipelines = {};
+
+  let activePipeline = null;
+  let emptyVAO;
 
   function createShader(type, source) {
     var shader = gl.createShader(type);
@@ -98,6 +101,7 @@ export async function init(core) {
       alert("Unable to initialize WebGL2.");
       return;
     }
+    emptyVAO = gl.createVertexArray();
 
     gl.clearColor(0.2, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -115,15 +119,33 @@ export async function init(core) {
       const vertexShader = createShader(gl.VERTEX_SHADER, canvasVertexShader);
       const fragmentShader = createShader(gl.FRAGMENT_SHADER, canvasFragmentShader);
       const program = createProgram(vertexShader, fragmentShader);
+
+      let indices = [];
+      indices[Descriptor.CONSTANTS_BUFFER] = 1;
+      indices[Descriptor.BATCHES_BUFFER] = 2;
+      indices[Descriptor.QUADS_BUFFER] = 3;
+
+      let locations = [];
+      locations[Descriptor.TEXTURE] = gl.getAttribLocation(program, "texture0");
+      locations[Descriptor.BATCH_INDEX] = gl.getAttribLocation(program, "batchIndex");
+
+      let units = [];
+      units[Descriptor.TEXTURE] = 0;
+
       const handle = core.generateHandle();
-      programs[handle] = program;
+      pipelines[handle] = {
+        program: program,
+        indices: indices,
+        units: units,
+        locations: locations,
+      };
       return handle;
     }
     return 0;
   }
   env.gpu_delete_pipeline = function (handle) {
-    gl.deleteProgram(programs[handle]);
-    delete programs[handle];
+    gl.deleteProgram(pipelines[handle].program);
+    delete pipelines[handle];
   }
   env.gpu_create_texture = function (w, h, filtering, type) {
 
@@ -165,7 +187,7 @@ export async function init(core) {
     gl.deleteTexture(texture);
     delete textures[handle];
   }
-  env.gpu_update_texture = function (handle, x, y, w, h, data, len) {
+  env.gpu_update_texture = function (handle, x, y, w, h, data) {
     const texture = textures[handle];
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texSubImage2D(
@@ -177,32 +199,38 @@ export async function init(core) {
       h,
       gl.RGBA,
       gl.UNSIGNED_BYTE,
-      core.memorySlice(data, len),
+      core.memorySlice(data, w * h * 4),
     );
   }
   env.gpu_create_buffer = function (bufferType, size) {
     let texture;
     let ubo;
+
     switch (bufferType) {
       case BufferType.CONSTANTS: {
-        // Create UBO
+        ubo = gl.createBuffer();
+        gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
+        gl.bufferData(gl.UNIFORM_BUFFER, size, gl.DYNAMIC_DRAW);
         break;
       }
       case BufferType.BATCHES:
       case BufferType.QUADS:
       case BufferType.TRANSFORMS:
       case BufferType.VERTICES: {
-        // Create texture
+        const bytesPerPixel = 16; // RGBA32UI
+        const pixelCount = Math.ceil(size / bytesPerPixel);
+
         const widthMax = 16384;
-        let width;
-        let height;
-        if (size < widthMax) {
-          width = size;
+        let width, height;
+
+        if (pixelCount <= widthMax) {
+          width = pixelCount;
           height = 1;
         } else {
           width = widthMax;
-          height = Math.ceil(size / widthMax);
+          height = Math.ceil(pixelCount / widthMax);
         }
+
         texture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.texStorage2D(
@@ -210,7 +238,25 @@ export async function init(core) {
           1,
           gl.RGBA32UI,
           width,
-          height
+          height,
+        );
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        // Initialize to zero
+        const zero = new Uint32Array(width * height * 4); // RGBA32UI
+        gl.texSubImage2D(
+          gl.TEXTURE_2D,
+          0,
+          0,
+          0,
+          width,
+          height,
+          gl.RGBA_INTEGER,
+          gl.UNSIGNED_INT,
+          zero
         );
         break;
       }
@@ -219,106 +265,184 @@ export async function init(core) {
     const handle = core.generateHandle();
     buffers[handle] = {
       type: bufferType,
-      texture: texture,
-      ubo: ubo,
+      texture,
+      ubo,
     };
+
     return handle;
   }
   env.gpu_delete_buffer = function (handle) {
     const buffer = buffers[handle];
+    if (!buffer) return;
+
     if (buffer.texture) {
       gl.deleteTexture(buffer.texture);
     }
+
     if (buffer.ubo) {
       gl.deleteBuffer(buffer.ubo);
     }
+
     delete buffers[handle];
   }
-  env.gpu_update_buffer = function (handle, offset, size, data, len) {
+  env.gpu_update_buffer = function (handle, offset, len, data) {
     const buffer = buffers[handle];
 
-    if (buffer.texture) {
-      gl.bindTexture(gl.TEXTURE_2D, buffer.texture);
+    if (buffer.ubo) {
+      const src = core.memorySlice(data, len);
+      gl.bindBuffer(gl.UNIFORM_BUFFER, buffer.ubo);
+      gl.bufferSubData(gl.UNIFORM_BUFFER, offset, src);
+    } else if (buffer.texture) {
+
+      const bytesPerPixel = 16; // RGBA32UI
+      const uintsPerPixel = 4;
       const widthMax = 16384;
 
-      // Convert element offset to pixel offset
-      let x = offset % widthMax;
-      let y = Math.floor(offset / widthMax);
-      let remaining = size;
-      let dataOffset = 0;
-      const src = core.memorySlice(data, len);
-      while (remaining > 0) {
+      // Convert bytes to pixels
+      let pixelOffset = Math.floor(offset / bytesPerPixel);
+      let pixelCount = Math.floor(len / bytesPerPixel);
+
+      let x = pixelOffset % widthMax;
+      let y = Math.floor(pixelOffset / widthMax);
+
+      let remainingPixels = pixelCount;
+
+      // Convert input data to Uint32
+      const src = core.memorySliceU32(data, len / 4);
+
+      let dataOffset = 0; // in uint32
+
+      gl.bindTexture(gl.TEXTURE_2D, buffer.texture);
+      while (remainingPixels > 0) {
         const rowSpace = widthMax - x;
-        const writeWidth = Math.min(remaining, rowSpace);
+        const writePixels = Math.min(remainingPixels, rowSpace);
+        const uintCount = writePixels * uintsPerPixel;
         gl.texSubImage2D(
           gl.TEXTURE_2D,
           0,
           x,
           y,
-          writeWidth,
+          writePixels,
           1,
           gl.RGBA_INTEGER,
           gl.UNSIGNED_INT,
-          src.subarray(dataOffset, dataOffset + writeWidth * 4)
+          src.subarray(dataOffset, dataOffset + uintCount)
         );
-        remaining -= writeWidth;
-        dataOffset += writeWidth * 4;
+
+        remainingPixels -= writePixels;
+        dataOffset += uintCount;
+
         x = 0;
         y += 1;
       }
-    } else if (buffer.ubo) {
-      gl.bindBuffer(gl.UNIFORM_BUFFER, buffer.ubo);
-      gl.bufferSubData(
-        gl.UNIFORM_BUFFER,
-        offset,
-        core.memorySlice(data, len)
-      );
     }
-  };
+  }
   env.gpu_submit_commands = function (count, commands, command_size) {
-    gl.clearColor(0.0, 0.5, 0.0, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
     for (let i = 0; i < count; ++i) {
       const p = commands + i * command_size;
       const type = core.getU32(p);
+
       switch (type) {
         case CommandType.BIND_FRAMEBUFFER: {
           const handle = core.getU32(p + 4);
+          if (handle !== 0) {
+            const fb = framebuffers[handle];
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fb.handle);
+          } else {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          }
           break;
         }
         case CommandType.BIND_PIPELINE: {
           const handle = core.getU32(p + 4);
+          const pipeline = pipelines[handle];
+
+          gl.useProgram(pipeline.program);
+
+          if (pipeline.depth_test) gl.enable(gl.DEPTH_TEST);
+          else gl.disable(gl.DEPTH_TEST);
+
+          if (pipeline.blend) {
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          } else {
+            gl.disable(gl.BLEND);
+          }
+
+          if (pipeline.type === PipelineType.UBER) {
+            gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
+          }
+
+          activePipeline = pipeline;
           break;
         }
         case CommandType.BIND_BUFFER: {
           const handle = core.getU32(p + 4);
           const desc = core.getU32(p + 8);
+
+          const buffer = buffers[handle];
+          const index = activePipeline.indices[desc];
+
+          gl.bindBufferBase(buffer.type, index, buffer.handle);
           break;
         }
         case CommandType.BIND_TEXTURE: {
           const handle = core.getU32(p + 4);
           const desc = core.getU32(p + 8);
+
+          let texHandle = null;
+          if (handle !== 0) {
+            texHandle = textures[handle].handle;
+          }
+
+          const unit = activePipeline.units[desc];
+          const location = activePipeline.locations[desc];
+
+          gl.activeTexture(gl.TEXTURE0 + unit);
+          gl.bindTexture(gl.TEXTURE_2D, texHandle);
+          gl.uniform1i(location, unit);
+
           break;
         }
         case CommandType.PUSH_U32: {
           const value = core.getU32(p + 4);
           const desc = core.getU32(p + 8);
+
+          const location = activePipeline.locations[desc];
+          gl.uniform1ui(location, value);
           break;
         }
         case CommandType.PUSH_F32: {
-          const value = core.getU32(p + 4);
+          const value = core.getF32(p + 4);
           const desc = core.getU32(p + 8);
+
+          const location = activePipeline.locations[desc];
+          gl.uniform1f(location, value);
           break;
         }
         case CommandType.DRAW: {
-          const count = core.getU32(p + 4);
+          const vertexCount = core.getU32(p + 4);
+
+          gl.bindVertexArray(emptyVAO);
+          gl.drawArrays(activePipeline.primitive, 0, vertexCount);
+          gl.bindVertexArray(null);
+
           break;
         }
         case CommandType.CLEAR_COLOR: {
           const color = core.getU32(p + 4);
+
+          const r = ((color >> 0) & 0xFF) / 255;
+          const g = ((color >> 8) & 0xFF) / 255;
+          const b = ((color >> 16) & 0xFF) / 255;
+          const a = ((color >> 24) & 0xFF) / 255;
+
+          gl.clearColor(r, g, b, a);
+          gl.clear(gl.COLOR_BUFFER_BIT);
           break;
         }
         case CommandType.CLEAR_DEPTH: {
+          gl.clear(gl.DEPTH_BUFFER_BIT);
           break;
         }
         case CommandType.VIEWPORT: {
@@ -326,6 +450,12 @@ export async function init(core) {
           const y = core.getU32(p + 8);
           const width = core.getU32(p + 12);
           const height = core.getU32(p + 16);
+
+          const flippedY = height - (y + height);
+
+          gl.viewport(x, flippedY, width, height);
+          gl.enable(gl.SCISSOR_TEST);
+          gl.scissor(x, flippedY, width, height);
           break;
         }
       }

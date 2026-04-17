@@ -25,7 +25,6 @@ extern fn gpu_update_texture(
     w: u32,
     h: u32,
     data: [*]const u8,
-    len: usize,
 ) void;
 extern fn gpu_create_buffer(buffer_type: u32, size: u32) u32;
 extern fn gpu_delete_buffer(handle: u32) void;
@@ -34,7 +33,6 @@ extern fn gpu_update_buffer(
     offset: u32,
     size: u32,
     data: [*]const u8,
-    len: usize,
 ) void;
 extern fn gpu_submit_commands(
     count: u32,
@@ -83,7 +81,14 @@ pub fn updateTexture(
     h: u32,
     data: []const u8,
 ) !void {
-    gpu_update_texture(@intFromPtr(handle), x, y, w, h, data.ptr, data.len);
+    gpu_update_texture(
+        @intFromPtr(handle),
+        x,
+        y,
+        w,
+        h,
+        data.ptr,
+    );
 }
 
 pub fn createBuffer(
@@ -91,7 +96,10 @@ pub fn createBuffer(
     buffer_type: Platform.BufferType,
     size: u32,
 ) !Platform.Handle {
-    const handle = gpu_create_buffer(@intFromEnum(buffer_type), size);
+    const handle = gpu_create_buffer(
+        @intFromEnum(buffer_type),
+        size,
+    );
     return @ptrFromInt(handle);
 }
 pub fn deleteBuffer(_: *anyopaque, handle: Platform.Handle) void {
@@ -104,12 +112,21 @@ pub fn updateBuffer(
     size: u32,
     data: []const u8,
 ) !void {
-    gpu_update_buffer(@intFromPtr(handle), offset, size, data.ptr, data.len);
+    gpu_update_buffer(
+        @intFromPtr(handle),
+        offset,
+        size,
+        data.ptr,
+    );
 }
 
 pub fn submitCommands(
     _: *anyopaque,
     commands: []const Platform.Command,
 ) !void {
-    gpu_submit_commands(commands.len, @ptrCast(commands.ptr), @sizeOf(Platform.Command));
+    gpu_submit_commands(
+        commands.len,
+        @ptrCast(commands.ptr),
+        @sizeOf(Platform.Command),
+    );
 }

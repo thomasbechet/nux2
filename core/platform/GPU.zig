@@ -7,28 +7,29 @@ vtable: *const VTable = &.{},
 pub const Handle = *anyopaque;
 
 pub const Constants = extern struct {
-    view: [16]f32,
-    proj: [16]f32,
-    screen_size: [2]u32,
+    view: [16]f32, // 0
+    proj: [16]f32, // 4
+    screen_size: [2]u32, // 8
     time: f32,
-    _pad: [3]u32 = undefined,
+    _pad0: u32 = undefined,
 };
 
 pub const Quad = extern struct {
-    pos: u32,
+    pos: u32, // 0
     tex: u32,
     size: u32,
     scale: u32,
 };
 
 pub const Batch = extern struct {
-    mode: u32,
+    mode: u32, // 0
     first: u32,
     count: u32,
     texture_width: u32,
-    texture_height: u32,
-    _pad: [3]u32 = undefined,
-    color: [4]f32,
+    texture_height: u32, // 1
+    _pad0: [3]u32 = undefined,
+    color: [4]f32, // 2
+    _pad1: [4]u32 = undefined, // 3
 };
 
 pub const SceneBatch = extern struct {

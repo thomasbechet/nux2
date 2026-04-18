@@ -102,9 +102,6 @@ export async function init(core) {
       return;
     }
     emptyVAO = gl.createVertexArray();
-
-    gl.clearColor(0.2, 0.0, 0.0, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
   }
   env.gpu_delete_device = function () { }
   env.gpu_create_pipeline = function (
@@ -121,16 +118,18 @@ export async function init(core) {
       const program = createProgram(vertexShader, fragmentShader);
 
       let indices = [];
-      indices[Descriptor.CONSTANTS_BUFFER] = 1;
-      indices[Descriptor.BATCHES_BUFFER] = 2;
-      indices[Descriptor.QUADS_BUFFER] = 3;
+      indices[Descriptor.CONSTANTS_BUFFER] = gl.getUniformBlockIndex(program, "ConstantBlock");
 
       let locations = [];
-      locations[Descriptor.TEXTURE] = gl.getAttribLocation(program, "texture0");
-      locations[Descriptor.BATCH_INDEX] = gl.getAttribLocation(program, "batchIndex");
+      locations[Descriptor.BATCHES_BUFFER] = gl.getUniformLocation(program, "batchesTexture");
+      locations[Descriptor.QUADS_BUFFER] = gl.getUniformLocation(program, "quadsTexture");
+      locations[Descriptor.BATCH_INDEX] = gl.getUniformLocation(program, "batchIndex");
+      locations[Descriptor.TEXTURE] = gl.getUniformLocation(program, "texture0");
 
       let units = [];
-      units[Descriptor.TEXTURE] = 0;
+      units[Descriptor.BATCHES_BUFFER] = gl.TEXTURE0;
+      units[Descriptor.QUADS_BUFFER] = gl.TEXTURE1;
+      units[Descriptor.TEXTURE] = gl.TEXTURE2;
 
       const handle = core.generateHandle();
       pipelines[handle] = {
@@ -308,11 +307,9 @@ export async function init(core) {
       let remainingPixels = pixelCount;
 
       // Convert input data to Uint32
-      const src = core.memorySliceU32(data, len / 4);
-
-      let dataOffset = 0; // in uint32
-
       gl.bindTexture(gl.TEXTURE_2D, buffer.texture);
+      const src = core.memorySliceU32(data, len / 4);
+      let dataOffset = 0; // in uint32
       while (remainingPixels > 0) {
         const rowSpace = widthMax - x;
         const writePixels = Math.min(remainingPixels, rowSpace);
@@ -381,9 +378,17 @@ export async function init(core) {
           const desc = core.getU32(p + 8);
 
           const buffer = buffers[handle];
-          const index = activePipeline.indices[desc];
-
-          gl.bindBufferBase(buffer.type, index, buffer.handle);
+          if (buffer.ubo) {
+            const index = activePipeline.indices[desc];
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, index, buffer.handle);
+          } else if (buffer.texture) {
+            const location = activePipeline.locations[desc];
+            const unit = activePipeline.units[desc];
+            const unitIndex = unit - gl.TEXTURE0;
+            gl.activeTexture(unit);
+            gl.bindTexture(gl.TEXTURE_2D, buffer.texture);
+            gl.uniform1i(location, unitIndex);
+          }
           break;
         }
         case CommandType.BIND_TEXTURE: {
@@ -395,12 +400,13 @@ export async function init(core) {
             texHandle = textures[handle].handle;
           }
 
-          const unit = activePipeline.units[desc];
           const location = activePipeline.locations[desc];
+          const unit = activePipeline.units[desc];
+          const unitIndex = unit - gl.TEXTURE0;
 
-          gl.activeTexture(gl.TEXTURE0 + unit);
+          gl.activeTexture(unit);
           gl.bindTexture(gl.TEXTURE_2D, texHandle);
-          gl.uniform1i(location, unit);
+          gl.uniform1i(location, unitIndex);
 
           break;
         }

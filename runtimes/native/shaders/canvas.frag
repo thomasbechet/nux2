@@ -7,7 +7,9 @@ struct Batch
     uint count;
     uint textureWidth;
     uint textureHeight;
+    uint _pad0[3];
     vec4 color;
+    uint _pad1[3];
 };
 
 layout(binding = 2, std430) readonly buffer BatchBlock

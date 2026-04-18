@@ -6,6 +6,7 @@ struct Constants
     mat4 proj;
     uvec2 screenSize;
     float time;
+    uint _pad0;
 };
 
 struct Batch
@@ -15,7 +16,9 @@ struct Batch
     uint count;
     uint textureWidth;
     uint textureHeight;
+    uint _pad0[3];
     vec4 color;
+    uint _pad1[3];
 };
 
 layout(binding = 0, std140) uniform ConstantBlock

@@ -11,6 +11,7 @@ struct Constants
     mat4 proj;
     uvec2 screenSize;
     float time;
+    uint _pad0;
 };
 
 struct Batch

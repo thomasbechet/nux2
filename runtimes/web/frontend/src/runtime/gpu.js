@@ -118,7 +118,8 @@ export async function init(core) {
       const program = createProgram(vertexShader, fragmentShader);
 
       let indices = [];
-      indices[Descriptor.CONSTANTS_BUFFER] = gl.getUniformBlockIndex(program, "ConstantBlock");
+      gl.uniformBlockBinding(program, gl.getUniformBlockIndex(program, "ConstantBlock"), 1);
+      indices[Descriptor.CONSTANTS_BUFFER] = 1;
 
       let locations = [];
       locations[Descriptor.BATCHES_BUFFER] = gl.getUniformLocation(program, "batchesTexture");
@@ -205,9 +206,11 @@ export async function init(core) {
     let texture;
     let ubo;
 
+    const handle = core.generateHandle();
     switch (bufferType) {
       case BufferType.CONSTANTS: {
         ubo = gl.createBuffer();
+        console.log("UBO", size, handle);
         gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
         gl.bufferData(gl.UNIFORM_BUFFER, size, gl.DYNAMIC_DRAW);
         break;
@@ -261,7 +264,6 @@ export async function init(core) {
       }
     }
 
-    const handle = core.generateHandle();
     buffers[handle] = {
       type: bufferType,
       texture,
@@ -380,6 +382,7 @@ export async function init(core) {
           const buffer = buffers[handle];
           if (buffer.ubo) {
             const index = activePipeline.indices[desc];
+            console.log(handle, index);
             gl.bindBufferBase(gl.UNIFORM_BUFFER, index, buffer.handle);
           } else if (buffer.texture) {
             const location = activePipeline.locations[desc];
@@ -421,18 +424,15 @@ export async function init(core) {
         case CommandType.PUSH_F32: {
           const value = core.getF32(p + 4);
           const desc = core.getU32(p + 8);
-
           const location = activePipeline.locations[desc];
           gl.uniform1f(location, value);
           break;
         }
         case CommandType.DRAW: {
           const vertexCount = core.getU32(p + 4);
-
           gl.bindVertexArray(emptyVAO);
           gl.drawArrays(activePipeline.primitive, 0, vertexCount);
           gl.bindVertexArray(null);
-
           break;
         }
         case CommandType.CLEAR_COLOR: {

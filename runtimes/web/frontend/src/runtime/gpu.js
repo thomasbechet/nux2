@@ -138,6 +138,9 @@ export async function init(core) {
         indices: indices,
         units: units,
         locations: locations,
+        primitive: gl.TRIANGLES,
+        depthTest: depthTest,
+        blend: blend,
       };
       return handle;
     }
@@ -173,7 +176,6 @@ export async function init(core) {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     }
 
-    // Wrapping (safe default)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
@@ -210,7 +212,6 @@ export async function init(core) {
     switch (bufferType) {
       case BufferType.CONSTANTS: {
         ubo = gl.createBuffer();
-        console.log("UBO", size, handle);
         gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
         gl.bufferData(gl.UNIFORM_BUFFER, size, gl.DYNAMIC_DRAW);
         break;
@@ -358,8 +359,11 @@ export async function init(core) {
 
           gl.useProgram(pipeline.program);
 
-          if (pipeline.depth_test) gl.enable(gl.DEPTH_TEST);
-          else gl.disable(gl.DEPTH_TEST);
+          if (pipeline.depthTest) {
+            gl.enable(gl.DEPTH_TEST);
+          } else {
+            gl.disable(gl.DEPTH_TEST);
+          }
 
           if (pipeline.blend) {
             gl.enable(gl.BLEND);
@@ -382,8 +386,7 @@ export async function init(core) {
           const buffer = buffers[handle];
           if (buffer.ubo) {
             const index = activePipeline.indices[desc];
-            console.log(handle, index);
-            gl.bindBufferBase(gl.UNIFORM_BUFFER, index, buffer.handle);
+            gl.bindBufferBase(gl.UNIFORM_BUFFER, index, buffer.ubo);
           } else if (buffer.texture) {
             const location = activePipeline.locations[desc];
             const unit = activePipeline.units[desc];
@@ -397,18 +400,14 @@ export async function init(core) {
         case CommandType.BIND_TEXTURE: {
           const handle = core.getU32(p + 4);
           const desc = core.getU32(p + 8);
-
-          let texHandle = null;
-          if (handle !== 0) {
-            texHandle = textures[handle].handle;
-          }
+          const texture = textures[handle];
 
           const location = activePipeline.locations[desc];
           const unit = activePipeline.units[desc];
           const unitIndex = unit - gl.TEXTURE0;
 
           gl.activeTexture(unit);
-          gl.bindTexture(gl.TEXTURE_2D, texHandle);
+          gl.bindTexture(gl.TEXTURE_2D, texture);
           gl.uniform1i(location, unitIndex);
 
           break;
@@ -443,7 +442,7 @@ export async function init(core) {
           const b = ((color >> 16) & 0xFF) / 255;
           const a = ((color >> 24) & 0xFF) / 255;
 
-          gl.clearColor(r, g, b, a);
+          gl.clearColor(0, 0, 0, 1);
           gl.clear(gl.COLOR_BUFFER_BIT);
           break;
         }

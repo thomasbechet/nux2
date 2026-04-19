@@ -59,12 +59,12 @@ Batch fetchBatch(uint i)
     uvec4 p3 = texelFetch(batchesTexture, ivec2(x + 3u, y), 0).rgba;
 
     Batch b;
-    b.mode         = p0.r;
-    b.first        = p0.g;
-    b.count        = p0.b;
-    b.textureWidth = p0.a;
-    b.textureWidth = p1.r;
-    b.color        = uintBitsToFloat(p2.rgba);
+    b.mode          = p0.r;
+    b.first         = p0.g;
+    b.count         = p0.b;
+    b.textureWidth  = p0.a;
+    b.textureHeight = p1.r;
+    b.color         = uintBitsToFloat(p2.rgba);
     return b;
 }
 
@@ -82,7 +82,6 @@ Quad fetchQuad(uint i)
     q.size  = p0.b;
     q.scale = p0.a;
     return q;
-
 }
 
 void main()

@@ -1,9 +1,19 @@
 body {
     background-color: rgb(50, 20, 47);
+    margin: 0;
 }
 
-canvas {
-    padding: 0;
-    margin: auto;
-    display: block;
+#container {
+    min-height: 100vh;
+    text-align: center;
+    align-content: center;
+}
+
+#canvas {
+    height: 900px;
+
+    /* Nearest filtering */
+    -ms-interpolation-mode: nearest-neighbor;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
 }

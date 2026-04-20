@@ -6,12 +6,11 @@ const Self = @This();
 const Controller = struct {
     const max: u32 = 4;
 
-    cursor: nux.Vec2,
-    cursor_prev: nux.Vec2,
-    inputmap: nux.ID,
-    inputs: std.ArrayList(f32),
-    prev_inputs: std.ArrayList(f32),
-    // values: std.StringHashMap,
+    cursor: nux.Vec2 = .zero(),
+    cursor_prev: nux.Vec2 = .zero(),
+    inputmap: nux.ID = .null,
+    inputs: std.ArrayList(f32) = .empty,
+    prev_inputs: std.ArrayList(f32) = .empty,
 };
 
 pub const State = enum(u32) { pressed = 1, released = 0 };
@@ -137,83 +136,152 @@ pub const Key = enum(u32) {
     menu = 118,
 };
 
+pub const MouseButton = enum(u32) {
+    left = 0,
+    right = 1,
+    middle = 2,
+    wheel_up = 3,
+    wheel_down = 4,
+};
+
+pub const MouseAxis = enum(u32) {
+    motion_right = 0,
+    motion_left = 1,
+    motion_down = 2,
+    motion_up = 3,
+    scroll_up = 4,
+    scroll_down = 5,
+};
+
+pub const GamepadButton = enum(u32) {
+    a = 0,
+    x = 1,
+    y = 2,
+    b = 3,
+    dpad_up = 4,
+    dpad_down = 5,
+    dpad_left = 6,
+    dpad_right = 7,
+    shoulder_left = 8,
+    shoulder_right = 9,
+};
+
+pub const GamepadAxis = enum(u32) {
+    lstick_left = 0,
+    lstick_right = 1,
+    lstick_up = 2,
+    lstick_down = 3,
+    rstick_left = 4,
+    rstick_right = 5,
+    rstick_up = 6,
+    rstick_down = 7,
+    ltrigger = 8,
+    rtrigger = 9,
+};
+
 controllers: [Controller.max]Controller,
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
-input_map: *nux.InputMap,
+inputmap: *nux.InputMap,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
+    self.controllers = [_]Controller{.{}} ** Controller.max;
+}
+pub fn deinit(self: *Self) void {
+    for (&self.controllers) |*controller| {
+        controller.inputs.deinit(self.allocator);
+        controller.prev_inputs.deinit(self.allocator);
+    }
 }
 pub fn onEvent(self: *Self, event: *const nux.Platform.Event) void {
     switch (event.*) {
         .keyPressed => |*e| {
-            self.logger.info("{any} {any}", .{ e.key, e.state });
 
-            // for (self.controllers) |controller| {
-            //     if (self.input_map.components.getOptional(controller.inputmap)) |map| {
-            //         for (map.entries) |entry| {
-            //         }
-            //     }
-            // }
+            // Iterate controllers
+            for (self.controllers) |controller| {
+                if (self.inputmap.components.getOptional(controller.inputmap)) |map| {
 
-            // for ()
+                    // Iterate map entries
+                    for (map.entries.items, 0..) |entry, index| {
+                        if (entry.mapping == .key and entry.mapping.key == e.key) {
+                            controller.inputs.items[index] = @floatFromInt(@intFromEnum(e.state));
+                        }
+                    }
+                }
+            }
         },
         else => {},
     }
 }
+pub fn onPreUpdate(self: *Self) !void {
 
-// static void
-// controller_get_input_value (nux_u32_t       controller,
-//                             const nux_c8_t *name,
-//                             nux_f32_t      *value,
-//                             nux_f32_t      *prev_value,
-//                             nux_f32_t       default_value)
-// {
-//     nux_check(controller < nux_array_size(_module.controllers), goto error);
-//     nux_controller_t *ctrl = _module.controllers + controller;
-//     nux_inputmap_t   *map
-//         = nux_resource_get(NUX_RESOURCE_INPUTMAP, ctrl->inputmap);
-//     nux_check(map, goto error);
-//     nux_u32_t index;
-//     nux_check(nux_inputmap_find_index(map, name, &index), goto error);
-//     nux_assert(index < ctrl->inputs.size);
-//     *value      = ctrl->inputs.data[index];
-//     *prev_value = ctrl->prev_inputs.data[index];
-//     return;
-// error:
-//     *value      = default_value;
-//     *prev_value = default_value;
-// }
+    // Update inputs array size if inputmap has changed
+    for (&self.controllers) |*controller| {
+        if (self.inputmap.components.getOptional(controller.inputmap)) |map| {
+            if (controller.inputs.items.len != map.entries.items.len) {
+                try controller.inputs.resize(self.allocator, map.entries.items.len);
+                try controller.prev_inputs.resize(self.allocator, map.entries.items.len);
+            }
+        }
+    }
+}
+pub fn onPostUpdate(self: *Self) !void {
 
-// fn controllerInputValue(self: *Self, controller: u32, name: []const u8, default: f32) struct { f32, f32 } {
-//     const missing_default = .{ false, false };
-//     if (controller >= Controller.max) return missing_default;
-//     const map = self.input_map.objects.get(self.controllers[controller].inputmap) catch return missing_default;
-//     // map.entries
-// }
+    // Keep previous state
+    for (self.controllers) |controller| {
+        @memcpy(controller.prev_inputs.items, controller.inputs.items);
+    }
+}
 
+fn getController(self: *Self, controller: u32) !*Controller {
+    if (controller >= Controller.max) {
+        return error.InvalidControllerIndex;
+    }
+    return &self.controllers[controller];
+}
+fn controllerInputValue(self: *Self, controller: u32, name: []const u8, default: f32) struct { f32, f32 } {
+    const default_values = .{ default, default };
+    const ctrl = self.getController(controller) catch return default_values;
+    const map = self.inputmap.components.get(self.controllers[controller].inputmap) catch return default_values;
+    const entry = map.get(name) orelse return default_values;
+    if (entry.index >= ctrl.inputs.items.len) {
+        return default_values;
+    }
+    return .{
+        ctrl.inputs.items[entry.index],
+        ctrl.prev_inputs.items[entry.index],
+    };
+}
+
+pub fn setInputMap(self: *Self, controller: u32, id: nux.ID) !void {
+    const ctrl = try self.getController(controller);
+    ctrl.inputmap = id;
+}
 pub fn isPressed(self: *Self, controller: u32, name: []const u8) bool {
-    _ = controller;
-    _ = self;
-    _ = name;
-    return false;
+    const value, _ = self.controllerInputValue(
+        controller,
+        name,
+        @intFromEnum(State.released),
+    );
+    return value > @intFromEnum(State.released);
 }
 pub fn isReleased(self: *Self, controller: u32, name: []const u8) bool {
-    _ = self;
-    _ = controller;
-    _ = name;
-    return false;
+    return !self.isPressed(controller, name);
 }
 pub fn isJustPressed(self: *Self, controller: u32, name: []const u8) bool {
-    _ = self;
-    _ = controller;
-    _ = name;
-    return false;
+    const value, const prev = self.controllerInputValue(
+        controller,
+        name,
+        @intFromEnum(State.released),
+    );
+    return value > @intFromEnum(State.released) and prev <= @intFromEnum(State.released);
 }
 pub fn isJustReleased(self: *Self, controller: u32, name: []const u8) bool {
-    _ = self;
-    _ = controller;
-    _ = name;
-    return false;
+    const value, const prev = self.controllerInputValue(
+        controller,
+        name,
+        @intFromEnum(State.released),
+    );
+    return value <= @intFromEnum(State.released) and prev > @intFromEnum(State.released);
 }

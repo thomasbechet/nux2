@@ -3,6 +3,11 @@ const nux = @import("nux");
 const Window = @import("Window.zig");
 const GPU = @import("GPU.zig");
 
+fn match(s: []const u8, option: []const u8, single: []const u8) bool {
+    return std.mem.eql(u8, s, option) or
+        std.mem.eql(u8, s, single);
+}
+
 pub fn parseArgs(args: std.process.ArgIterator) !nux.Platform.Config {
     var cfg = nux.Platform.Config{};
 
@@ -10,14 +15,14 @@ pub fn parseArgs(args: std.process.ArgIterator) !nux.Platform.Config {
     _ = it.next(); // skip program name
 
     while (it.next()) |arg| {
-        if (std.mem.eql(u8, arg, "--log")) {
+        if (match(arg, "--log", "-l")) {
             cfg.logModuleInitialization = true;
-        } else if (std.mem.eql(u8, arg, "--build")) {
+        } else if (match(arg, "--build", "-b")) {
             cfg.build = true;
-        } else if (std.mem.eql(u8, arg, "--output")) {
+        } else if (match(arg, "--output", "-o")) {
             const v = it.next() orelse return error.MissingValue;
             cfg.outpout = v;
-        } else if (std.mem.eql(u8, arg, "--glob")) {
+        } else if (match(arg, "--glob", "-g")) {
             const v = it.next() orelse return error.MissingValue;
             cfg.glob = v;
         } else {

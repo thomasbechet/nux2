@@ -147,16 +147,16 @@ pub fn exportNode(self: *Self, parent: nux.ID, root: nux.ID) !nux.ID {
     return id;
 }
 pub fn instantiate(self: *Self, id: nux.ID, parent: nux.ID) !nux.ID {
-    const collection = try self.components.get(id);
+    const scene = try self.components.get(id);
 
     // Create nodes
-    try self.ids.resize(self.allocator, collection.nodes.items.len);
-    for (collection.nodes.items, 0..) |*node, index| {
+    try self.ids.resize(self.allocator, scene.nodes.items.len);
+    for (scene.nodes.items, 0..) |*node, index| {
         const node_parent = if (node.parent) |parent_index|
             self.ids.items[parent_index]
         else
             parent;
-        const name = collection.data.items[node.name_start..node.name_end];
+        const name = scene.data.items[node.name_start..node.name_end];
         self.ids.items[index] = try self.node.createNamed(node_parent, name);
     }
 
@@ -169,18 +169,22 @@ pub fn instantiate(self: *Self, id: nux.ID, parent: nux.ID) !nux.ID {
         .nodes = self.ids.items,
         .allocator = arena.allocator(),
     };
-    for (collection.nodes.items, 0..) |*node, index| {
+    for (scene.nodes.items, 0..) |*node, index| {
+
         // Create reader on component data
-        const data = collection.data.items[node.component_data_start..node.component_data_end];
+        const data = scene.data.items[node.component_data_start..node.component_data_end];
         var data_reader = std.Io.Reader.fixed(data);
         reader.reader = &data_reader;
+
         // Load components
         const node_id = self.ids.items[index];
-        for (collection.module_indices.items[node.module_indices_start..node.module_indices_end]) |module_index| {
+        for (scene.module_indices.items[node.module_indices_start..node.module_indices_end]) |module_index| {
+
             // Clear arena
             _ = arena.reset(.retain_capacity);
+
             // Load component
-            const module_id = collection.module_ids.items[module_index];
+            const module_id = scene.module_ids.items[module_index];
             const module = try self.component.getModule(module_id);
             try module.v_component.?.load(module.v_ptr, node_id, &reader);
         }
@@ -188,4 +192,11 @@ pub fn instantiate(self: *Self, id: nux.ID, parent: nux.ID) !nux.ID {
 
     // Return root
     return self.ids.items[0];
+}
+pub fn writeFile(self: *Self, id: nux.ID, path: []const u8) !void {
+    const scene = try self.components.get(id);
+    var writer = try nux.File.Writer.open(self.file, path, &.{});
+    defer writer.close();
+    // TODO: write to file
+    _ = scene;
 }

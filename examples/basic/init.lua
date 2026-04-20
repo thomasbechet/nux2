@@ -8,10 +8,18 @@ function createText(parent, text)
     Widget.setPadding(node, Math.vec4(10, 10, 0, 0))
 end
 
+-- function setupInputs()
+--     local map = Node.find("/inputmap")
+--     InputMap.bindKey(map, "move_up", Input.KEY_UP)
+--     InputMap.bindKey(map, "move_up", Input.KEY_UP)
+--     InputMap.bindKey(map, "move_up", Input.KEY_UP)
+--     InputMap.bindKey(map, "move_up", Input.KEY_UP)
+-- end
+
 function M:onInit()
     -- Gltf.loadGltf(Node.getRoot(), "industrial.glb")
-    -- local c = Collection.exportNode(Node.getRoot(), Node.getRoot())
-    -- Collection.instantiate(c, Node.getRoot())
+    -- local c = Scene.exportNode(Node.getRoot(), Node.getRoot())
+    -- Scene.instantiate(c, Node.getRoot())
     -- Node.dump(Node.getRoot())
 
     -- local gui = GUI.add(Node.getRoot())
@@ -61,13 +69,13 @@ function M:onInit()
     -- print(Widget.id)
 
     local module_count = Module.count()
-    for m=1,module_count do
-        local module_name = Module.getName(m-1)
+    for m = 1, module_count do
+        local module_name = Module.getName(m - 1)
         createText(panel, module_name)
-        local function_count = Function.count(m-1)
-        for f=1,function_count do
-            local ret = Function.getReturnType(m-1,f-1)
-            print(module_name.."."..Function.getName(m-1, f-1).."("..ret..")")
+        local function_count = Function.count(m - 1)
+        for f = 1, function_count do
+            local ret = Function.getReturnType(m - 1, f - 1)
+            print(module_name .. "." .. Function.getName(m - 1, f - 1) .. "(" .. ret .. ")")
         end
     end
 end

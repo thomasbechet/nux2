@@ -351,7 +351,7 @@ root: ID,
 component: *nux.Component,
 file: *nux.File,
 logger: *nux.Logger,
-collection: *nux.Collection,
+collection: *nux.Scene,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;

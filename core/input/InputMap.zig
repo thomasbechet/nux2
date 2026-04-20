@@ -23,7 +23,6 @@ const Component = struct {
 };
 
 allocator: std.mem.Allocator,
-logger: *nux.Logger,
 components: nux.Components(Component),
 
 pub fn init(self: *Self, core: *const nux.Core) !void {

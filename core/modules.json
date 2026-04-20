@@ -59,7 +59,7 @@
             ]
         },
         {
-            "path": "base/Collection.zig"
+            "path": "base/Scene.zig"
         },
         {
             "path": "base/Signal.zig",

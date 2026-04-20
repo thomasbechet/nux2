@@ -12,7 +12,7 @@ const Node = struct {
     component_data_start: usize,
     component_data_end: usize,
 };
-const Collection = struct {
+const Component = struct {
     path: []const u8 = "",
     nodes: std.ArrayList(Node) = .empty,
     references: std.ArrayList([]const u8) = .empty,
@@ -20,7 +20,7 @@ const Collection = struct {
     module_indices: std.ArrayList(usize) = .empty,
     data: std.ArrayList(u8) = .empty,
 
-    pub fn deinit(self: *Collection, mod: *Self) void {
+    pub fn deinit(self: *Component, mod: *Self) void {
         self.nodes.deinit(mod.allocator);
         self.references.deinit(mod.allocator);
         self.module_ids.deinit(mod.allocator);
@@ -30,7 +30,7 @@ const Collection = struct {
 };
 
 allocator: std.mem.Allocator,
-components: nux.Components(Collection),
+components: nux.Components(Component),
 node: *nux.Node,
 file: *nux.File,
 component: *nux.Component,

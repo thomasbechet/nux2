@@ -179,6 +179,14 @@ pub const GamepadAxis = enum(u32) {
     rtrigger = 9,
 };
 
+pub const Input = union(enum) {
+    key: Key,
+    mouse_button: MouseButton,
+    gamepad_button: GamepadButton,
+    mouse_axis: MouseAxis,
+    gamepad_axis: GamepadAxis,
+};
+
 controllers: [Controller.max]Controller,
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
@@ -195,23 +203,46 @@ pub fn deinit(self: *Self) void {
     }
 }
 pub fn onEvent(self: *Self, event: *const nux.Platform.Event) void {
+
     switch (event.*) {
-        .keyPressed => |*e| {
+        .inputValueChanged => |e| {
 
-            // Iterate controllers
-            for (self.controllers) |controller| {
-                if (self.inputmap.components.getOptional(controller.inputmap)) |map| {
+        },
+        else => {}
+    }
 
-                    // Iterate map entries
-                    for (map.entries.items, 0..) |entry, index| {
-                        if (entry.mapping == .key and entry.mapping.key == e.key) {
-                            controller.inputs.items[index] = @floatFromInt(@intFromEnum(e.state));
+    // Iterate controllers
+    for (self.controllers) |controller| {
+        if (self.inputmap.components.getOptional(controller.inputmap)) |map| {
+
+            // Iterate map entries
+            for (map.entries.items, 0..) |entry, index| {
+                const mapping = entry.mapping orelse continue;
+
+                // Check mapping
+                switch (event.*) {
+                    .buttonStateChanged => |e| {
+                        switch (e.button) {
+                            .key => |k| {
+                                if (mapping == .key and mapping.key == k) {}
+                            },
+                            .gamepad => |g| {},
                         }
+                    },
+                    .axisValueChanged => |e| {},
+                    else => {},
+                }
+                if (mapping == .key and event.* == .keyStateChanged) {
+                    if (event.keyStateChanged.key == mapping.key) {
+                        controller.inputs.items[index] = @floatFromInt(@intFromEnum(event.keyStateChanged.state));
+                    }
+                } else if (mapping == .mouse_button and event.* == .mouseButtonStateChanged) {
+                    if (event.keyStateChanged.key == mapping.key) {
+                        controller.inputs.items[index] = @floatFromInt(@intFromEnum(event.keyStateChanged.state));
                     }
                 }
             }
-        },
-        else => {},
+        }
     }
 }
 pub fn onPreUpdate(self: *Self) !void {

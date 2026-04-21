@@ -75,7 +75,7 @@ pub const Platform = struct {
     pub const File = @import("platform/File.zig");
     pub const GPU = @import("platform/GPU.zig");
     pub const Event = union(enum) {
-        keyPressed: Platform.Input.KeyPressed,
+        inputValueChanged: Platform.Input.InputValueChanged,
         windowResized: Platform.Window.WindowResized,
         requestExit,
     };

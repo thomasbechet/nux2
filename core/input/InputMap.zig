@@ -6,14 +6,8 @@ const Component = struct {
     const Entry = struct {
         name: []const u8,
         index: usize,
-        mapping: union(enum) {
-            unmapped,
-            key: nux.Input.Key,
-            mouse_button: nux.Input.MouseButton,
-            mouse_axis: nux.Input.MouseAxis,
-            gamepad_button: nux.Input.GamepadButton,
-            gamepad_axis: nux.Input.GamepadAxis,
-        },
+        mapping: ?nux.Input.Input,
+        sensivity: f32 = 1,
     };
 
     entries: std.ArrayList(Entry),
@@ -69,5 +63,49 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn bindKey(self: *Self, id: nux.ID, name: []const u8, key: nux.Input.Key) !void {
     const map = try self.components.get(id);
     const entry = try map.put(self, name);
-    entry.mapping.key = key;
+    entry.mapping = .{ .key = key };
+}
+pub fn bindMouseButton(
+    self: *Self,
+    id: nux.ID,
+    name: []const u8,
+    button: nux.Input.MouseButton,
+) !void {
+    const map = try self.components.get(id);
+    const entry = try map.put(self, name);
+    entry.mapping = .{ .mouse_button = button };
+}
+pub fn bindGamepadButton(
+    self: *Self,
+    id: nux.ID,
+    name: []const u8,
+    button: nux.Input.GamepadButton,
+) !void {
+    const map = try self.components.get(id);
+    const entry = try map.put(self, name);
+    entry.mapping = .{ .gamepad_button = button };
+}
+pub fn bindGamepadAxis(
+    self: *Self,
+    id: nux.ID,
+    name: []const u8,
+    axis: nux.Input.GamepadAxis,
+    sensivity: f32,
+) !void {
+    const map = try self.components.get(id);
+    const entry = try map.put(self, name);
+    entry.mapping = .{ .gamepad_axis = axis };
+    entry.sensivity = sensivity;
+}
+pub fn bindMouseAxis(
+    self: *Self,
+    id: nux.ID,
+    name: []const u8,
+    axis: nux.Input.MouseAxis,
+    sensivity: f32,
+) !void {
+    const map = try self.components.get(id);
+    const entry = try map.put(self, name);
+    entry.mapping = .{ .mouse_axis = axis };
+    entry.sensivity = sensivity;
 }

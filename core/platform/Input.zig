@@ -1,6 +1,6 @@
 const nux = @import("../nux.zig");
 
 pub const InputValueChanged = struct {
-    button: nux.Input.Button,
+    input: nux.Input.Input,
     value: f32, // Use Input.State for pressed / released
 };

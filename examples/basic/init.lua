@@ -81,7 +81,7 @@ function M:onInit()
 
     local map = Node.createNamed("/", "inputmap")
     Component.add(map, InputMap)
-    InputMap.bindKey(map, "up", Input.KEY_UP);
+    InputMap.bindButton(map, "up", Input.GAMEPAD_RSTICK_RIGHT);
     Input.setInputMap(0, map)
 end
 
@@ -89,7 +89,7 @@ function M:onDeinit()
 end
 
 function M:onUpdate()
-    print(Input.isJustReleased(0, "up"))
+    print(Input.getValue(0, "up"))
     -- Texture.blit("Textures/Building_1", Math.vec2(0, 0))
     -- Texture.blit("Textures/Building_2", Math.vec2(256, 0))
     -- Texture.blit("Textures/Building_3", Math.vec2(512, 0))

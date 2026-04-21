@@ -6,8 +6,13 @@ const nux = @import("nux");
 const gl = @import("gl");
 const std = @import("std");
 
+const gamepadcontrollerdb = @embedFile("gamecontrollerdb.txt");
+
 var procs: gl.ProcTable = undefined;
-var key_map: [c.GLFW_KEY_LAST + 1]?nux.Input.Key = undefined;
+var key_map: [c.GLFW_KEY_LAST + 1]?nux.Input.Input = undefined;
+var mouse_button_map: [c.GLFW_MOUSE_BUTTON_LAST + 1]?nux.Input.Input = undefined;
+var gamepad_button_map: [c.GLFW_GAMEPAD_BUTTON_LAST + 1]?nux.Input.Input = undefined;
+var gamepad_axis_map: [c.GLFW_GAMEPAD_AXIS_LAST + 1]?nux.Input.Input = undefined;
 
 const Self = @This();
 
@@ -50,7 +55,6 @@ fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     if (c.glfwInit() == 0) {
         @panic("Failed to initialize GLFW");
     }
-    // c.glfwWindowHint(c.GLFW_DECORATED, c.GLFW_FALSE);
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, 4);
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 3);
     c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
@@ -63,9 +67,11 @@ fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     c.glfwMakeContextCurrent(self.window);
     gl.makeProcTableCurrent(&procs);
     if (!procs.init(c.glfwGetProcAddress)) return error.initFailed;
-
     gl.Enable(gl.DEBUG_OUTPUT);
     gl.DebugMessageCallback(glMessageCallback, null);
+
+    // Setup gamepad
+    _ = c.glfwUpdateGamepadMappings(gamepadcontrollerdb);
 
     // Setup callbacks
     _ = c.glfwSetFramebufferSizeCallback(self.window, resizeCallback);
@@ -79,127 +85,146 @@ fn close(ctx: *anyopaque) void {
 fn resize(_: *anyopaque, _: u32, _: u32) void {}
 
 pub fn init() Self {
-    key_map[c.GLFW_KEY_SPACE] = .space;
-    key_map[c.GLFW_KEY_SPACE] = .space;
-    key_map[c.GLFW_KEY_APOSTROPHE] = .apostrophe;
-    key_map[c.GLFW_KEY_COMMA] = .comma;
-    key_map[c.GLFW_KEY_MINUS] = .minus;
-    key_map[c.GLFW_KEY_PERIOD] = .period;
-    key_map[c.GLFW_KEY_SLASH] = .slash;
-    key_map[c.GLFW_KEY_0] = .num0;
-    key_map[c.GLFW_KEY_1] = .num1;
-    key_map[c.GLFW_KEY_2] = .num2;
-    key_map[c.GLFW_KEY_3] = .num3;
-    key_map[c.GLFW_KEY_4] = .num4;
-    key_map[c.GLFW_KEY_5] = .num5;
-    key_map[c.GLFW_KEY_6] = .num6;
-    key_map[c.GLFW_KEY_7] = .num7;
-    key_map[c.GLFW_KEY_8] = .num8;
-    key_map[c.GLFW_KEY_9] = .num9;
-    key_map[c.GLFW_KEY_SEMICOLON] = .semicolon;
-    key_map[c.GLFW_KEY_EQUAL] = .equal;
-    key_map[c.GLFW_KEY_A] = .a;
-    key_map[c.GLFW_KEY_B] = .b;
-    key_map[c.GLFW_KEY_C] = .c;
-    key_map[c.GLFW_KEY_D] = .d;
-    key_map[c.GLFW_KEY_E] = .e;
-    key_map[c.GLFW_KEY_F] = .f;
-    key_map[c.GLFW_KEY_G] = .g;
-    key_map[c.GLFW_KEY_H] = .h;
-    key_map[c.GLFW_KEY_I] = .i;
-    key_map[c.GLFW_KEY_J] = .j;
-    key_map[c.GLFW_KEY_K] = .k;
-    key_map[c.GLFW_KEY_L] = .l;
-    key_map[c.GLFW_KEY_M] = .m;
-    key_map[c.GLFW_KEY_N] = .n;
-    key_map[c.GLFW_KEY_O] = .o;
-    key_map[c.GLFW_KEY_P] = .p;
-    key_map[c.GLFW_KEY_Q] = .q;
-    key_map[c.GLFW_KEY_R] = .r;
-    key_map[c.GLFW_KEY_S] = .s;
-    key_map[c.GLFW_KEY_T] = .t;
-    key_map[c.GLFW_KEY_U] = .u;
-    key_map[c.GLFW_KEY_V] = .v;
-    key_map[c.GLFW_KEY_W] = .w;
-    key_map[c.GLFW_KEY_X] = .x;
-    key_map[c.GLFW_KEY_Y] = .y;
-    key_map[c.GLFW_KEY_Z] = .z;
-    key_map[c.GLFW_KEY_LEFT_BRACKET] = .left_bracket;
-    key_map[c.GLFW_KEY_BACKSLASH] = .backslash;
-    key_map[c.GLFW_KEY_RIGHT_BRACKET] = .right_bracket;
-    key_map[c.GLFW_KEY_GRAVE_ACCENT] = .grave_accent;
+    key_map[c.GLFW_KEY_SPACE] = .key_space;
+    key_map[c.GLFW_KEY_APOSTROPHE] = .key_apostrophe;
+    key_map[c.GLFW_KEY_COMMA] = .key_comma;
+    key_map[c.GLFW_KEY_MINUS] = .key_minus;
+    key_map[c.GLFW_KEY_PERIOD] = .key_period;
+    key_map[c.GLFW_KEY_SLASH] = .key_slash;
+    key_map[c.GLFW_KEY_0] = .key_num0;
+    key_map[c.GLFW_KEY_1] = .key_num1;
+    key_map[c.GLFW_KEY_2] = .key_num2;
+    key_map[c.GLFW_KEY_3] = .key_num3;
+    key_map[c.GLFW_KEY_4] = .key_num4;
+    key_map[c.GLFW_KEY_5] = .key_num5;
+    key_map[c.GLFW_KEY_6] = .key_num6;
+    key_map[c.GLFW_KEY_7] = .key_num7;
+    key_map[c.GLFW_KEY_8] = .key_num8;
+    key_map[c.GLFW_KEY_9] = .key_num9;
+    key_map[c.GLFW_KEY_SEMICOLON] = .key_semicolon;
+    key_map[c.GLFW_KEY_EQUAL] = .key_equal;
+    key_map[c.GLFW_KEY_A] = .key_a;
+    key_map[c.GLFW_KEY_B] = .key_b;
+    key_map[c.GLFW_KEY_C] = .key_c;
+    key_map[c.GLFW_KEY_D] = .key_d;
+    key_map[c.GLFW_KEY_E] = .key_e;
+    key_map[c.GLFW_KEY_F] = .key_f;
+    key_map[c.GLFW_KEY_G] = .key_g;
+    key_map[c.GLFW_KEY_H] = .key_h;
+    key_map[c.GLFW_KEY_I] = .key_i;
+    key_map[c.GLFW_KEY_J] = .key_j;
+    key_map[c.GLFW_KEY_K] = .key_k;
+    key_map[c.GLFW_KEY_L] = .key_l;
+    key_map[c.GLFW_KEY_M] = .key_m;
+    key_map[c.GLFW_KEY_N] = .key_n;
+    key_map[c.GLFW_KEY_O] = .key_o;
+    key_map[c.GLFW_KEY_P] = .key_p;
+    key_map[c.GLFW_KEY_Q] = .key_q;
+    key_map[c.GLFW_KEY_R] = .key_r;
+    key_map[c.GLFW_KEY_S] = .key_s;
+    key_map[c.GLFW_KEY_T] = .key_t;
+    key_map[c.GLFW_KEY_U] = .key_u;
+    key_map[c.GLFW_KEY_V] = .key_v;
+    key_map[c.GLFW_KEY_W] = .key_w;
+    key_map[c.GLFW_KEY_X] = .key_x;
+    key_map[c.GLFW_KEY_Y] = .key_y;
+    key_map[c.GLFW_KEY_Z] = .key_z;
+    key_map[c.GLFW_KEY_LEFT_BRACKET] = .key_left_bracket;
+    key_map[c.GLFW_KEY_BACKSLASH] = .key_backslash;
+    key_map[c.GLFW_KEY_RIGHT_BRACKET] = .key_right_bracket;
+    key_map[c.GLFW_KEY_GRAVE_ACCENT] = .key_grave_accent;
     key_map[c.GLFW_KEY_WORLD_1] = null;
     key_map[c.GLFW_KEY_WORLD_2] = null;
-    key_map[c.GLFW_KEY_ESCAPE] = .escape;
-    key_map[c.GLFW_KEY_ENTER] = .enter;
-    key_map[c.GLFW_KEY_TAB] = .tab;
-    key_map[c.GLFW_KEY_BACKSPACE] = .backspace;
-    key_map[c.GLFW_KEY_INSERT] = .insert;
-    key_map[c.GLFW_KEY_DELETE] = .delete;
-    key_map[c.GLFW_KEY_RIGHT] = .right;
-    key_map[c.GLFW_KEY_LEFT] = .left;
-    key_map[c.GLFW_KEY_DOWN] = .down;
-    key_map[c.GLFW_KEY_UP] = .up;
-    key_map[c.GLFW_KEY_PAGE_UP] = .page_up;
-    key_map[c.GLFW_KEY_PAGE_DOWN] = .page_down;
-    key_map[c.GLFW_KEY_HOME] = .home;
-    key_map[c.GLFW_KEY_END] = .end;
-    key_map[c.GLFW_KEY_CAPS_LOCK] = .caps_lock;
-    key_map[c.GLFW_KEY_SCROLL_LOCK] = .scroll_lock;
-    key_map[c.GLFW_KEY_NUM_LOCK] = .num_lock;
-    key_map[c.GLFW_KEY_PRINT_SCREEN] = .print_screen;
-    key_map[c.GLFW_KEY_PAUSE] = .pause;
-    key_map[c.GLFW_KEY_F1] = .f1;
-    key_map[c.GLFW_KEY_F2] = .f2;
-    key_map[c.GLFW_KEY_F3] = .f3;
-    key_map[c.GLFW_KEY_F4] = .f4;
-    key_map[c.GLFW_KEY_F5] = .f5;
-    key_map[c.GLFW_KEY_F6] = .f6;
-    key_map[c.GLFW_KEY_F7] = .f7;
-    key_map[c.GLFW_KEY_F8] = .f8;
-    key_map[c.GLFW_KEY_F9] = .f9;
-    key_map[c.GLFW_KEY_F10] = .f10;
-    key_map[c.GLFW_KEY_F11] = .f11;
-    key_map[c.GLFW_KEY_F12] = .f12;
-    key_map[c.GLFW_KEY_F13] = .f13;
-    key_map[c.GLFW_KEY_F14] = .f14;
-    key_map[c.GLFW_KEY_F15] = .f15;
-    key_map[c.GLFW_KEY_F16] = .f16;
-    key_map[c.GLFW_KEY_F17] = .f17;
-    key_map[c.GLFW_KEY_F18] = .f18;
-    key_map[c.GLFW_KEY_F19] = .f19;
-    key_map[c.GLFW_KEY_F20] = .f20;
-    key_map[c.GLFW_KEY_F21] = .f21;
-    key_map[c.GLFW_KEY_F22] = .f22;
-    key_map[c.GLFW_KEY_F23] = .f23;
-    key_map[c.GLFW_KEY_F24] = .f24;
-    key_map[c.GLFW_KEY_F25] = .f25;
-    key_map[c.GLFW_KEY_KP_0] = .kp_0;
-    key_map[c.GLFW_KEY_KP_1] = .kp_1;
-    key_map[c.GLFW_KEY_KP_2] = .kp_2;
-    key_map[c.GLFW_KEY_KP_3] = .kp_3;
-    key_map[c.GLFW_KEY_KP_4] = .kp_4;
-    key_map[c.GLFW_KEY_KP_5] = .kp_5;
-    key_map[c.GLFW_KEY_KP_6] = .kp_6;
-    key_map[c.GLFW_KEY_KP_7] = .kp_7;
-    key_map[c.GLFW_KEY_KP_8] = .kp_8;
-    key_map[c.GLFW_KEY_KP_9] = .kp_9;
-    key_map[c.GLFW_KEY_KP_DECIMAL] = .kp_decimal;
-    key_map[c.GLFW_KEY_KP_DIVIDE] = .kp_divide;
-    key_map[c.GLFW_KEY_KP_MULTIPLY] = .kp_multiply;
-    key_map[c.GLFW_KEY_KP_SUBTRACT] = .kp_subtract;
-    key_map[c.GLFW_KEY_KP_ADD] = .kp_add;
-    key_map[c.GLFW_KEY_KP_ENTER] = .kp_enter;
-    key_map[c.GLFW_KEY_KP_EQUAL] = .kp_equal;
-    key_map[c.GLFW_KEY_LEFT_SHIFT] = .left_shift;
-    key_map[c.GLFW_KEY_LEFT_CONTROL] = .left_control;
-    key_map[c.GLFW_KEY_LEFT_ALT] = .left_alt;
-    key_map[c.GLFW_KEY_LEFT_SUPER] = .left_super;
-    key_map[c.GLFW_KEY_RIGHT_SHIFT] = .right_shift;
-    key_map[c.GLFW_KEY_RIGHT_CONTROL] = .right_control;
-    key_map[c.GLFW_KEY_RIGHT_ALT] = .right_alt;
-    key_map[c.GLFW_KEY_RIGHT_SUPER] = .right_super;
-    key_map[c.GLFW_KEY_MENU] = .menu;
+    key_map[c.GLFW_KEY_ESCAPE] = .key_escape;
+    key_map[c.GLFW_KEY_ENTER] = .key_enter;
+    key_map[c.GLFW_KEY_TAB] = .key_tab;
+    key_map[c.GLFW_KEY_BACKSPACE] = .key_backspace;
+    key_map[c.GLFW_KEY_INSERT] = .key_insert;
+    key_map[c.GLFW_KEY_DELETE] = .key_delete;
+    key_map[c.GLFW_KEY_RIGHT] = .key_right;
+    key_map[c.GLFW_KEY_LEFT] = .key_left;
+    key_map[c.GLFW_KEY_DOWN] = .key_down;
+    key_map[c.GLFW_KEY_UP] = .key_up;
+    key_map[c.GLFW_KEY_PAGE_UP] = .key_page_up;
+    key_map[c.GLFW_KEY_PAGE_DOWN] = .key_page_down;
+    key_map[c.GLFW_KEY_HOME] = .key_home;
+    key_map[c.GLFW_KEY_END] = .key_end;
+    key_map[c.GLFW_KEY_CAPS_LOCK] = .key_caps_lock;
+    key_map[c.GLFW_KEY_SCROLL_LOCK] = .key_scroll_lock;
+    key_map[c.GLFW_KEY_NUM_LOCK] = .key_num_lock;
+    key_map[c.GLFW_KEY_PRINT_SCREEN] = .key_print_screen;
+    key_map[c.GLFW_KEY_PAUSE] = .key_pause;
+    key_map[c.GLFW_KEY_F1] = .key_f1;
+    key_map[c.GLFW_KEY_F2] = .key_f2;
+    key_map[c.GLFW_KEY_F3] = .key_f3;
+    key_map[c.GLFW_KEY_F4] = .key_f4;
+    key_map[c.GLFW_KEY_F5] = .key_f5;
+    key_map[c.GLFW_KEY_F6] = .key_f6;
+    key_map[c.GLFW_KEY_F7] = .key_f7;
+    key_map[c.GLFW_KEY_F8] = .key_f8;
+    key_map[c.GLFW_KEY_F9] = .key_f9;
+    key_map[c.GLFW_KEY_F10] = .key_f10;
+    key_map[c.GLFW_KEY_F11] = .key_f11;
+    key_map[c.GLFW_KEY_F12] = .key_f12;
+    key_map[c.GLFW_KEY_F13] = .key_f13;
+    key_map[c.GLFW_KEY_F14] = .key_f14;
+    key_map[c.GLFW_KEY_F15] = .key_f15;
+    key_map[c.GLFW_KEY_F16] = .key_f16;
+    key_map[c.GLFW_KEY_F17] = .key_f17;
+    key_map[c.GLFW_KEY_F18] = .key_f18;
+    key_map[c.GLFW_KEY_F19] = .key_f19;
+    key_map[c.GLFW_KEY_F20] = .key_f20;
+    key_map[c.GLFW_KEY_F21] = .key_f21;
+    key_map[c.GLFW_KEY_F22] = .key_f22;
+    key_map[c.GLFW_KEY_F23] = .key_f23;
+    key_map[c.GLFW_KEY_F24] = .key_f24;
+    key_map[c.GLFW_KEY_F25] = .key_f25;
+    key_map[c.GLFW_KEY_KP_0] = .key_kp_0;
+    key_map[c.GLFW_KEY_KP_1] = .key_kp_1;
+    key_map[c.GLFW_KEY_KP_2] = .key_kp_2;
+    key_map[c.GLFW_KEY_KP_3] = .key_kp_3;
+    key_map[c.GLFW_KEY_KP_4] = .key_kp_4;
+    key_map[c.GLFW_KEY_KP_5] = .key_kp_5;
+    key_map[c.GLFW_KEY_KP_6] = .key_kp_6;
+    key_map[c.GLFW_KEY_KP_7] = .key_kp_7;
+    key_map[c.GLFW_KEY_KP_8] = .key_kp_8;
+    key_map[c.GLFW_KEY_KP_9] = .key_kp_9;
+    key_map[c.GLFW_KEY_KP_DECIMAL] = .key_kp_decimal;
+    key_map[c.GLFW_KEY_KP_DIVIDE] = .key_kp_divide;
+    key_map[c.GLFW_KEY_KP_MULTIPLY] = .key_kp_multiply;
+    key_map[c.GLFW_KEY_KP_SUBTRACT] = .key_kp_subtract;
+    key_map[c.GLFW_KEY_KP_ADD] = .key_kp_add;
+    key_map[c.GLFW_KEY_KP_ENTER] = .key_kp_enter;
+    key_map[c.GLFW_KEY_KP_EQUAL] = .key_kp_equal;
+    key_map[c.GLFW_KEY_LEFT_SHIFT] = .key_left_shift;
+    key_map[c.GLFW_KEY_LEFT_CONTROL] = .key_left_control;
+    key_map[c.GLFW_KEY_LEFT_ALT] = .key_left_alt;
+    key_map[c.GLFW_KEY_LEFT_SUPER] = .key_left_super;
+    key_map[c.GLFW_KEY_RIGHT_SHIFT] = .key_right_shift;
+    key_map[c.GLFW_KEY_RIGHT_CONTROL] = .key_right_control;
+    key_map[c.GLFW_KEY_RIGHT_ALT] = .key_right_alt;
+    key_map[c.GLFW_KEY_RIGHT_SUPER] = .key_right_super;
+    key_map[c.GLFW_KEY_MENU] = .key_menu;
+
+    mouse_button_map[c.GLFW_MOUSE_BUTTON_LEFT] = .mouse_left;
+    mouse_button_map[c.GLFW_MOUSE_BUTTON_RIGHT] = .mouse_right;
+    mouse_button_map[c.GLFW_MOUSE_BUTTON_MIDDLE] = .mouse_middle;
+
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_A] = .gamepad_a;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_B] = .gamepad_b;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_X] = .gamepad_x;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_Y] = .gamepad_y;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_LEFT_BUMPER] = .gamepad_shoulder_left;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER] = .gamepad_shoulder_right;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_BACK] = .gamepad_start;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_START] = .gamepad_end;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_DPAD_UP] = .gamepad_dpad_up;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] = .gamepad_dpad_right;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_DPAD_DOWN] = .gamepad_dpad_down;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_DPAD_LEFT] = .gamepad_dpad_left;
+
+    gamepad_axis_map[c.GLFW_GAMEPAD_AXIS_RIGHT_X] = .gamepad_rstick_right;
+
     return .{};
 }
 pub fn deinit(self: *Self) void {
@@ -222,6 +247,50 @@ pub fn pollEvents(self: *Self, core: *nux.Core) !void {
         c.glfwPollEvents();
         if (c.glfwWindowShouldClose(window) != 0) {
             core.pushEvent(.requestExit);
+        }
+
+        // Acquire gamepads inputs
+        for (c.GLFW_JOYSTICK_1..c.GLFW_JOYSTICK_LAST) |joystick_index| {
+            const jid: c_int = @intCast(joystick_index);
+            std.log.info("TEST {d} {d} {d}", .{ joystick_index, c.glfwJoystickPresent(jid), c.glfwJoystickIsGamepad(jid) });
+            if (c.glfwJoystickPresent(jid) != 0 and c.glfwJoystickIsGamepad(jid) != 0) {
+                var state: c.GLFWgamepadstate = undefined;
+                if (c.glfwGetGamepadState(jid, &state) != 0) {
+                    std.log.info("OK", .{});
+                    for (0..c.GLFW_GAMEPAD_BUTTON_LAST) |button_index| {
+                        _ = button_index;
+                        // nux_button_t mask = gamepad_button_to_button(button);
+                        // if (mask != (nux_button_t)-1)
+                        // {
+                        //     if (state.buttons[button])
+                        //     {
+                        //         runtime.buttons |= mask;
+                        //     }
+                        //     else
+                        //     {
+                        //         runtime.buttons &= ~mask;
+                        //     }
+                        // }
+                    }
+
+                    for (0..c.GLFW_GAMEPAD_AXIS_LAST) |axis_index| {
+                        if (gamepad_axis_map[axis_index]) |axis| {
+                            var value: f32 = state.axes[axis_index];
+                            if (@abs(value) <= 0.3) {
+                                value = 0;
+                            }
+                            if (axis_index == c.GLFW_GAMEPAD_AXIS_RIGHT_Y or axis_index == c.GLFW_GAMEPAD_AXIS_LEFT_Y) {
+                                value = -value;
+                            }
+
+                            core.pushEvent(.{ .inputValueChanged = .{
+                                .input = axis,
+                                .value = value,
+                            } });
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -290,10 +359,10 @@ fn keyCallback(win: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, 
         else => {},
     }
     const state: nux.Input.State = if (action == c.GLFW_RELEASE) .released else .pressed;
-    if (key_map[@intCast(key)]) |k| {
-        self.core.pushEvent(.{ .keyPressed = .{
-            .key = k,
-            .state = state,
+    if (key_map[@intCast(key)]) |input| {
+        self.core.pushEvent(.{ .inputValueChanged = .{
+            .input = input,
+            .value = @floatFromInt(@intFromEnum(state)),
         } });
     }
 }

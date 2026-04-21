@@ -15,176 +15,168 @@ const Controller = struct {
 
 pub const State = enum(u32) { pressed = 1, released = 0 };
 
-pub const Key = enum(u32) {
-    space = 0,
-    apostrophe = 1,
-    comma = 2,
-    minus = 3,
-    period = 4,
-    slash = 5,
-    num0 = 6,
-    num1 = 7,
-    num2 = 8,
-    num3 = 9,
-    num4 = 10,
-    num5 = 11,
-    num6 = 12,
-    num7 = 13,
-    num8 = 14,
-    num9 = 15,
-    semicolon = 16,
-    equal = 17,
-    a = 18,
-    b = 19,
-    c = 20,
-    d = 21,
-    e = 22,
-    f = 23,
-    g = 24,
-    h = 25,
-    i = 26,
-    j = 27,
-    k = 29,
-    l = 30,
-    m = 31,
-    n = 32,
-    o = 33,
-    p = 34,
-    q = 35,
-    r = 36,
-    s = 37,
-    t = 38,
-    u = 39,
-    v = 40,
-    w = 41,
-    x = 42,
-    y = 43,
-    z = 44,
-    left_bracket = 45,
-    backslash = 46,
-    right_bracket = 47,
-    grave_accent = 48,
-    escape = 49,
-    enter = 50,
-    tab = 51,
-    backspace = 52,
-    insert = 53,
-    delete = 54,
-    right = 55,
-    left = 56,
-    down = 57,
-    up = 58,
-    page_up = 59,
-    page_down = 60,
-    home = 61,
-    end = 62,
-    caps_lock = 63,
-    scroll_lock = 64,
-    num_lock = 65,
-    print_screen = 66,
-    pause = 67,
-    f1 = 68,
-    f2 = 69,
-    f3 = 70,
-    f4 = 71,
-    f5 = 72,
-    f6 = 73,
-    f7 = 74,
-    f8 = 75,
-    f9 = 76,
-    f10 = 77,
-    f11 = 78,
-    f12 = 79,
-    f13 = 80,
-    f14 = 81,
-    f15 = 82,
-    f16 = 83,
-    f17 = 84,
-    f18 = 85,
-    f19 = 86,
-    f20 = 87,
-    f21 = 88,
-    f22 = 89,
-    f23 = 90,
-    f24 = 91,
-    f25 = 92,
-    kp_0 = 93,
-    kp_1 = 94,
-    kp_2 = 95,
-    kp_3 = 96,
-    kp_4 = 97,
-    kp_5 = 98,
-    kp_6 = 99,
-    kp_7 = 100,
-    kp_8 = 101,
-    kp_9 = 102,
-    kp_decimal = 103,
-    kp_divide = 104,
-    kp_multiply = 105,
-    kp_subtract = 106,
-    kp_add = 107,
-    kp_enter = 108,
-    kp_equal = 109,
-    left_shift = 110,
-    left_control = 111,
-    left_alt = 112,
-    left_super = 113,
-    right_shift = 114,
-    right_control = 115,
-    right_alt = 116,
-    right_super = 117,
-    menu = 118,
-};
+pub const Input = enum(u32) {
 
-pub const MouseButton = enum(u32) {
-    left = 0,
-    right = 1,
-    middle = 2,
-    wheel_up = 3,
-    wheel_down = 4,
-};
+    // Keyboard
+    key_space = 0,
+    key_apostrophe = 1,
+    key_comma = 2,
+    key_minus = 3,
+    key_period = 4,
+    key_slash = 5,
+    key_num0 = 6,
+    key_num1 = 7,
+    key_num2 = 8,
+    key_num3 = 9,
+    key_num4 = 10,
+    key_num5 = 11,
+    key_num6 = 12,
+    key_num7 = 13,
+    key_num8 = 14,
+    key_num9 = 15,
+    key_semicolon = 16,
+    key_equal = 17,
+    key_a = 18,
+    key_b = 19,
+    key_c = 20,
+    key_d = 21,
+    key_e = 22,
+    key_f = 23,
+    key_g = 24,
+    key_h = 25,
+    key_i = 26,
+    key_j = 27,
+    key_k = 29,
+    key_l = 30,
+    key_m = 31,
+    key_n = 32,
+    key_o = 33,
+    key_p = 34,
+    key_q = 35,
+    key_r = 36,
+    key_s = 37,
+    key_t = 38,
+    key_u = 39,
+    key_v = 40,
+    key_w = 41,
+    key_x = 42,
+    key_y = 43,
+    key_z = 44,
+    key_left_bracket = 45,
+    key_backslash = 46,
+    key_right_bracket = 47,
+    key_grave_accent = 48,
+    key_escape = 49,
+    key_enter = 50,
+    key_tab = 51,
+    key_backspace = 52,
+    key_insert = 53,
+    key_delete = 54,
+    key_right = 55,
+    key_left = 56,
+    key_down = 57,
+    key_up = 58,
+    key_page_up = 59,
+    key_page_down = 60,
+    key_home = 61,
+    key_end = 62,
+    key_caps_lock = 63,
+    key_scroll_lock = 64,
+    key_num_lock = 65,
+    key_print_screen = 66,
+    key_pause = 67,
+    key_f1 = 68,
+    key_f2 = 69,
+    key_f3 = 70,
+    key_f4 = 71,
+    key_f5 = 72,
+    key_f6 = 73,
+    key_f7 = 74,
+    key_f8 = 75,
+    key_f9 = 76,
+    key_f10 = 77,
+    key_f11 = 78,
+    key_f12 = 79,
+    key_f13 = 80,
+    key_f14 = 81,
+    key_f15 = 82,
+    key_f16 = 83,
+    key_f17 = 84,
+    key_f18 = 85,
+    key_f19 = 86,
+    key_f20 = 87,
+    key_f21 = 88,
+    key_f22 = 89,
+    key_f23 = 90,
+    key_f24 = 91,
+    key_f25 = 92,
+    key_kp_0 = 93,
+    key_kp_1 = 94,
+    key_kp_2 = 95,
+    key_kp_3 = 96,
+    key_kp_4 = 97,
+    key_kp_5 = 98,
+    key_kp_6 = 99,
+    key_kp_7 = 100,
+    key_kp_8 = 101,
+    key_kp_9 = 102,
+    key_kp_decimal = 103,
+    key_kp_divide = 104,
+    key_kp_multiply = 105,
+    key_kp_subtract = 106,
+    key_kp_add = 107,
+    key_kp_enter = 108,
+    key_kp_equal = 109,
+    key_left_shift = 110,
+    key_left_control = 111,
+    key_left_alt = 112,
+    key_left_super = 113,
+    key_right_shift = 114,
+    key_right_control = 115,
+    key_right_alt = 116,
+    key_right_super = 117,
+    key_menu = 118,
 
-pub const MouseAxis = enum(u32) {
-    motion_right = 0,
-    motion_left = 1,
-    motion_down = 2,
-    motion_up = 3,
-    scroll_up = 4,
-    scroll_down = 5,
-};
+    // Mouse Buttons
+    mouse_left = 199,
+    mouse_right = 200,
+    mouse_middle = 201,
+    mouse_wheel_up = 202,
+    mouse_wheel_down = 203,
 
-pub const GamepadButton = enum(u32) {
-    a = 0,
-    x = 1,
-    y = 2,
-    b = 3,
-    dpad_up = 4,
-    dpad_down = 5,
-    dpad_left = 6,
-    dpad_right = 7,
-    shoulder_left = 8,
-    shoulder_right = 9,
-};
+    // Mouse Axis
+    mouse_motion_right = 204,
+    mouse_motion_left = 205,
+    mouse_motion_down = 206,
+    mouse_motion_up = 207,
+    mouse_scroll_up = 208,
+    mouse_scroll_down = 209,
 
-pub const GamepadAxis = enum(u32) {
-    lstick_left = 0,
-    lstick_right = 1,
-    lstick_up = 2,
-    lstick_down = 3,
-    rstick_left = 4,
-    rstick_right = 5,
-    rstick_up = 6,
-    rstick_down = 7,
-    ltrigger = 8,
-    rtrigger = 9,
-};
+    // Gamepad Buttons
+    gamepad_a = 210,
+    gamepad_x = 211,
+    gamepad_y = 212,
+    gamepad_b = 213,
+    gamepad_dpad_up = 214,
+    gamepad_dpad_down = 215,
+    gamepad_dpad_left = 216,
+    gamepad_dpad_right = 217,
+    gamepad_shoulder_left = 218,
+    gamepad_shoulder_right = 219,
+    gamepad_start = 220,
+    gamepad_end = 221,
 
-pub const Input = union(enum) {
-    key: Key,
-    mouse_button: MouseButton,
-    gamepad_button: GamepadButton,
-    mouse_axis: MouseAxis,
-    gamepad_axis: GamepadAxis,
+    // Gamepad Axis
+    gamepad_lstick_left = 222,
+    gamepad_lstick_right = 223,
+    gamepad_lstick_up = 224,
+    gamepad_lstick_down = 225,
+    gamepad_rstick_left = 226,
+    gamepad_rstick_right = 227,
+    gamepad_rstick_up = 228,
+    gamepad_rstick_down = 229,
+    gamepad_ltrigger = 230,
+    gamepad_rtrigger = 231,
 };
 
 controllers: [Controller.max]Controller,
@@ -203,42 +195,17 @@ pub fn deinit(self: *Self) void {
     }
 }
 pub fn onEvent(self: *Self, event: *const nux.Platform.Event) void {
+    if (event.* == .inputValueChanged) {
 
-    switch (event.*) {
-        .inputValueChanged => |e| {
+        // Iterate controllers
+        for (self.controllers) |controller| {
+            if (self.inputmap.components.getOptional(controller.inputmap)) |map| {
 
-        },
-        else => {}
-    }
-
-    // Iterate controllers
-    for (self.controllers) |controller| {
-        if (self.inputmap.components.getOptional(controller.inputmap)) |map| {
-
-            // Iterate map entries
-            for (map.entries.items, 0..) |entry, index| {
-                const mapping = entry.mapping orelse continue;
-
-                // Check mapping
-                switch (event.*) {
-                    .buttonStateChanged => |e| {
-                        switch (e.button) {
-                            .key => |k| {
-                                if (mapping == .key and mapping.key == k) {}
-                            },
-                            .gamepad => |g| {},
-                        }
-                    },
-                    .axisValueChanged => |e| {},
-                    else => {},
-                }
-                if (mapping == .key and event.* == .keyStateChanged) {
-                    if (event.keyStateChanged.key == mapping.key) {
-                        controller.inputs.items[index] = @floatFromInt(@intFromEnum(event.keyStateChanged.state));
-                    }
-                } else if (mapping == .mouse_button and event.* == .mouseButtonStateChanged) {
-                    if (event.keyStateChanged.key == mapping.key) {
-                        controller.inputs.items[index] = @floatFromInt(@intFromEnum(event.keyStateChanged.state));
+                // Iterate map entries
+                for (map.entries.items, 0..) |entry, index| {
+                    const mapping = entry.mapping orelse continue;
+                    if (mapping == event.inputValueChanged.input) {
+                        controller.inputs.items[index] = event.inputValueChanged.value;
                     }
                 }
             }
@@ -288,6 +255,14 @@ fn controllerInputValue(self: *Self, controller: u32, name: []const u8, default:
 pub fn setInputMap(self: *Self, controller: u32, id: nux.ID) !void {
     const ctrl = try self.getController(controller);
     ctrl.inputmap = id;
+}
+pub fn getValue(self: *Self, controller: u32, name: []const u8) f32 {
+    const value, _ = self.controllerInputValue(
+        controller,
+        name,
+        0,
+    );
+    return value;
 }
 pub fn isPressed(self: *Self, controller: u32, name: []const u8) bool {
     const value, _ = self.controllerInputValue(

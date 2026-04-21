@@ -85,7 +85,10 @@
             "ignore_all": true
         },
         {
-            "path": "input/Input.zig"
+            "path": "input/Input.zig",
+            "no_enum_prefix": [
+                "Input"
+            ] 
         },
         {
             "path": "input/InputMap.zig"

@@ -60,52 +60,23 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
 
-pub fn bindKey(self: *Self, id: nux.ID, name: []const u8, key: nux.Input.Key) !void {
-    const map = try self.components.get(id);
-    const entry = try map.put(self, name);
-    entry.mapping = .{ .key = key };
-}
-pub fn bindMouseButton(
+pub fn bindButton(
     self: *Self,
     id: nux.ID,
     name: []const u8,
-    button: nux.Input.MouseButton,
+    button: nux.Input.Input,
 ) !void {
     const map = try self.components.get(id);
     const entry = try map.put(self, name);
-    entry.mapping = .{ .mouse_button = button };
+    entry.mapping = button;
 }
-pub fn bindGamepadButton(
+pub fn bindAxis(
     self: *Self,
     id: nux.ID,
     name: []const u8,
-    button: nux.Input.GamepadButton,
+    axis: nux.Input.Input,
 ) !void {
     const map = try self.components.get(id);
     const entry = try map.put(self, name);
-    entry.mapping = .{ .gamepad_button = button };
-}
-pub fn bindGamepadAxis(
-    self: *Self,
-    id: nux.ID,
-    name: []const u8,
-    axis: nux.Input.GamepadAxis,
-    sensivity: f32,
-) !void {
-    const map = try self.components.get(id);
-    const entry = try map.put(self, name);
-    entry.mapping = .{ .gamepad_axis = axis };
-    entry.sensivity = sensivity;
-}
-pub fn bindMouseAxis(
-    self: *Self,
-    id: nux.ID,
-    name: []const u8,
-    axis: nux.Input.MouseAxis,
-    sensivity: f32,
-) !void {
-    const map = try self.components.get(id);
-    const entry = try map.put(self, name);
-    entry.mapping = .{ .mouse_axis = axis };
-    entry.sensivity = sensivity;
+    entry.mapping = axis;
 }

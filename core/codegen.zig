@@ -344,6 +344,7 @@ const ModuleJson = struct {
     path: []const u8,
     ignore: ?[][]const u8 = null,
     ignore_all: bool = false,
+    no_enum_prefix: ?[][]const u8 = null,
 };
 const ModulesJson = struct {
     rootpath: []const u8,
@@ -358,6 +359,7 @@ const Module = struct {
     functions: std.StringHashMap(AstIter.Function),
     enums: std.StringHashMap(AstIter.Enum),
     is_component_module: bool,
+    json_module: *const ModuleJson,
 
     fn deinit(self: *Module, alloc: Allocator) void {
         var function_it = self.functions.valueIterator();
@@ -483,7 +485,7 @@ const Modules = struct {
         errdefer alloc.free(rootpath);
 
         // Iter files and generate bindings
-        for (modules_json.value.modules) |module| {
+        for (modules_json.value.modules) |*module| {
             const parts = [_][]const u8{ "core/", module.path };
             const module_path = try std.mem.concat(alloc, u8, &parts);
             defer alloc.free(module_path);
@@ -520,7 +522,7 @@ const Modules = struct {
             }
 
             // Filter items
-            var it = try AstIter.init(alloc, &ast, &module);
+            var it = try AstIter.init(alloc, &ast, module);
             defer it.deinit();
             while (try it.next()) |next| {
                 switch (next.data) {
@@ -556,6 +558,7 @@ const Modules = struct {
                 .path = try alloc.dupe(u8, module.path),
                 .name = std.fs.path.stem(module.path),
                 .is_component_module = is_component_module,
+                .json_module = module,
             });
         }
 
@@ -672,10 +675,26 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
                 var value_upper_case = try toUpperCase(alloc, value);
                 defer value_upper_case.deinit(alloc);
                 try writer.print("\t\t\t\tpub const {s} = struct {{\n", .{value_upper_case.items});
-                try writer.print("\t\t\t\t\tpub const name = \"{s}_{s}\";\n", .{
-                    enum_upper_case.items,
-                    value_upper_case.items,
-                });
+
+                var no_prefix = false;
+                if (module.json_module.no_enum_prefix) |no_enum_prefix| {
+                    for (no_enum_prefix) |e| {
+                        if (std.mem.eql(u8, e, enu.key_ptr.*)) {
+                            no_prefix = true;
+                            break;
+                        }
+                    }
+                }
+                if (no_prefix) {
+                    try writer.print("\t\t\t\t\tpub const name = \"{s}\";\n", .{
+                        value_upper_case.items,
+                    });
+                } else {
+                    try writer.print("\t\t\t\t\tpub const name = \"{s}_{s}\";\n", .{
+                        enum_upper_case.items,
+                        value_upper_case.items,
+                    });
+                }
                 if (enu.value_ptr.isBitfield) {
                     try writer.print("\t\t\t\t\tpub const value = nux.{s}.{s} {{ .{s} = true }};\n", .{
                         module.name,

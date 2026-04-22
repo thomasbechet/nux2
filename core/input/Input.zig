@@ -13,7 +13,14 @@ const Controller = struct {
     prev_inputs: std.ArrayList(f32) = .empty,
 };
 
-pub const State = enum(u32) { pressed = 1, released = 0 };
+pub const State = enum(u32) {
+    pressed = 1,
+    released = 0,
+
+    pub fn value(self: State) f32 {
+        return @floatFromInt(@intFromEnum(self));
+    }
+};
 
 pub const Input = enum(u32) {
 
@@ -198,13 +205,21 @@ pub fn onEvent(self: *Self, event: *const nux.Platform.Event) void {
     if (event.* == .inputValueChanged) {
 
         // Iterate controllers
-        for (self.controllers) |controller| {
+        for (&self.controllers) |*controller| {
             if (self.inputmap.components.getOptional(controller.inputmap)) |map| {
 
                 // Iterate map entries
                 for (map.entries.items, 0..) |entry, index| {
                     const mapping = entry.mapping orelse continue;
                     if (mapping == event.inputValueChanged.input) {
+
+                        // Resize inputs if needed
+                        if (index >= controller.inputs.items.len) {
+                            controller.inputs.resize(self.allocator, index + 1) catch {};
+                            controller.prev_inputs.resize(self.allocator, index + 1) catch {};
+                        }
+
+                        // Assign value
                         controller.inputs.items[index] = event.inputValueChanged.value;
                     }
                 }

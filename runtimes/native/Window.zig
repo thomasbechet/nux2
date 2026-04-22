@@ -216,8 +216,8 @@ pub fn init() Self {
     gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_Y] = .gamepad_y;
     gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_LEFT_BUMPER] = .gamepad_shoulder_left;
     gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER] = .gamepad_shoulder_right;
-    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_BACK] = .gamepad_start;
-    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_START] = .gamepad_end;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_START] = .gamepad_start;
+    gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_BACK] = .gamepad_end;
     gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_DPAD_UP] = .gamepad_dpad_up;
     gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] = .gamepad_dpad_right;
     gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_DPAD_DOWN] = .gamepad_dpad_down;
@@ -252,37 +252,43 @@ pub fn pollEvents(self: *Self, core: *nux.Core) !void {
         // Acquire gamepads inputs
         for (c.GLFW_JOYSTICK_1..c.GLFW_JOYSTICK_LAST) |joystick_index| {
             const jid: c_int = @intCast(joystick_index);
-            std.log.info("TEST {d} {d} {d}", .{ joystick_index, c.glfwJoystickPresent(jid), c.glfwJoystickIsGamepad(jid) });
             if (c.glfwJoystickPresent(jid) != 0 and c.glfwJoystickIsGamepad(jid) != 0) {
                 var state: c.GLFWgamepadstate = undefined;
                 if (c.glfwGetGamepadState(jid, &state) != 0) {
-                    std.log.info("OK", .{});
+
+                    // Update gamepad buttons
                     for (0..c.GLFW_GAMEPAD_BUTTON_LAST) |button_index| {
-                        _ = button_index;
-                        // nux_button_t mask = gamepad_button_to_button(button);
-                        // if (mask != (nux_button_t)-1)
-                        // {
-                        //     if (state.buttons[button])
-                        //     {
-                        //         runtime.buttons |= mask;
-                        //     }
-                        //     else
-                        //     {
-                        //         runtime.buttons &= ~mask;
-                        //     }
-                        // }
+                        if (gamepad_button_map[button_index]) |button| {
+                            var button_state: nux.Input.State =
+                                if (state.buttons[button_index] != 0)
+                                    .pressed
+                                else
+                                    .released;
+
+                            // Push event
+                            core.pushEvent(.{ .inputValueChanged = .{
+                                .input = button,
+                                .value = button_state.value(),
+                            } });
+                        }
                     }
 
+                    // Update gamepad axis
                     for (0..c.GLFW_GAMEPAD_AXIS_LAST) |axis_index| {
                         if (gamepad_axis_map[axis_index]) |axis| {
+
+                            // Correct small bias
                             var value: f32 = state.axes[axis_index];
                             if (@abs(value) <= 0.3) {
                                 value = 0;
                             }
+
+                            // Invert y axis
                             if (axis_index == c.GLFW_GAMEPAD_AXIS_RIGHT_Y or axis_index == c.GLFW_GAMEPAD_AXIS_LEFT_Y) {
                                 value = -value;
                             }
 
+                            // Push event
                             core.pushEvent(.{ .inputValueChanged = .{
                                 .input = axis,
                                 .value = value,
@@ -362,7 +368,7 @@ fn keyCallback(win: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, 
     if (key_map[@intCast(key)]) |input| {
         self.core.pushEvent(.{ .inputValueChanged = .{
             .input = input,
-            .value = @floatFromInt(@intFromEnum(state)),
+            .value = state.value()
         } });
     }
 }

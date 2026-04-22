@@ -11,6 +11,16 @@ const Controller = struct {
     inputmap: nux.ID = .null,
     inputs: std.ArrayList(f32) = .empty,
     prev_inputs: std.ArrayList(f32) = .empty,
+
+    pub fn ensureSize(self: *Controller, allocator: std.mem.Allocator, size: usize) !void {
+        if (size >= self.inputs.items.len) {
+            const prev_size = self.inputs.items.len;
+            try self.inputs.resize(allocator, size);
+            try self.prev_inputs.resize(allocator, size);
+            @memset(self.inputs.items[prev_size..], 0);
+            @memset(self.prev_inputs.items[prev_size..], 0);
+        }
+    }
 };
 
 pub const State = enum(u32) {
@@ -214,10 +224,7 @@ pub fn onEvent(self: *Self, event: *const nux.Platform.Event) void {
                     if (mapping == event.inputValueChanged.input) {
 
                         // Resize inputs if needed
-                        if (index >= controller.inputs.items.len) {
-                            controller.inputs.resize(self.allocator, index + 1) catch {};
-                            controller.prev_inputs.resize(self.allocator, index + 1) catch {};
-                        }
+                        controller.ensureSize(self.allocator, index + 1) catch {};
 
                         // Assign value
                         controller.inputs.items[index] = event.inputValueChanged.value;
@@ -233,8 +240,7 @@ pub fn onPreUpdate(self: *Self) !void {
     for (&self.controllers) |*controller| {
         if (self.inputmap.components.getOptional(controller.inputmap)) |map| {
             if (controller.inputs.items.len != map.entries.items.len) {
-                try controller.inputs.resize(self.allocator, map.entries.items.len);
-                try controller.prev_inputs.resize(self.allocator, map.entries.items.len);
+                try controller.ensureSize(self.allocator, map.entries.items.len);
             }
         }
     }

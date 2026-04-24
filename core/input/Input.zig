@@ -3,14 +3,32 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
+const VirtualCursor = struct {
+    const menu_up = "menu.up";
+    const menu_down = "menu.down";
+    const menu_left = "menu.left";
+    const menu_right = "menu.right";
+
+    position: nux.Vec2 = .zero(),
+    prev_position: nux.Vec2 = .zero(),
+    speed: f32 = 1,
+
+    pub fn wrap(self: *VirtualCursor, position: nux.Vec2) void {
+        self.position = position;
+        self.prev_position = position;
+    }
+    pub fn integrate(self: *VirtualCursor, move: nux.Vec2, delta: f32) void {
+        self.position.addAssign(move.mul(.scalar(delta)));
+    }
+};
+
 const Controller = struct {
     const max: u32 = 4;
 
-    cursor: nux.Vec2 = .zero(),
-    cursor_prev: nux.Vec2 = .zero(),
     inputmap: nux.ID = .null,
     inputs: std.ArrayList(f32) = .empty,
     prev_inputs: std.ArrayList(f32) = .empty,
+    cursor: VirtualCursor = .{},
 
     pub fn ensureSize(self: *Controller, allocator: std.mem.Allocator, size: usize) !void {
         if (size >= self.inputs.items.len) {
@@ -212,26 +230,29 @@ pub fn deinit(self: *Self) void {
     }
 }
 pub fn onEvent(self: *Self, event: *const nux.Platform.Event) void {
-    if (event.* == .inputValueChanged) {
+    switch (event.*) {
+        .inputValueChanged => |e| {
 
-        // Iterate controllers
-        for (&self.controllers) |*controller| {
-            if (self.inputmap.components.getOptional(controller.inputmap)) |map| {
+            // Iterate controllers
+            for (&self.controllers) |*controller| {
+                if (self.inputmap.components.getOptional(controller.inputmap)) |map| {
 
-                // Iterate map entries
-                for (map.entries.items, 0..) |entry, index| {
-                    const mapping = entry.mapping orelse continue;
-                    if (mapping == event.inputValueChanged.input) {
+                    // Iterate map entries
+                    for (map.entries.items, 0..) |entry, index| {
+                        const mapping = entry.mapping orelse continue;
+                        if (mapping == e.input) {
 
-                        // Resize inputs if needed
-                        controller.ensureSize(self.allocator, index + 1) catch {};
+                            // Resize inputs if needed
+                            controller.ensureSize(self.allocator, index + 1) catch {};
 
-                        // Assign value
-                        controller.inputs.items[index] = event.inputValueChanged.value;
+                            // Assign value
+                            controller.inputs.items[index] = e.value;
+                        }
                     }
                 }
             }
-        }
+        },
+        else => {},
     }
 }
 pub fn onPreUpdate(self: *Self) !void {
@@ -243,6 +264,18 @@ pub fn onPreUpdate(self: *Self) !void {
                 try controller.ensureSize(self.allocator, map.entries.items.len);
             }
         }
+    }
+
+    // Integrate virtual cursor
+    for (&self.controllers, 0..) |*controller, index| {
+        const move = self.getVec2(
+            @intCast(index),
+            VirtualCursor.menu_up,
+            VirtualCursor.menu_down,
+            VirtualCursor.menu_right,
+            VirtualCursor.menu_left,
+        );
+        controller.cursor.integrate(move, 1.0 / 60.0);
     }
 }
 pub fn onPostUpdate(self: *Self) !void {
@@ -273,7 +306,7 @@ fn controllerInputValue(self: *Self, controller: u32, name: []const u8, default:
     };
 }
 
-pub fn setInputMap(self: *Self, controller: u32, id: nux.ID) !void {
+pub fn setMap(self: *Self, controller: u32, id: nux.ID) !void {
     const ctrl = try self.getController(controller);
     ctrl.inputmap = id;
 }
@@ -284,6 +317,19 @@ pub fn getValue(self: *Self, controller: u32, name: []const u8) f32 {
         0,
     );
     return value;
+}
+pub fn getVec2(
+    self: *Self,
+    controller: u32,
+    xpos: []const u8,
+    xneg: []const u8,
+    ypos: []const u8,
+    yneg: []const u8,
+) nux.Vec2 {
+    return .init(
+        self.getValue(controller, xpos) - self.getValue(controller, xneg),
+        self.getValue(controller, ypos) - self.getValue(controller, yneg),
+    );
 }
 pub fn isPressed(self: *Self, controller: u32, name: []const u8) bool {
     const value, _ = self.controllerInputValue(

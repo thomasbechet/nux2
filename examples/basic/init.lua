@@ -81,27 +81,28 @@ function M:onInit()
 
     local map = Node.createNamed("/", "inputmap")
     Component.add(map, InputMap)
-    InputMap.bindButton(map, "up", Input.GAMEPAD_RSTICK_RIGHT);
-    InputMap.bindButton(map, "A", Input.GAMEPAD_A);
-    InputMap.bindButton(map, "B", Input.GAMEPAD_B);
-    InputMap.bindButton(map, "X", Input.GAMEPAD_X);
-    InputMap.bindButton(map, "Y", Input.GAMEPAD_Y);
-    InputMap.bindButton(map, "START", Input.GAMEPAD_START);
-    InputMap.bindButton(map, "END", Input.GAMEPAD_END);
-    Input.setInputMap(0, map)
+    -- InputMap.bindButton(map, "menu.up", Input.GAMEPAD_A);
+    -- InputMap.bindButton(map, "menu.down", Input.GAMEPAD_B);
+    -- InputMap.bindButton(map, "menu.left", Input.GAMEPAD_X);
+    -- InputMap.bindButton(map, "menu.right", Input.GAMEPAD_Y);
+    InputMap.bindButton(map, "menu.up", Input.KEY_W);
+    InputMap.bindButton(map, "menu.down", Input.KEY_S);
+    InputMap.bindButton(map, "menu.left", Input.KEY_A);
+    InputMap.bindButton(map, "menu.right", Input.KEY_D);
+    Input.setMap(0, map)
+
+    Node.dump(Node.getRoot())
 end
 
 function M:onDeinit()
 end
 
 function M:onUpdate()
-    print(Input.getValue(0, "up"))
-    print("A"..Input.getValue(0, "A"))
-    print("B"..Input.getValue(0, "B"))
-    print("X"..Input.getValue(0, "X"))
-    print("Y"..Input.getValue(0, "Y"))
-    print("START"..Input.getValue(0, "START"))
-    print("END"..Input.getValue(0, "END"))
+    -- print("up"..Input.getValue(0, "up"))
+    -- print("down"..Input.getValue(0, "down"))
+    -- print("left"..Input.getValue(0, "left"))
+    -- print("right"..Input.getValue(0, "right"))
+    print(Math.norm(Input.getVec2(0, "menu.up", "menu.down", "menu.right", "menu.left")))
     -- Texture.blit("Textures/Building_1", Math.vec2(0, 0))
     -- Texture.blit("Textures/Building_2", Math.vec2(256, 0))
     -- Texture.blit("Textures/Building_3", Math.vec2(512, 0))

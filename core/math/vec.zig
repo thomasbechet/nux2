@@ -111,13 +111,13 @@ pub fn Vec(n: comptime_int, comptime Type: type) type {
         }
 
         pub fn len(self: Self) T {
-            return @sqrt(self.lenSq());
+            return @sqrt(self.lenSqrt());
         }
 
         pub fn norm(self: Self) Self {
             const magnitude = self.len();
             if (magnitude == 0.0) {
-                @panic("cannot normalize zero vector");
+                return self;
             }
             var result: Self = .{ .data = undefined };
             inline for (0..n) |i| {

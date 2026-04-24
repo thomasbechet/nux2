@@ -380,8 +380,32 @@ fn mathVec4(lua: ?*c.lua_State) callconv(.c) c_int {
     return 1;
 }
 fn mathQuat(lua: ?*c.lua_State) callconv(.c) c_int {
-    pushUserData(lua, .quat, mathVec(lua, nux.Quat));
+    pushUserData(lua, .quat, .init(
+        @floatCast(c.luaL_checknumber(lua, 1)),
+        @floatCast(c.luaL_checknumber(lua, 2)),
+        @floatCast(c.luaL_checknumber(lua, 3)),
+        @floatCast(c.luaL_checknumber(lua, 4)),
+    ));
     return 1;
+}
+fn mathNorm(lua: ?*c.lua_State) callconv(.c) c_int {
+    const userdata = checkAnyUserData(lua, 1);
+    switch (userdata.*) {
+        .vec2 => |*v| {
+            v.* = v.norm();
+            return 1;
+        },
+        .vec3 => |*v| {
+            v.* = v.norm();
+            return 1;
+        },
+        .vec4 => |*v| {
+            v.* = v.norm();
+            return 1;
+        },
+        else => return c.luaL_error(lua, "invalid norm on userdata"),
+    }
+    return 0;
 }
 fn openMath(lua: *c.lua_State) !void {
     _ = c.luaL_newmetatable(lua, "userdata");
@@ -404,6 +428,8 @@ fn openMath(lua: *c.lua_State) !void {
         .{ .name = "vec2", .func = mathVec2 },
         .{ .name = "vec3", .func = mathVec3 },
         .{ .name = "vec4", .func = mathVec4 },
+        .{ .name = "quat", .func = mathQuat },
+        .{ .name = "norm", .func = mathNorm },
         .{ .name = null, .func = null },
     };
     c.luaL_setfuncs(lua, math_lib, 0);

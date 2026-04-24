@@ -1,7 +1,6 @@
-[ ] yaml parser instead of json
-[ ] define os interface with core
-[ ] generate lua bindings from modules
-[ ] wasm core build
-[ ] font binary generator
-[ ] cartridge loading
-
+- [ ] YAML parser instead of JSON
+- [ ] Define OS interface with core
+- [ ] Generate Lua bindings from modules
+- [ ] WASM core build
+- [ ] Font binary generator
+- [ ] Cartridge loading

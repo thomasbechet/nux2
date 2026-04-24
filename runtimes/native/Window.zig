@@ -345,9 +345,10 @@ fn resizeCallback(win: ?*c.GLFWwindow, w: c_int, h: c_int) callconv(.c) void {
     const self: *Self = @ptrCast(@alignCast(c.glfwGetWindowUserPointer(win).?));
     self.size.w = w;
     self.size.h = h;
-    self.core.pushEvent(.{
-        .windowResized = .{ .width = @intCast(w), .height = @intCast(h) },
-    });
+    self.core.pushEvent(.{ .windowResized = .{
+        .width = @intCast(w),
+        .height = @intCast(h),
+    } });
 }
 fn keyCallback(win: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.c) void {
     _ = scancode;
@@ -368,7 +369,7 @@ fn keyCallback(win: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, 
     if (key_map[@intCast(key)]) |input| {
         self.core.pushEvent(.{ .inputValueChanged = .{
             .input = input,
-            .value = state.value()
+            .value = state.value(),
         } });
     }
 }

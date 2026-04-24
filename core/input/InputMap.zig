@@ -11,7 +11,7 @@ const Component = struct {
     };
 
     entries: std.ArrayList(Entry),
-    lookup: std.StringHashMap(usize),
+    lookup: std.StringHashMap(usize), // Map name to entry index
     sensivity: f32,
 
     pub fn init(mod: *Self) !Component {

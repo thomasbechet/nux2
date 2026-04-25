@@ -199,7 +199,6 @@ quads_queue: std.ArrayList(GPU.Quad),
 quads_head: usize,
 vertex_span_allocator: nux.SpanAllocator,
 active_batch: GPU.Batch,
-active_batch_index: usize,
 encoder: Encoder,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
@@ -251,8 +250,8 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     // Create transfer buffers
     self.batches_head = 0;
     self.quads_queue = try .initCapacity(self.allocator, quad_queue_size);
-    self.quads_head = 0;
     errdefer self.quads_queue.deinit(self.allocator);
+    self.quads_head = 0;
     self.vertex_span_allocator = try .init(
         self.allocator,
         default_vertex_buffer_size,
@@ -278,18 +277,15 @@ pub fn onPostUpdate(self: *Self) !void {
     try self.flushQuads();
     self.quads_head = 0;
     self.batches_head = 0;
-    self.active_batch_index = 0;
 }
 fn flushQuads(self: *Self) !void {
-    const offset = @sizeOf(GPU.Quad) * self.quads_head;
-    const size = @sizeOf(GPU.Quad) * self.quads_queue.items.len;
     try self.buffers.quads.update(
-        offset,
-        size,
+        @sizeOf(GPU.Quad) * self.quads_head,
+        @sizeOf(GPU.Quad) * self.quads_queue.items.len,
         @ptrCast(self.quads_queue.items),
     );
-    self.quads_queue.clearRetainingCapacity();
     self.quads_head += self.quads_queue.items.len;
+    self.quads_queue.clearRetainingCapacity();
 }
 fn pushQuad(self: *Self, box: nux.Box2i, tex: nux.Vec2i, scale: u32) !void {
     if (self.quads_queue.capacity == self.quads_queue.items.len) {
@@ -318,7 +314,6 @@ fn beginTexturedBatch(self: *Self, texture_id: nux.ID, color: nux.Color) !void {
         .texture_height = texture.info.height,
         .color = color.rgba.data,
     };
-    self.active_batch_index = self.batches_head;
 
     // Begin commands
     try self.encoder.bindTexture(.texture, &texture.handle.?);
@@ -333,23 +328,22 @@ fn beginColoredBatch(self: *Self, color: nux.Color) !void {
         .color = color.rgba.data,
     };
 
-    self.active_batch_index = self.batches_head;
+    // Begin commands
     try self.encoder.bindTexture(.texture, null);
 }
 fn endBatch(self: *Self) !void {
 
     // Draw quads command
-    try self.encoder.pushU32(.batch_index, @intCast(self.active_batch_index));
+    try self.encoder.pushU32(.batch_index, @intCast(self.batches_head));
     try self.encoder.draw(self.active_batch.count * 6);
 
     // Update batch buffer
     try self.buffers.batches.update(
-        @sizeOf(GPU.Batch) * self.active_batch_index,
+        @sizeOf(GPU.Batch) * self.batches_head,
         @sizeOf(GPU.Batch),
         @ptrCast(&self.active_batch),
     );
     self.batches_head += 1;
-    self.active_batch_index += 1;
 }
 pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
 
@@ -415,6 +409,9 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
                     // Advance text box
                     line_height = @max(line_height, glyph.box.h());
                     pos = pos.add(.init(@as(i32, @intCast((glyph.box.w() + 1) * info.scale)), 0));
+                }
+                if (std.mem.startsWith(u8, text, "rstick_down")) {
+                    std.log.info("{s} {d}", .{ text, self.active_batch.count });
                 }
                 try self.endBatch();
             },

@@ -159,7 +159,7 @@ fn renderWidgetRecursive(self: *Self, id: nux.ID) !void {
         if (self.label.components.getOptional(id)) |label| {
             const font = try self.font.components.get(try self.font.default());
             clay.text(label.text.items, .{
-                .font_size = 24,
+                .font_size = 16,
                 .color = colorToClay(label.color),
                 .user_data = @ptrCast(font),
                 .alignment = .center,

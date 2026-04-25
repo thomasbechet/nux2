@@ -12,7 +12,6 @@ var procs: gl.ProcTable = undefined;
 var key_map: [c.GLFW_KEY_LAST + 1]?nux.Input.Input = undefined;
 var mouse_button_map: [c.GLFW_MOUSE_BUTTON_LAST + 1]?nux.Input.Input = undefined;
 var gamepad_button_map: [c.GLFW_GAMEPAD_BUTTON_LAST + 1]?nux.Input.Input = undefined;
-var gamepad_axis_map: [c.GLFW_GAMEPAD_AXIS_LAST + 1]?nux.Input.Input = undefined;
 
 const Self = @This();
 
@@ -55,6 +54,7 @@ fn open(ctx: *anyopaque, w: u32, h: u32) anyerror!void {
     if (c.glfwInit() == 0) {
         @panic("Failed to initialize GLFW");
     }
+
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, 4);
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 3);
     c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
@@ -223,8 +223,6 @@ pub fn init() Self {
     gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_DPAD_DOWN] = .gamepad_dpad_down;
     gamepad_button_map[c.GLFW_GAMEPAD_BUTTON_DPAD_LEFT] = .gamepad_dpad_left;
 
-    gamepad_axis_map[c.GLFW_GAMEPAD_AXIS_RIGHT_X] = .gamepad_rstick_right;
-
     return .{};
 }
 pub fn deinit(self: *Self) void {
@@ -250,14 +248,14 @@ pub fn pollEvents(self: *Self, core: *nux.Core) !void {
         }
 
         // Acquire gamepads inputs
-        for (c.GLFW_JOYSTICK_1..c.GLFW_JOYSTICK_LAST) |joystick_index| {
+        for (c.GLFW_JOYSTICK_1..(c.GLFW_JOYSTICK_LAST + 1)) |joystick_index| {
             const jid: c_int = @intCast(joystick_index);
             if (c.glfwJoystickPresent(jid) != 0 and c.glfwJoystickIsGamepad(jid) != 0) {
                 var state: c.GLFWgamepadstate = undefined;
                 if (c.glfwGetGamepadState(jid, &state) != 0) {
 
                     // Update gamepad buttons
-                    for (0..c.GLFW_GAMEPAD_BUTTON_LAST) |button_index| {
+                    for (0..(c.GLFW_GAMEPAD_BUTTON_LAST + 1)) |button_index| {
                         if (gamepad_button_map[button_index]) |button| {
                             var button_state: nux.Input.State =
                                 if (state.buttons[button_index] != 0)
@@ -274,23 +272,52 @@ pub fn pollEvents(self: *Self, core: *nux.Core) !void {
                     }
 
                     // Update gamepad axis
-                    for (0..c.GLFW_GAMEPAD_AXIS_LAST) |axis_index| {
-                        if (gamepad_axis_map[axis_index]) |axis| {
+                    for (0..(c.GLFW_GAMEPAD_AXIS_LAST + 1)) |axis_index| {
+                        const is_stick = axis_index >= 0 and axis_index <= c.GLFW_GAMEPAD_AXIS_RIGHT_Y;
 
-                            // Correct small bias
-                            var value: f32 = state.axes[axis_index];
-                            if (@abs(value) <= 0.3) {
+                        var value: f32 = state.axes[axis_index];
+                        if (is_stick) {
+
+                            // Correct deadzone
+                            if (@abs(value) <= 0.1) {
                                 value = 0;
                             }
 
-                            // Invert y axis
-                            if (axis_index == c.GLFW_GAMEPAD_AXIS_RIGHT_Y or axis_index == c.GLFW_GAMEPAD_AXIS_LEFT_Y) {
-                                value = -value;
+                            // Split axis into pos / neg
+                            var pos_input: nux.Input.Input = undefined;
+                            var neg_input: nux.Input.Input = undefined;
+                            if (axis_index == c.GLFW_GAMEPAD_AXIS_LEFT_X) {
+                                pos_input = .gamepad_lstick_right;
+                                neg_input = .gamepad_lstick_left;
+                            } else if (axis_index == c.GLFW_GAMEPAD_AXIS_LEFT_Y) {
+                                pos_input = .gamepad_lstick_down;
+                                neg_input = .gamepad_lstick_up;
+                            } else if (axis_index == c.GLFW_GAMEPAD_AXIS_RIGHT_X) {
+                                pos_input = .gamepad_rstick_right;
+                                neg_input = .gamepad_rstick_left;
+                            } else if (axis_index == c.GLFW_GAMEPAD_AXIS_RIGHT_Y) {
+                                pos_input = .gamepad_rstick_down;
+                                neg_input = .gamepad_rstick_up;
                             }
 
                             // Push event
                             core.pushEvent(.{ .inputValueChanged = .{
-                                .input = axis,
+                                .input = pos_input,
+                                .value = if (value > 0) value else 0,
+                            } });
+                            core.pushEvent(.{ .inputValueChanged = .{
+                                .input = neg_input,
+                                .value = if (value < 0) @abs(value) else 0,
+                            } });
+                        } else {
+                            var input: nux.Input.Input = undefined;
+                            if (axis_index == c.GLFW_GAMEPAD_AXIS_LEFT_TRIGGER) {
+                                input = .gamepad_ltrigger;
+                            } else if (axis_index == c.GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER) {
+                                input = .gamepad_rtrigger;
+                            }
+                            core.pushEvent(.{ .inputValueChanged = .{
+                                .input = input,
                                 .value = value,
                             } });
                         }

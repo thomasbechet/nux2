@@ -59,7 +59,7 @@ pub const Writer = struct {
         const T = @TypeOf(v);
         switch (T) {
             nux.ID => {
-                if (self.node.exists(v)) {
+                if (self.node.valid(v)) {
                     var found = false;
                     for (self.nodes, 0..) |id, index| {
                         if (v == id) {
@@ -378,7 +378,7 @@ pub fn onStop(self: *Self) void {
 fn addEntry(self: *Self, parent: ID) !ID {
 
     // Check parent
-    if (!self.exists(parent)) {
+    if (!self.valid(parent)) {
         return error.InvalidParent;
     }
 
@@ -495,8 +495,12 @@ pub fn delete(self: *Self, id: ID) !void {
     // Delete entry
     try self.removeEntry(id);
 }
-pub fn exists(self: *Self, id: ID) bool {
+pub fn valid(self: *Self, id: ID) bool {
     _ = self.getEntry(id) catch return false;
+    return true;
+}
+pub fn exists(self: *Self, path: []const u8) bool {
+    _ = self.findGlobal(path) catch return false;
     return true;
 }
 pub fn getParent(self: *Self, id: ID) !ID {

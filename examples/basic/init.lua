@@ -81,14 +81,18 @@ function M:onInit()
 
     local map = Node.createNamed("/", "inputmap")
     Component.add(map, InputMap)
-    -- InputMap.bindButton(map, "menu.up", Input.GAMEPAD_A);
-    -- InputMap.bindButton(map, "menu.down", Input.GAMEPAD_B);
-    -- InputMap.bindButton(map, "menu.left", Input.GAMEPAD_X);
-    -- InputMap.bindButton(map, "menu.right", Input.GAMEPAD_Y);
-    InputMap.bindButton(map, "menu.up", Input.KEY_W);
-    InputMap.bindButton(map, "menu.down", Input.KEY_S);
-    InputMap.bindButton(map, "menu.left", Input.KEY_A);
-    InputMap.bindButton(map, "menu.right", Input.KEY_D);
+    InputMap.bindButton(map, "menu.up", Input.GAMEPAD_LSTICK_UP);
+    InputMap.bindButton(map, "menu.down", Input.GAMEPAD_LSTICK_DOWN);
+    InputMap.bindButton(map, "menu.left", Input.GAMEPAD_LSTICK_LEFT);
+    InputMap.bindButton(map, "menu.right", Input.GAMEPAD_LSTICK_RIGHT);
+    -- InputMap.bindButton(map, "menu.up", Input.GAMEPAD_DPAD_UP);
+    -- InputMap.bindButton(map, "menu.down", Input.GAMEPAD_DPAD_DOWN);
+    -- InputMap.bindButton(map, "menu.left", Input.GAMEPAD_DPAD_LEFT);
+    -- InputMap.bindButton(map, "menu.right", Input.GAMEPAD_DPAD_RIGHT);
+    -- InputMap.bindButton(map, "menu.up", Input.KEY_W);
+    -- InputMap.bindButton(map, "menu.down", Input.KEY_S);
+    -- InputMap.bindButton(map, "menu.left", Input.KEY_A);
+    -- InputMap.bindButton(map, "menu.right", Input.KEY_D);
     Input.setMap(0, map)
 
     Node.dump(Node.getRoot())
@@ -98,11 +102,11 @@ function M:onDeinit()
 end
 
 function M:onUpdate()
-    -- print("up"..Input.getValue(0, "up"))
-    -- print("down"..Input.getValue(0, "down"))
-    -- print("left"..Input.getValue(0, "left"))
-    -- print("right"..Input.getValue(0, "right"))
-    print(Math.norm(Input.getVec2(0, "menu.up", "menu.down", "menu.right", "menu.left")))
+    print("up"..Input.getValue(0, "menu.up"))
+    print("down"..Input.getValue(0, "menu.down"))
+    print("left"..Input.getValue(0, "menu.left"))
+    print("right"..Input.getValue(0, "menu.right"))
+    -- print(Math.norm(Input.getVec2(0, "menu.up", "menu.down", "menu.right", "menu.left")))
     -- Texture.blit("Textures/Building_1", Math.vec2(0, 0))
     -- Texture.blit("Textures/Building_2", Math.vec2(256, 0))
     -- Texture.blit("Textures/Building_3", Math.vec2(512, 0))

@@ -186,6 +186,14 @@ pub fn Vec(n: comptime_int, comptime Type: type) type {
             return .{ .data = @min(self.data, other.data) };
         }
 
+        pub fn reduceMin(self: Self) T {
+            return @reduce(.Min, self.data);
+        }
+
+        pub fn reduceMax(self: Self) T {
+            return @reduce(.Max, self.data);
+        }
+
         pub fn as(self: Self, V: type) V {
             var data: @Vector(V.N, V.T) = undefined;
             if (is_integer) {

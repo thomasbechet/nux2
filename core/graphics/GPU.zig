@@ -323,14 +323,6 @@ pub fn deinit(self: *Self) void {
     self.pipelines.canvas.deinit();
     self.gpu.vtable.delete_device(self.gpu.ptr);
 }
-pub fn onPostUpdate(self: *Self) !void {
-    try self.mesh.syncGPU();
-    try self.texture.syncGPU();
-    try self.batches.flush();
-    try self.quads.flush();
-    self.batches.reset();
-    self.quads.reset();
-}
 fn pushQuad(self: *Self, box: nux.Box2i, tex: nux.Vec2i, scale: u32) !void {
     try self.quads.push(.{
         .pos = @as(u32, @intCast(box.y())) << 16 | @as(u32, @intCast(box.x())),
@@ -373,7 +365,6 @@ fn beginColoredBatch(self: *Self, color: nux.Color) !void {
     try self.encoder.bindTexture(.texture, null);
 }
 fn endBatch(self: *Self) !void {
-
     // Draw quads command
     try self.encoder.pushU32(.batch_index, @intCast(self.batches.buffer_head));
     try self.encoder.draw(self.active_batch.count * 6);
@@ -453,5 +444,15 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
             else => {},
         }
     }
+
+    // Upload buffers
+    try self.mesh.syncGPU();
+    try self.texture.syncGPU();
+    try self.batches.flush();
+    try self.quads.flush();
+    self.batches.reset();
+    self.quads.reset();
+
+    // Submit gpu commands
     try self.encoder.submit();
 }

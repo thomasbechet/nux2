@@ -94,9 +94,6 @@ fn configCore(b: *std.Build, config: Config) void {
         }) catch unreachable;
     }
 
-    // clay
-    const zclay_pkg = b.dependency("zclay", .{ .target = config.target, .optimize = config.optimize });
-
     // zgltf
     const zgltf_pkg = b.dependency("zgltf", .{ .target = config.target, .optimize = config.optimize });
 
@@ -123,7 +120,6 @@ fn configCore(b: *std.Build, config: Config) void {
         .root_source_file = b.path("core/nux.zig"),
         .imports = &.{
             .{ .name = "zgltf", .module = zgltf_pkg.module("zgltf") },
-            .{ .name = "zclay", .module = zclay_pkg.module("zclay") },
         },
     });
 

@@ -40,8 +40,8 @@ pub fn onUpdate(self: *Self) !void {
     var it = self.components.iterator();
     while (it.next()) |entry| {
         if (entry.component.widget) |widget| {
-            try self.widget.layoutWidget(widget, entry.component);            
-            try self.widget.renderWidget(widget, entry.component);            
+            try self.widget.layoutWidget(widget, entry.component);
+            try self.widget.renderWidget(widget, entry.component);
         }
     }
 }
@@ -51,9 +51,6 @@ pub fn onRender(self: *Self) !void {
         try self.gpu.render(&entry.component.commands);
         entry.component.commands.reset();
     }
-
-    // 1. Render to texture
-    // 2. Render to screen
 }
 
 pub fn setWidget(self: *Self, id: nux.ID, widget: nux.ID) !void {

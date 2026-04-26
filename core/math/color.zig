@@ -36,4 +36,8 @@ pub const Color = struct {
     pub fn a(self: Color) f32 {
         return self.rgba.w();
     }
+
+    pub fn isTransparent(self: Color) bool {
+        return self.a() == 0;
+    }
 };

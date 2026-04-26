@@ -390,26 +390,26 @@ function M:onInit()
     local vp = Node.createNamed("/", "vp")
     Component.add(vp, Viewport)
     Component.add(vp, Widget)
-    Widget.setSizeX(vp, Widget.SIZING_GROW, 0, 0)
-    Widget.setSizeY(vp, Widget.SIZING_GROW, 0, 0)
+    Widget.setWidth(vp, Widget.SIZING_GROW, 0, 0)
+    Widget.setHeight(vp, Widget.SIZING_GROW, 0, 0)
     Widget.setBackgroundColor(vp, Math.vec4(0, 0, 0, 1))
-    Widget.setDirection(vp, Widget.DIRECTION_TOP_TO_BOTTOM)
+    Widget.setDirection(vp, Widget.DIRECTION_COLUMN)
     Widget.setChildGap(vp, 1)
     Viewport.setWidget(vp, vp)
 
     for y = 1, 18 do
         local row = Node.createNamed(vp, "row" .. y)
         Component.add(row, Widget)
-        Widget.setSizeX(row, Widget.SIZING_GROW, 0, 0)
-        Widget.setSizeY(row, Widget.SIZING_GROW, 0, 0)
-        Widget.setDirection(row, Widget.DIRECTION_LEFT_TO_RIGHT)
+        Widget.setWidth(row, Widget.SIZING_GROW, 0)
+        Widget.setHeight(row, Widget.SIZING_GROW, 0)
+        Widget.setDirection(row, Widget.DIRECTION_ROW)
         Widget.setChildGap(row, 1)
 
         for x = 1, 32 do
             local pixel = Node.createNamed(row, "c" .. x .. "_" .. y)
             Component.add(pixel, Widget)
-            Widget.setSizeX(pixel, Widget.SIZING_GROW, 0, 0)
-            Widget.setSizeY(pixel, Widget.SIZING_GROW, 0, 0)
+            Widget.setWidth(pixel, Widget.SIZING_GROW, 0)
+            Widget.setHeight(pixel, Widget.SIZING_GROW, 0)
             pixels[#pixels + 1] = pixel
         end
     end

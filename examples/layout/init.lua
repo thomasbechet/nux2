@@ -13,6 +13,28 @@ function M:onInit()
     self.panel = Node.createNamed(self.ui, "panel")
     Component.add(self.panel, Widget)
     Widget.setBackgroundColor(self.panel, Math.vec4(1, 1, 0, 1))
+    Widget.setPadding(self.panel, Math.vec4(10))
+    Widget.setChildGap(self.panel, 5)
+
+    -- Create panel
+    for i=0,10 do
+        local n = Node.createNamed(self.panel, "item"..i)
+        Component.add(n, Widget)
+        Component.add(n, Label)
+        Label.setText(n, "hello")
+        Widget.setBackgroundColor(n, Math.vec4(0, 0, 1, 1))
+        Widget.setWidth(n, Widget.SIZING_FIXED, 100)
+        if i % 2 == 0 then
+            Widget.setWidth(n, Widget.SIZING_FIXED, 100)
+        else
+            Widget.setWidth(n, Widget.SIZING_GROW, 100)
+        end
+        if i == 10 then
+            Widget.setHeight(n, Widget.SIZING_GROW, 20)
+        else
+            Widget.setHeight(n, Widget.SIZING_FIXED, 20)
+        end
+    end
 end
 
 function M:onUpdate()

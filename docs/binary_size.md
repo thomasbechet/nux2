@@ -2,4 +2,6 @@
 - fda247a5330367e424c486cbddda05861e3673c9 - 1320 KB - Windows
 - 3f3854f248be03277f31739d53d8e6623b51f7f7 - 1123 KB - Linux
 - 3f3854f248be03277f31739d53d8e6623b51f7f7 - 771 KB - Wasm
-- efad701efd03cf8d6a195e61e97b0f266720ecfa - 1692 KB - Linux (with gamecontrollerdb.txt)
+- efad701efd03cf8d6a195e61e97b0f266720ecfa - 1692 KB - Linux (gamecontrollerdb.txt added)
+- 0cd8e816941918627833708537073ce5d9ee5c18 - 1618 KB - Windows
+- 0cd8e816941918627833708537073ce5d9ee5c18 - 536 KB - Wasm (from Windows)

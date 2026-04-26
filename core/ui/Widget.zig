@@ -99,11 +99,11 @@ fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) clay
     };
 }
 
-fn renderWidgetRecursive(self: *Self, id: nux.ID) !void {
+fn renderWidgetRecursive(self: *Self, id: nux.ID, index: u32) !void {
     const widget = self.components.get(id) catch return;
     const name = try self.node.getName(id);
     clay.UI()(.{
-        .id = .localID(name),
+        .id = .localIDI(name, index),
         .layout = .{
             .direction = @enumFromInt(@intFromEnum(widget.direction)),
             .sizing = .{
@@ -158,6 +158,7 @@ fn renderWidgetRecursive(self: *Self, id: nux.ID) !void {
         // Label
         if (self.label.components.getOptional(id)) |label| {
             const font = try self.font.components.get(try self.font.default());
+
             clay.text(label.text.items, .{
                 .font_size = 16,
                 .color = colorToClay(label.color),
@@ -171,9 +172,10 @@ fn renderWidgetRecursive(self: *Self, id: nux.ID) !void {
 
         // Render children
         var it = try self.node.iterChildren(id);
-        while (it.next()) |child| {
+        var i: u32 = 0;
+        while (it.next()) |child| : (i += 1) {
             if (self.components.has(child)) {
-                try self.renderWidgetRecursive(child);
+                try self.renderWidgetRecursive(child, i);
             }
         }
     });
@@ -199,7 +201,7 @@ pub fn renderWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) 
 
     // Render widgets
     clay.beginLayout();
-    try self.renderWidgetRecursive(id);
+    try self.renderWidgetRecursive(id, 0);
     const commands = clay.endLayout();
 
     // Generate graphics commands

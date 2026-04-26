@@ -14,6 +14,7 @@ function M:entry(name, input)
 
     local label = Node.findGlobal(label_node)
     local value = Input.getValue(0, name)
+    print(value)
     Label.setText(label, name..": "..value)
 end
 

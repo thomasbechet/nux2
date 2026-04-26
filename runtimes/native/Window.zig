@@ -316,6 +316,11 @@ pub fn pollEvents(self: *Self, core: *nux.Core) !void {
                             } else if (axis_index == c.GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER) {
                                 input = .gamepad_rtrigger;
                             }
+
+                            // Normalize input from -1,1 to 0,1
+                            value = (value + 1) / 2;
+
+                            // Push event
                             core.pushEvent(.{ .inputValueChanged = .{
                                 .input = input,
                                 .value = value,

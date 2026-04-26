@@ -53,11 +53,13 @@ pub const Texture = struct {
 pub const Buffer = struct {
     handle: GPU.Handle,
     gpu: *Self,
+    size: usize,
 
-    pub fn init(renderer: *Self, typ: GPU.BufferType, size: u32) !Buffer {
+    pub fn init(gpu: *Self, typ: GPU.BufferType, size: u32) !Buffer {
         return .{
-            .gpu = renderer,
-            .handle = try renderer.gpu.vtable.create_buffer(renderer.gpu.ptr, typ, size),
+            .gpu = gpu,
+            .handle = try gpu.gpu.vtable.create_buffer(gpu.gpu.ptr, typ, size),
+            .size = size,
         };
     }
     pub fn deinit(self: *Buffer) void {
@@ -171,6 +173,64 @@ const Encoder = struct {
     }
 };
 
+fn QueueBuffer(T: type) type {
+    return struct {
+        queue: []T,
+        queue_size: usize,
+        buffer: Buffer,
+        buffer_head: usize,
+        buffer_start: usize, // Next index for upload
+
+        fn init(
+            gpu: *Self,
+            buffer_type: GPU.BufferType,
+            buffer_size: usize,
+            queue_size: usize,
+        ) !@This() {
+            return .{
+                .queue = try gpu.allocator.alloc(T, queue_size),
+                .queue_size = 0,
+                .buffer = try .init(gpu, buffer_type, @intCast(@sizeOf(T) * buffer_size)),
+                .buffer_head = 0,
+                .buffer_start = 0,
+            };
+        }
+        fn deinit(self: *@This()) void {
+            self.buffer.gpu.allocator.free(self.queue);
+            self.buffer.deinit();
+        }
+        fn push(self: *@This(), value: T) !void {
+            if (self.buffer_head >= self.buffer.size) {
+                return error.OutOfMemoryGPU;
+            }
+
+            // Flush
+            if (self.queue_size >= self.queue.len) {
+                try self.flush();
+            }
+
+            // Push element
+            self.queue[self.queue_size] = value;
+            self.queue_size += 1;
+            self.buffer_head += 1;
+        }
+        fn flush(self: *@This()) !void {
+            try self.buffer.update(
+                @sizeOf(T) * self.buffer_start,
+                @sizeOf(T) * self.queue_size,
+                @ptrCast(self.queue),
+            );
+            self.buffer_start += self.queue_size;
+            self.queue_size = 0;
+        }
+        fn reset(self: *@This()) void {
+            self.buffer_head = 0;
+            self.buffer_start = 0;
+            self.queue_size = 0;
+        }
+    };
+}
+
 allocator: std.mem.Allocator,
 gpu: GPU,
 config: *nux.Config,
@@ -182,21 +242,17 @@ staticmesh: *nux.StaticMesh,
 transform: *nux.Transform,
 font: *nux.Font,
 pipelines: struct {
-    uber_opaque: nux.GPU.Pipeline,
-    uber_line: nux.GPU.Pipeline,
-    canvas: nux.GPU.Pipeline,
+    uber_opaque: Pipeline,
+    uber_line: Pipeline,
+    canvas: Pipeline,
 },
 buffers: struct {
-    constants: nux.GPU.Buffer,
-    batches: nux.GPU.Buffer,
-    transforms: nux.GPU.Buffer,
-    quads: nux.GPU.Buffer,
-    vertices: nux.GPU.Buffer,
+    constants: Buffer,
+    transforms: Buffer,
+    vertices: Buffer,
 },
-batches: std.ArrayList(GPU.Batch),
-batches_head: usize,
-quads_queue: std.ArrayList(GPU.Quad),
-quads_head: usize,
+batches: QueueBuffer(GPU.Batch),
+quads: QueueBuffer(GPU.Quad),
 vertex_span_allocator: nux.SpanAllocator,
 active_batch: GPU.Batch,
 encoder: Encoder,
@@ -233,37 +289,33 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     errdefer self.pipelines.canvas.deinit();
 
     // Create buffers
-    const default_quad_size = try self.config.getUint(u32, "GPU.defaultQuadBufferSize");
+    const quad_buffer_size = try self.config.getUint(u32, "GPU.quadBufferSize");
     const quad_queue_size = try self.config.getUint(u32, "GPU.quadQueueSize");
-    const default_vertex_buffer_size = try self.config.getUint(u32, "GPU.defaultVertexBufferSize");
-    const default_span_capacity = try self.config.getUint(u32, "GPU.defaultVertexBufferSpanCapacity");
-    const default_batches_capacity = try self.config.getUint(u32, "GPU.batchesCapacity");
+    const batch_buffer_size = try self.config.getUint(u32, "GPU.batchBufferSize");
+    const batch_queue_size = try self.config.getUint(u32, "GPU.batchQueueSize");
+    const vertex_buffer_size = try self.config.getUint(u32, "GPU.vertexBufferSize");
+    const vertex_span_size = try self.config.getUint(u32, "GPU.vertexSpanSize");
+
     self.buffers.constants = try .init(self, .constants, @sizeOf(GPU.Constants));
     errdefer self.buffers.constants.deinit();
-    self.buffers.vertices = try .init(self, .vertices, default_vertex_buffer_size);
+    self.buffers.vertices = try .init(self, .vertices, vertex_buffer_size);
     errdefer self.buffers.vertices.deinit();
-    self.buffers.quads = try .init(self, .quads, @sizeOf(GPU.Quad) * default_quad_size);
-    errdefer self.buffers.quads.deinit();
-    self.buffers.batches = try .init(self, .batches, @sizeOf(GPU.Batch) * default_batches_capacity);
-    errdefer self.buffers.batches.deinit();
+    self.batches = try .init(self, .batches, batch_buffer_size, batch_queue_size);
+    errdefer self.batches.deinit();
+    self.quads = try .init(self, .quads, quad_buffer_size, quad_queue_size);
+    errdefer self.quads.deinit();
 
-    // Create transfer buffers
-    self.batches_head = 0;
-    self.quads_queue = try .initCapacity(self.allocator, quad_queue_size);
-    errdefer self.quads_queue.deinit(self.allocator);
-    self.quads_head = 0;
     self.vertex_span_allocator = try .init(
         self.allocator,
-        default_vertex_buffer_size,
-        default_span_capacity,
+        vertex_buffer_size,
+        vertex_span_size,
     );
 }
 pub fn deinit(self: *Self) void {
     self.encoder.deinit();
     self.vertex_span_allocator.deinit();
-    self.quads_queue.deinit(self.allocator);
-    self.buffers.batches.deinit();
-    self.buffers.quads.deinit();
+    self.quads.deinit();
+    self.batches.deinit();
     self.buffers.vertices.deinit();
     self.buffers.constants.deinit();
     self.pipelines.uber_opaque.deinit();
@@ -274,24 +326,13 @@ pub fn deinit(self: *Self) void {
 pub fn onPostUpdate(self: *Self) !void {
     try self.mesh.syncGPU();
     try self.texture.syncGPU();
-    try self.flushQuads();
-    self.quads_head = 0;
-    self.batches_head = 0;
-}
-fn flushQuads(self: *Self) !void {
-    try self.buffers.quads.update(
-        @sizeOf(GPU.Quad) * self.quads_head,
-        @sizeOf(GPU.Quad) * self.quads_queue.items.len,
-        @ptrCast(self.quads_queue.items),
-    );
-    self.quads_head += self.quads_queue.items.len;
-    self.quads_queue.clearRetainingCapacity();
+    try self.batches.flush();
+    try self.quads.flush();
+    self.batches.reset();
+    self.quads.reset();
 }
 fn pushQuad(self: *Self, box: nux.Box2i, tex: nux.Vec2i, scale: u32) !void {
-    if (self.quads_queue.capacity == self.quads_queue.items.len) {
-        try self.flushQuads();
-    }
-    self.quads_queue.appendAssumeCapacity(.{
+    try self.quads.push(.{
         .pos = @as(u32, @intCast(box.y())) << 16 | @as(u32, @intCast(box.x())),
         .tex = @as(u32, @intCast(tex.y())) << 16 | @as(u32, @intCast(tex.x())),
         .size = @as(u32, @intCast(box.h())) << 16 | @as(u32, @intCast(box.w())),
@@ -308,7 +349,7 @@ fn beginTexturedBatch(self: *Self, texture_id: nux.ID, color: nux.Color) !void {
     // Prepare batch
     self.active_batch = .{
         .mode = 1,
-        .first = @intCast(self.quads_head + self.quads_queue.items.len),
+        .first = @intCast(self.quads.buffer_head),
         .count = 0,
         .texture_width = texture.info.width,
         .texture_height = texture.info.height,
@@ -321,7 +362,7 @@ fn beginTexturedBatch(self: *Self, texture_id: nux.ID, color: nux.Color) !void {
 fn beginColoredBatch(self: *Self, color: nux.Color) !void {
     self.active_batch = .{
         .mode = 0,
-        .first = @intCast(self.quads_head + self.quads_queue.items.len),
+        .first = @intCast(self.quads.buffer_head),
         .count = 0,
         .texture_width = 0,
         .texture_height = 0,
@@ -334,16 +375,11 @@ fn beginColoredBatch(self: *Self, color: nux.Color) !void {
 fn endBatch(self: *Self) !void {
 
     // Draw quads command
-    try self.encoder.pushU32(.batch_index, @intCast(self.batches_head));
+    try self.encoder.pushU32(.batch_index, @intCast(self.batches.buffer_head));
     try self.encoder.draw(self.active_batch.count * 6);
 
-    // Update batch buffer
-    try self.buffers.batches.update(
-        @sizeOf(GPU.Batch) * self.batches_head,
-        @sizeOf(GPU.Batch),
-        @ptrCast(&self.active_batch),
-    );
-    self.batches_head += 1;
+    // Push batch buffer
+    try self.batches.push(self.active_batch);
 }
 pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
 
@@ -362,8 +398,8 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
     try self.encoder.bindPipeline(&self.pipelines.canvas);
     try self.encoder.viewport(0, 0, self.window.width, self.window.height);
     try self.encoder.bindBuffer(.constants_buffer, &self.buffers.constants);
-    try self.encoder.bindBuffer(.batches_buffer, &self.buffers.batches);
-    try self.encoder.bindBuffer(.quads_buffer, &self.buffers.quads);
+    try self.encoder.bindBuffer(.batches_buffer, &self.batches.buffer);
+    try self.encoder.bindBuffer(.quads_buffer, &self.quads.buffer);
 
     for (cb.commands.items) |cmd| {
         switch (cmd) {
@@ -408,11 +444,10 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
 
                     // Advance text box
                     line_height = @max(line_height, glyph.box.h());
-                    pos = pos.add(.init(@as(i32, @intCast((glyph.box.w() + 1) * info.scale)), 0));
+                    const advance = (glyph.box.w() + 1) * info.scale;
+                    pos = pos.add(.init(@intCast(advance), 0));
                 }
-                if (std.mem.startsWith(u8, text, "rstick_down")) {
-                    std.log.info("{s} {d}", .{ text, self.active_batch.count });
-                }
+
                 try self.endBatch();
             },
             else => {},

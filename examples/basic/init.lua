@@ -54,11 +54,11 @@ function M:onInit()
     -- Component.add(version, Label)
     -- Widget.setAlignX(version, Widget.ALIGNMENT_X_RIGHT)
     -- Widget.setAlignY(version, Widget.ALIGNMENT_Y_BOTTOM)
-
+    --
     -- Widget.setPadding(version, Math.vec4(0, 10, 0, 10))
     -- Widget.setSizeX(version, Widget.SIZING_FIT, 0, 0)
     -- Widget.setSizeY(version, Widget.SIZING_FIT, 0, 0)
-    -- Label.setText(version, "1.0.0-dev")
+    -- Label.setText(version, "1.0.0-devawdaowihdaowihdoaiwhdoaiwhdoaiwhdoaiwhdoaihwdoaiwhdoaiwhdoaiwhdoiahwd\n")
 
     -- local df = Node.create(Node.getRoot())
     -- DataTable.put("alive", Primitive.BOOL, false)

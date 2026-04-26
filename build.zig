@@ -221,6 +221,9 @@ fn configNative(b: *std.Build, config: Config) void {
     // valgrind
     const valgrind = b.addSystemCommand(&.{"valgrind"});
     valgrind.addArtifactArg(artifact);
+    if (b.args) |args| {
+        valgrind.addArgs(args);
+    }
     const valgrind_step = b.step("valgrind", "Run the console with valgrind");
     valgrind_step.dependOn(&valgrind.step);
 }

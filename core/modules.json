@@ -131,6 +131,7 @@
         {
             "path": "ui/Widget.zig",
             "ignore": [
+                "layoutWidget",
                 "renderWidget"
             ]
         },

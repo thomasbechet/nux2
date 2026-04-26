@@ -2,7 +2,7 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 const monogram = @import("monogram.zig");
 
-const default_font_id = "Fonts/Default";
+const default_font_id = "fonts/default";
 
 const Self = @This();
 

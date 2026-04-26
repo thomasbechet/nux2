@@ -5,8 +5,8 @@ const clay = @import("zclay");
 const Self = @This();
 
 pub const Direction = enum(u32) {
-    left_to_right = 0,
-    top_to_bottom = 1,
+    row = 0,
+    column = 1,
 };
 
 pub const AlignmentX = enum(u32) {
@@ -29,20 +29,22 @@ pub const Sizing = enum(u32) {
 };
 
 const Component = struct {
-    box: nux.Box2i = .empty(0, 0),
     background_color: nux.Color = .transparent,
-    padding: nux.Vec4i = .zero(),
-    direction: Direction = .top_to_bottom,
+    padding: nux.Vec4i = .zero(), // left, right, top, bottom
+    direction: Direction = .column,
     alignX: AlignmentX = .left,
     alignY: AlignmentY = .top,
     child_gap: u32 = 0,
     sizing_x: Sizing = .fit,
     sizing_y: Sizing = .fit,
-    minmax_x: nux.Vec2i = .zero(),
-    minmax_y: nux.Vec2i = .zero(),
+    size_x: f32 = 0, // float to support percent
+    size_y: f32 = 0, // float to support percent
     border_width: nux.Vec4i = .zero(),
     border_color: nux.Color = .white,
     border_radius: nux.Vec4i = .zero(),
+
+    // Computed layout
+    box: nux.Box2i = .empty(0, 0),
 };
 
 components: nux.Components(Component),
@@ -99,86 +101,162 @@ fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) clay
     };
 }
 
-fn renderWidgetRecursive(self: *Self, id: nux.ID, index: u32) !void {
+// fn renderWidgetRecursive(self: *Self, id: nux.ID) !void {
+//     const widget = self.components.get(id) catch return;
+//     const name = try self.node.getName(id);
+//     clay.UI()(.{
+//         .id = .localID(name),
+//         .layout = .{
+//             .direction = @enumFromInt(@intFromEnum(widget.direction)),
+//             .sizing = .{
+//                 .w = .{
+//                     .type = @enumFromInt(@intFromEnum(widget.sizing_x)),
+//                     .size = if (widget.sizing_x == .percent) .{
+//                         .percent = @floatFromInt(widget.minmax_x.x()),
+//                     } else .{
+//                         .minmax = .{
+//                             .min = @floatFromInt(widget.minmax_x.x()),
+//                             .max = @floatFromInt(widget.minmax_x.y()),
+//                         },
+//                     },
+//                 },
+//                 .h = .{
+//                     .type = @enumFromInt(@intFromEnum(widget.sizing_y)),
+//                     .size = if (widget.sizing_y == .percent) .{
+//                         .percent = @floatFromInt(widget.minmax_y.x()),
+//                     } else .{
+//                         .minmax = .{
+//                             .min = @floatFromInt(widget.minmax_y.x()),
+//                             .max = @floatFromInt(widget.minmax_y.y()),
+//                         },
+//                     },
+//                 },
+//             },
+//             .padding = .{
+//                 .left = @intCast(widget.padding.x()),
+//                 .right = @intCast(widget.padding.y()),
+//                 .top = @intCast(widget.padding.z()),
+//                 .bottom = @intCast(widget.padding.w()),
+//             },
+//             .child_alignment = .{
+//                 .x = @enumFromInt(@intFromEnum(widget.alignX)),
+//                 .y = @enumFromInt(@intFromEnum(widget.alignY)),
+//             },
+//             .child_gap = @intCast(widget.child_gap),
+//         },
+//         .border = .{
+//             .color = colorToClay(widget.border_color),
+//             .width = .{
+//                 .left = @intCast(widget.border_width.x()),
+//                 .right = @intCast(widget.border_width.y()),
+//                 .top = @intCast(widget.border_width.z()),
+//                 .bottom = @intCast(widget.border_width.w()),
+//                 .between_children = 0,
+//             },
+//         },
+//         .background_color = colorToClay(widget.background_color),
+//     })({
+//
+//         // Label
+//         if (self.label.components.getOptional(id)) |label| {
+//             const font = try self.font.components.get(try self.font.default());
+//
+//             clay.text(label.text.items, .{
+//                 .font_size = 16,
+//                 .color = colorToClay(label.color),
+//                 .user_data = @ptrCast(font),
+//                 .alignment = .center,
+//             });
+//         }
+//
+//         // Button
+//         // if (self.button.components.getOptional(id)) |button| {}
+//
+//         // Render children
+//         var it = try self.node.iterChildren(id);
+//         while (it.next()) |child| {
+//             if (self.components.has(child)) {
+//                 try self.renderWidgetRecursive(child);
+//             }
+//         }
+//     });
+// }
+
+fn resolveSizing(sizing: Sizing, size: f32, available: u32) i32 {
+    const raw: i32 = switch (sizing) {
+        .fixed => @intFromFloat(size),
+        .percent => @intFromFloat((@as(f32, @floatFromInt(available)) * size)),
+        .grow => @intCast(available), // temporary, refined later
+        .fit => @intCast(available),
+    };
+    return @max(@as(i32, @intCast(available)), @min(0, raw));
+}
+fn layoutWidgetRecursive(self: *Self, id: nux.ID, available: nux.Box2i) !void {
     const widget = self.components.get(id) catch return;
-    const name = try self.node.getName(id);
-    clay.UI()(.{
-        .id = .localIDI(name, index),
-        .layout = .{
-            .direction = @enumFromInt(@intFromEnum(widget.direction)),
-            .sizing = .{
-                .w = .{
-                    .type = @enumFromInt(@intFromEnum(widget.sizing_x)),
-                    .size = if (widget.sizing_x == .percent) .{
-                        .percent = @floatFromInt(widget.minmax_x.x()),
-                    } else .{
-                        .minmax = .{
-                            .min = @floatFromInt(widget.minmax_x.x()),
-                            .max = @floatFromInt(widget.minmax_x.y()),
-                        },
-                    },
-                },
-                .h = .{
-                    .type = @enumFromInt(@intFromEnum(widget.sizing_y)),
-                    .size = if (widget.sizing_y == .percent) .{
-                        .percent = @floatFromInt(widget.minmax_y.x()),
-                    } else .{
-                        .minmax = .{
-                            .min = @floatFromInt(widget.minmax_y.x()),
-                            .max = @floatFromInt(widget.minmax_y.y()),
-                        },
-                    },
-                },
-            },
-            .padding = .{
-                .left = @intCast(widget.padding.x()),
-                .right = @intCast(widget.padding.y()),
-                .top = @intCast(widget.padding.z()),
-                .bottom = @intCast(widget.padding.w()),
-            },
-            .child_alignment = .{
-                .x = @enumFromInt(@intFromEnum(widget.alignX)),
-                .y = @enumFromInt(@intFromEnum(widget.alignY)),
-            },
-            .child_gap = @intCast(widget.child_gap),
-        },
-        .border = .{
-            .color = colorToClay(widget.border_color),
-            .width = .{
-                .left = @intCast(widget.border_width.x()),
-                .right = @intCast(widget.border_width.y()),
-                .top = @intCast(widget.border_width.z()),
-                .bottom = @intCast(widget.border_width.w()),
-                .between_children = 0,
-            },
-        },
-        .background_color = colorToClay(widget.background_color),
-    })({
 
-        // Label
-        if (self.label.components.getOptional(id)) |label| {
-            const font = try self.font.components.get(try self.font.default());
+    // 1. Resolve own size
+    var size: nux.Vec2i = .init(
+        resolveSizing(widget.sizing_x, widget.size_x, available.w()),
+        resolveSizing(widget.sizing_y, widget.size_y, available.h()),
+    );
+    widget.box = .init(
+        available.x(),
+        available.y(),
+        @intCast(size.x()),
+        @intCast(size.y()),
+    );
 
-            clay.text(label.text.items, .{
-                .font_size = 16,
-                .color = colorToClay(label.color),
-                .user_data = @ptrCast(font),
-                .alignment = .center,
-            });
+    // 2. Compute inner
+    const pad = widget.padding;
+    const inner: nux.Box2i = .init(
+        pad.x(),
+        pad.y(),
+        @intCast(size.x() - pad.x() - pad.y()),
+        @intCast(size.y() - pad.z() - pad.w()),
+    );
+
+    // 2. Render children
+    var it = try self.node.iterChildren(id);
+    while (it.next()) |child| {
+        if (self.components.has(child)) {
+            try self.layoutWidgetRecursive(child, inner);
         }
+    }
+}
+pub fn layoutWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) !void {
 
-        // Button
-        // if (self.button.components.getOptional(id)) |button| {}
+    // Compute viewport size
+    var width = self.window.width;
+    var height = self.window.height;
+    if (viewport.target) |texture_id| {
+        const texture = try self.texture.components.get(texture_id);
+        width = texture.info.width;
+        height = texture.info.height;
+    }
 
-        // Render children
-        var it = try self.node.iterChildren(id);
-        var i: u32 = 0;
-        while (it.next()) |child| : (i += 1) {
-            if (self.components.has(child)) {
-                try self.renderWidgetRecursive(child, i);
-            }
-        }
+    // Recursive compute
+    try self.layoutWidgetRecursive(id, .init(0, 0, @intCast(width), @intCast(height)));
+}
+fn renderWidgetRecursive(
+    self: *Self,
+    id: nux.ID,
+    viewport: *nux.Viewport.Component,
+) !void {
+    const widget = self.components.get(id) catch return;
+
+    // Render background
+    try viewport.commands.rectangle(.{
+        .box = widget.box,
+        .color = widget.background_color,
     });
+
+    // Render children
+    var it = try self.node.iterChildren(id);
+    while (it.next()) |child| {
+        if (self.components.has(child)) {
+            try self.renderWidgetRecursive(child, viewport);
+        }
+    }
 }
 pub fn renderWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) !void {
 
@@ -191,76 +269,66 @@ pub fn renderWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) 
         height = texture.info.height;
     }
 
-    // Setup clay
-    clay.setLayoutDimensions(.{
-        .w = @floatFromInt(width),
-        .h = @floatFromInt(height),
-    });
-    clay.setPointerState(.{ .x = 0, .y = 0 }, false);
-    clay.updateScrollContainers(false, .{ .x = 0, .y = 0 }, 0);
+    // Render root widget
+    try self.renderWidgetRecursive(id, viewport);
 
-    // Render widgets
-    clay.beginLayout();
-    try self.renderWidgetRecursive(id, 0);
-    const commands = clay.endLayout();
-
-    // Generate graphics commands
-    const cb = &viewport.commands;
-    for (commands) |command| {
-        const box = nux.Box2i.init(
-            @intFromFloat(command.bounding_box.x),
-            @intFromFloat(command.bounding_box.y),
-            @intFromFloat(command.bounding_box.width),
-            @intFromFloat(command.bounding_box.height),
-        );
-        switch (command.command_type) {
-            .none => {},
-            .rectangle => {
-                try cb.rectangle(.{
-                    .box = box,
-                    .color = .fromRGBA255(command.render_data.rectangle.background_color),
-                });
-            },
-            .border => {
-                const color = nux.Color.fromRGBA255(command.render_data.border.color);
-                const border = command.render_data.border.width;
-                const rectangles: [4]nux.Box2i = .{
-                    .init(box.x(), box.y(), border.left, box.h()), // left
-                    .init(box.tr().x() - border.left, box.y(), border.left, box.h()), // right
-                    .init(box.x(), box.y(), box.w(), border.top), // top
-                    .init(box.x(), box.br().y() - border.bottom, box.w(), border.bottom), // bottom
-                };
-                for (rectangles) |rect| {
-                    try cb.rectangle(.{
-                        .box = rect,
-                        .color = color,
-                    });
-                }
-            },
-            .text => {
-                const len: usize = @intCast(command.render_data.text.string_contents.length);
-                try cb.text(.{
-                    .text = command.render_data.text.string_contents.chars[0..len],
-                    .pos = box.pos,
-                    .scale = command.render_data.text.font_size / 8,
-                    .color = .fromRGBA255(command.render_data.text.text_color),
-                });
-            },
-            .image => {
-                // try cb.blit(.{
-                //     .box = box,
-                //     .pos = box.pos,
-                // });
-            },
-            .scissor_start => {
-                try cb.scissor(box);
-            },
-            .scissor_end => {
-                try cb.scissor(null);
-            },
-            .custom => {},
-        }
-    }
+    // // Generate graphics commands
+    // const cb = &viewport.commands;
+    // for (commands) |command| {
+    //     const box = nux.Box2i.init(
+    //         @intFromFloat(command.bounding_box.x),
+    //         @intFromFloat(command.bounding_box.y),
+    //         @intFromFloat(command.bounding_box.width),
+    //         @intFromFloat(command.bounding_box.height),
+    //     );
+    //     switch (command.command_type) {
+    //         .none => {},
+    //         .rectangle => {
+    //             try cb.rectangle(.{
+    //                 .box = box,
+    //                 .color = .fromRGBA255(command.render_data.rectangle.background_color),
+    //             });
+    //         },
+    //         .border => {
+    //             const color = nux.Color.fromRGBA255(command.render_data.border.color);
+    //             const border = command.render_data.border.width;
+    //             const rectangles: [4]nux.Box2i = .{
+    //                 .init(box.x(), box.y(), border.left, box.h()), // left
+    //                 .init(box.tr().x() - border.left, box.y(), border.left, box.h()), // right
+    //                 .init(box.x(), box.y(), box.w(), border.top), // top
+    //                 .init(box.x(), box.br().y() - border.bottom, box.w(), border.bottom), // bottom
+    //             };
+    //             for (rectangles) |rect| {
+    //                 try cb.rectangle(.{
+    //                     .box = rect,
+    //                     .color = color,
+    //                 });
+    //             }
+    //         },
+    //         .text => {
+    //             const len: usize = @intCast(command.render_data.text.string_contents.length);
+    //             try cb.text(.{
+    //                 .text = command.render_data.text.string_contents.chars[0..len],
+    //                 .pos = box.pos,
+    //                 .scale = command.render_data.text.font_size / 8,
+    //                 .color = .fromRGBA255(command.render_data.text.text_color),
+    //             });
+    //         },
+    //         .image => {
+    //             // try cb.blit(.{
+    //             //     .box = box,
+    //             //     .pos = box.pos,
+    //             // });
+    //         },
+    //         .scissor_start => {
+    //             try cb.scissor(box);
+    //         },
+    //         .scissor_end => {
+    //             try cb.scissor(null);
+    //         },
+    //         .custom => {},
+    //     }
+    // }
 }
 
 pub fn setBackgroundColor(self: *Self, id: nux.ID, color: nux.Color) !void {
@@ -287,27 +355,25 @@ pub fn setChildGap(self: *Self, id: nux.ID, gap: u32) !void {
     const widget = try self.components.get(id);
     widget.child_gap = gap;
 }
-pub fn setSizeX(
+pub fn setWidth(
     self: *Self,
     id: nux.ID,
     sizing: nux.Widget.Sizing,
-    min: u32,
-    max: u32,
+    width: f32,
 ) !void {
     const widget = try self.components.get(id);
     widget.sizing_x = sizing;
-    widget.minmax_x = .init(@intCast(min), @intCast(max));
+    widget.size_x = @max(width, 0);
 }
-pub fn setSizeY(
+pub fn setHeight(
     self: *Self,
     id: nux.ID,
     sizing: nux.Widget.Sizing,
-    min: u32,
-    max: u32,
+    height: f32,
 ) !void {
     const widget = try self.components.get(id);
     widget.sizing_y = sizing;
-    widget.minmax_y = .init(@intCast(min), @intCast(max));
+    widget.size_y = @max(height, 0);
 }
 pub fn setBorder(self: *Self, id: nux.ID, width: nux.Vec4i) !void {
     const widget = try self.components.get(id);

@@ -30,9 +30,9 @@ function M:onInit()
             Widget.setWidth(n, Widget.SIZING_GROW, 100)
         end
         if i == 10 then
-            Widget.setHeight(n, Widget.SIZING_GROW, 20)
+            Widget.setHeight(n, Widget.SIZING_GROW, 0)
         else
-            Widget.setHeight(n, Widget.SIZING_FIXED, 20)
+            Widget.setHeight(n, Widget.SIZING_FIT, 32)
         end
     end
 end

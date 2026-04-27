@@ -8,15 +8,9 @@ pub const Direction = enum(u32) {
     column = 1,
 };
 
-pub const AlignmentX = enum(u32) {
-    left = 0,
-    right = 1,
-    center = 2,
-};
-
-pub const AlignmentY = enum(u32) {
-    top = 0,
-    bottom = 1,
+pub const Alignment = enum(u32) {
+    start = 0,
+    end = 1,
     center = 2,
 };
 
@@ -27,23 +21,27 @@ pub const Sizing = enum(u32) {
     fixed = 3,
 };
 
+const Dimension = enum(usize) {
+    const size: usize = 2;
+    x = 0,
+    y = 1,
+};
+
 const Component = struct {
     background_color: nux.Color = .transparent,
     padding: nux.Vec4i = .zero(), // left, right, top, bottom
-    direction: Direction = .column,
-    alignX: AlignmentX = .left,
-    alignY: AlignmentY = .top,
+    child_direction: Direction = .column,
+    child_align: [Dimension.size]Alignment = .{.start} ** Dimension.size,
     child_gap: u32 = 0,
-    sizing_x: Sizing = .fit,
-    sizing_y: Sizing = .fit,
-    size_x: f32 = 0, // float to support percent
-    size_y: f32 = 0, // float to support percent
-    border_width: nux.Vec4i = .zero(),
+    sizing: [Dimension.size]Sizing = .{.fit} ** Dimension.size,
+    size: [Dimension.size]f32 = .{0} ** Dimension.size, // float to support percent
+    border_sizes: nux.Vec4i = .zero(),
     border_color: nux.Color = .white,
     border_radius: nux.Vec4i = .zero(),
 
     // Computed layout
     box: nux.Box2i = .empty(0, 0),
+    fit_size: nux.Vec2i = .zero(),
 };
 
 components: nux.Components(Component),
@@ -59,81 +57,36 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
 
-// fn measureText(text: []const u8, config: *clay.TextElementConfig, _: *Self) clay.Dimensions {
-//     var text_width: u32 = 0;
-//     var max_text_height: u32 = 0;
-
-//     const font: *nux.Font.Component = @ptrCast(@alignCast(config.user_data));
-//     var it = font.iterate(text);
-//     while (it.next()) |entry| {
-//         const glyph = entry.glyph;
-//         if (entry.codepoint != '\n') {
-//             text_width += glyph.box.w() + config.letter_spacing + 1;
-//             max_text_height = @max(max_text_height, glyph.box.h());
-//         } else {
-//             // max_text_width = @max(max_text_width, text_width);
-//             // text_width = 0;
-//             // text_height += font_size + @as(u32, @intCast(config.line_height));
-//         }
-//     }
-//     const scale_factor = (config.font_size / max_text_height) + 1;
-
-//     return clay.Dimensions{
-//         .h = @floatFromInt(max_text_height * scale_factor),
-//         .w = @floatFromInt(text_width * scale_factor),
-//     };
-// }
-
-fn resolveSizing(sizing: Sizing, size: f32, available: u32) i32 {
+fn measureWidget(self: *Self, available: u32, id: nux.ID) i32 {
+    if (self.label.components.getOptional(id)) |label| {
+        _ = label;
+        return 24;
+    }
+    return @intCast(available);
+}
+fn resolveSizing(
+    self: *Self,
+    sizing: Sizing,
+    size: f32,
+    available: u32,
+    id: nux.ID,
+) i32 {
     const raw: i32 = switch (sizing) {
         .fixed => @intFromFloat(size),
         .percent => @intFromFloat((@as(f32, @floatFromInt(available)) * size)),
         .grow => @intCast(available), // temporary, refined later
-        .fit => @intCast(available),
+        .fit => self.measureWidget(available, id),
     };
     return @max(0, @min(available, raw));
 }
-// fn layoutWidgetRecursive(self: *Self, id: nux.ID, available: nux.Box2i) !void {
-//     const widget = self.components.get(id) catch return;
-
-//     // 1. Resolve own size
-//     var size: nux.Vec2i = .init(
-//         resolveSizing(widget.sizing_x, widget.size_x, available.w()),
-//         resolveSizing(widget.sizing_y, widget.size_y, available.h()),
-//     );
-//     widget.box = .init(
-//         available.x(),
-//         available.y(),
-//         @intCast(size.x()),
-//         @intCast(size.y()),
-//     );
-
-//     // 2. Compute inner
-//     const pad = widget.padding;
-//     const inner: nux.Box2i = .init(
-//         pad.x(),
-//         pad.y(),
-//         @intCast(size.x() - pad.x() - pad.y()),
-//         @intCast(size.y() - pad.z() - pad.w()),
-//     );
-
-//     // 2. Render children
-//     var it = try self.node.iterChildren(id);
-//     while (it.next()) |child| {
-//         if (self.components.has(child)) {
-//             try self.layoutWidgetRecursive(child, inner);
-//         }
-//     }
-// }
 fn layoutWidgetRecursive(self: *Self, id: nux.ID, available: nux.Box2i) !void {
     const widget = self.components.get(id) catch return;
 
     // 1. Resolve own size
     var size = nux.Vec2i.init(
-        resolveSizing(widget.sizing_x, widget.size_x, available.w()),
-        resolveSizing(widget.sizing_y, widget.size_y, available.h()),
+        self.resolveSizing(widget.sizing_x, widget.size_x, available.w(), id),
+        self.resolveSizing(widget.sizing_y, widget.size_y, available.h(), id),
     );
-
     widget.box = .init(
         available.x(),
         available.y(),
@@ -151,7 +104,7 @@ fn layoutWidgetRecursive(self: *Self, id: nux.ID, available: nux.Box2i) !void {
     );
 
     // 3. Measure fixed + percent, count grow
-    const is_row = widget.direction == .row;
+    const is_row = widget.child_direction == .row;
     var total_fixed: i32 = 0;
     var grow_count: i32 = 0;
     var child_count: usize = 0;
@@ -216,14 +169,14 @@ fn layoutWidgetRecursive(self: *Self, id: nux.ID, available: nux.Box2i) !void {
                 .percent => @intFromFloat(@as(f32, @floatFromInt(inner.w())) * child.size_x),
                 .grow, .fit => grow_size,
             };
-            child_h = resolveSizing(child.sizing_y, child.size_y, inner.h());
+            child_h = self.resolveSizing(child.sizing_y, child.size_y, inner.h(), child_id);
         } else {
             child_h = switch (child.sizing_y) {
                 .fixed => @intFromFloat(child.size_y),
                 .percent => @intFromFloat(@as(f32, @floatFromInt(inner.h())) * child.size_y),
                 .grow, .fit => grow_size,
             };
-            child_w = resolveSizing(child.sizing_x, child.size_x, inner.w());
+            child_w = self.resolveSizing(child.sizing_x, child.size_x, inner.w(), child_id);
         }
 
         // Compute alignment
@@ -299,8 +252,8 @@ fn renderWidgetRecursive(
     }
 
     // Border
-    if (widget.border_width.reduceMax() > 0) {
-        const border = widget.border_width;
+    if (widget.border_sizes.reduceMax() > 0) {
+        const border = widget.border_sizes;
         const box = widget.box;
         const rectangles: [4]nux.Box2i = .{
             .init(box.x(), box.y(), @intCast(border.x()), box.h()), // left
@@ -419,7 +372,7 @@ pub fn setPadding(self: *Self, id: nux.ID, padding: nux.Vec4i) !void {
 }
 pub fn setDirection(self: *Self, id: nux.ID, direction: nux.Widget.Direction) !void {
     const widget = try self.components.get(id);
-    widget.direction = direction;
+    widget.child_direction = direction;
 }
 pub fn setAlignX(self: *Self, id: nux.ID, alignment: nux.Widget.AlignmentX) !void {
     const widget = try self.components.get(id);
@@ -455,7 +408,7 @@ pub fn setHeight(
 }
 pub fn setBorder(self: *Self, id: nux.ID, width: nux.Vec4i) !void {
     const widget = try self.components.get(id);
-    widget.border_width = width;
+    widget.border_sizes = width;
 }
 pub fn setBorderColor(self: *Self, id: nux.ID, color: nux.Color) !void {
     const widget = try self.components.get(id);

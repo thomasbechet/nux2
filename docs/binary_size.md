@@ -5,3 +5,5 @@
 - efad701efd03cf8d6a195e61e97b0f266720ecfa - 1692 KB - Linux (gamecontrollerdb.txt added)
 - 0cd8e816941918627833708537073ce5d9ee5c18 - 1618 KB - Windows
 - 0cd8e816941918627833708537073ce5d9ee5c18 - 536 KB - Wasm (from Windows)
+- 0cd8e816941918627833708537073ce5d9ee5c18 - 536 KB - Wasm (from Windows)
+- 5a443729a648d3fe5600d2f58cd88ea5bf2c7142 - 1608 KB - Linux

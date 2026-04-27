@@ -30,18 +30,19 @@ const Dimension = enum(usize) {
 const Component = struct {
     background_color: nux.Color = .transparent,
     padding: nux.Vec4i = .zero(), // left, right, top, bottom
-    child_direction: Direction = .column,
-    child_align: [Dimension.size]Alignment = .{.start} ** Dimension.size,
-    child_gap: u32 = 0,
-    sizing: [Dimension.size]Sizing = .{.fit} ** Dimension.size,
-    size: [Dimension.size]f32 = .{0} ** Dimension.size, // float to support percent
     border_sizes: nux.Vec4i = .zero(),
     border_color: nux.Color = .white,
     border_radius: nux.Vec4i = .zero(),
+    direction: Direction = .column,
+    alignment: [Dimension.size]Alignment = .{.start} ** Dimension.size,
+    gap: u32 = 0,
+    sizing: [Dimension.size]Sizing = .{.fit} ** Dimension.size,
+    size: [Dimension.size]f32 = .{0} ** Dimension.size, // float to support percent
+};
 
-    // Computed layout
-    box: nux.Box2i = .empty(0, 0),
-    fit_size: nux.Vec2i = .zero(),
+const Available = struct {
+    min: nux.Vec2i,
+    max: nux.Vec2i,
 };
 
 components: nux.Components(Component),
@@ -79,45 +80,38 @@ fn resolveSizing(
     };
     return @max(0, @min(available, raw));
 }
-fn layoutWidgetRecursive(self: *Self, id: nux.ID, available: nux.Box2i) !void {
+
+// - Constraints are given by parent with available parameter (min and max size).
+// - The widget compute its size using parent constraints.
+// - Parent position its children.
+fn layoutWidgetRecursive(self: *Self, id: nux.ID, available: Available) !nux.Vec2i {
     const widget = self.components.get(id) catch return;
 
-    // 1. Resolve own size
-    var size = nux.Vec2i.init(
-        self.resolveSizing(widget.sizing_x, widget.size_x, available.w(), id),
-        self.resolveSizing(widget.sizing_y, widget.size_y, available.h(), id),
-    );
-    widget.box = .init(
-        available.x(),
-        available.y(),
-        @intCast(size.x()),
-        @intCast(size.y()),
-    );
+    // Apply padding
+    var inner: nux.Vec2i = undefined;
+    switch (widget.sizing[0]) {
+        .fit => {
+            // iter childs and add children
+        },
+        .grow => {
+            inner = available.max;
+        },
+        .fixed => {
+            inner = widget.size;
+        },
+        .percent => {
+            inner = available.max.mul
+        },
+    }
 
-    // 2. Inner box (with padding)
-    const pad = widget.padding;
-    const inner = nux.Box2i.init(
-        available.x() + pad.x(),
-        available.y() + pad.z(),
-        @intCast(size.x() - pad.x() - pad.y()),
-        @intCast(size.y() - pad.z() - pad.w()),
-    );
-
-    // 3. Measure fixed + percent, count grow
-    const is_row = widget.child_direction == .row;
-    var total_fixed: i32 = 0;
-    var grow_count: i32 = 0;
     var child_count: usize = 0;
-
     var it = try self.node.iterChildren(id);
     while (it.next()) |child_id| {
         const child = self.components.getOptional(child_id) orelse continue;
 
         child_count += 1;
 
-        const sizing = if (is_row) child.sizing_x else child.sizing_y;
-        const size_val = if (is_row) child.size_x else child.size_y;
-        const avail = if (is_row) inner.w() else inner.h();
+        const child_size = self.layoutWidgetRecursive(child_id, inner);
 
         switch (sizing) {
             .fixed => total_fixed += @intFromFloat(size_val),
@@ -127,100 +121,6 @@ fn layoutWidgetRecursive(self: *Self, id: nux.ID, available: nux.Box2i) !void {
         }
     }
     if (child_count == 0) return;
-
-    const gap_total: i32 = @intCast((child_count - 1) * widget.child_gap);
-    const main_available: i32 = if (is_row) @intCast(inner.w()) else @intCast(inner.h());
-
-    var remaining = main_available - total_fixed - gap_total;
-    if (remaining < 0) remaining = 0;
-
-    const grow_size: i32 = if (grow_count > 0) @divTrunc(remaining, grow_count) else 0;
-
-    // 4. Alignment offset
-    const content_size: i32 = total_fixed + gap_total + (grow_size * grow_count);
-
-    var cursor: i32 = undefined;
-    if (is_row) {
-        cursor = switch (widget.alignX) {
-            .left => 0,
-            .center => @divTrunc((main_available - content_size), 2),
-            .right => (main_available - content_size),
-        };
-    } else {
-        cursor = switch (widget.alignY) {
-            .top => 0,
-            .center => @divTrunc((main_available - content_size), 2),
-            .bottom => (main_available - content_size),
-        };
-    }
-
-    // 5. Layout children
-    it = try self.node.iterChildren(id);
-    while (it.next()) |child_id| {
-        const child = self.components.getOptional(child_id) orelse continue;
-
-        var child_w: i32 = 0;
-        var child_h: i32 = 0;
-
-        // Compute child size
-        if (is_row) {
-            child_w = switch (child.sizing_x) {
-                .fixed => @intFromFloat(child.size_x),
-                .percent => @intFromFloat(@as(f32, @floatFromInt(inner.w())) * child.size_x),
-                .grow, .fit => grow_size,
-            };
-            child_h = self.resolveSizing(child.sizing_y, child.size_y, inner.h(), child_id);
-        } else {
-            child_h = switch (child.sizing_y) {
-                .fixed => @intFromFloat(child.size_y),
-                .percent => @intFromFloat(@as(f32, @floatFromInt(inner.h())) * child.size_y),
-                .grow, .fit => grow_size,
-            };
-            child_w = self.resolveSizing(child.sizing_x, child.size_x, inner.w(), child_id);
-        }
-
-        // Compute alignment
-        var offset_cross: i32 = 0;
-        if (is_row) {
-            const free = @as(i32, @intCast(inner.h())) - child_h;
-            offset_cross = switch (widget.alignY) {
-                .top => 0,
-                .center => @divTrunc(free, 2),
-                .bottom => free,
-            };
-        } else {
-            const free = @as(i32, @intCast(inner.w())) - child_w;
-            offset_cross = switch (widget.alignX) {
-                .left => 0,
-                .center => @divTrunc(free, 2),
-                .right => free,
-            };
-        }
-
-        // Compute child position
-        const child_x = if (is_row)
-            inner.x() + cursor
-        else
-            inner.x() + offset_cross;
-
-        const child_y = if (is_row)
-            inner.y() + offset_cross
-        else
-            inner.y() + cursor;
-
-        const child_box = nux.Box2i.init(
-            child_x,
-            child_y,
-            @intCast(child_w),
-            @intCast(child_h),
-        );
-
-        // Compute child layout
-        try self.layoutWidgetRecursive(child_id, child_box);
-
-        // Advance cursor
-        cursor += (if (is_row) child_w else child_h) + @as(i32, @intCast(widget.child_gap));
-    }
 }
 pub fn layoutWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) !void {
 
@@ -372,7 +272,7 @@ pub fn setPadding(self: *Self, id: nux.ID, padding: nux.Vec4i) !void {
 }
 pub fn setDirection(self: *Self, id: nux.ID, direction: nux.Widget.Direction) !void {
     const widget = try self.components.get(id);
-    widget.child_direction = direction;
+    widget.direction = direction;
 }
 pub fn setAlignX(self: *Self, id: nux.ID, alignment: nux.Widget.AlignmentX) !void {
     const widget = try self.components.get(id);
@@ -384,7 +284,7 @@ pub fn setAlignY(self: *Self, id: nux.ID, alignment: nux.Widget.AlignmentY) !voi
 }
 pub fn setChildGap(self: *Self, id: nux.ID, gap: u32) !void {
     const widget = try self.components.get(id);
-    widget.child_gap = gap;
+    widget.gap = gap;
 }
 pub fn setWidth(
     self: *Self,

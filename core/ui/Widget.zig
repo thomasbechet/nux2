@@ -14,6 +14,11 @@ pub const Alignment = enum(u32) {
     center = 2,
 };
 
+pub const Layout = enum(u32) {
+    container,
+    stack,
+};
+
 const Component = struct {
     background_color: nux.Color = .transparent,
     padding: nux.Vec4i = .zero(), // left, right, top, bottom
@@ -24,6 +29,7 @@ const Component = struct {
     border_radius: nux.Vec4i = .zero(),
     alignment_x: Alignment = .start,
     alignment_y: Alignment = .start,
+    layout: Layout = .container,
 
     // Computed size
     box: nux.Box2i = .empty(0, 0),
@@ -47,6 +53,11 @@ fn layoutRecursive(self: *Self, id: nux.ID, available: nux.Vec2i) !nux.Vec2i {
     var size_x: i32 = available.x();
     var size_y: i32 = available.y();
 
+    switch (widget.layout) {
+        .container => {},
+        .stack => {},
+    }
+
     // Remove padding
     size_x -= @max(0, widget.padding.x() - widget.padding.y());
     size_y -= @max(0, widget.padding.z() - widget.padding.w());
@@ -59,16 +70,17 @@ fn layoutRecursive(self: *Self, id: nux.ID, available: nux.Vec2i) !nux.Vec2i {
     // Iterate children
     var it = try self.node.iterChildren(id);
     while (it.next()) |child_id| {
-        const consumed = try self.layoutRecursive(child_id, .init(size_x, size_y)); 
-        size_x -= consumed.x();
-        size_y -= consumed.y();
+        _ = child_id;
+        // const consumed = try self.layoutRecursive(child_id, .init(size_x, size_y));
+        // size_x -= consumed.x();
+        // size_y -= consumed.y();
 
-        // Gap
-        if (widget.direction == .row) {
-            size_x -= widget.gap;
-        } else {
-            size_y -= widget.gap;
-        }
+        // // Gap
+        // if (widget.direction == .row) {
+        //     size_x -= widget.gap;
+        // } else {
+        //     size_y -= widget.gap;
+        // }
     }
 
     return .init(size_x, size_y);
@@ -86,7 +98,10 @@ pub fn layoutWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) 
     }
 
     // Compute widget layout
-    try self.layoutRecursive(id, .init(0, 0, width, height));
+    _ = try self.layoutRecursive(id, .init(
+        @intCast(width),
+        @intCast(height),
+    ));
 }
 fn renderWidgetRecursive(
     self: *Self,
@@ -234,29 +249,9 @@ pub fn setAlignY(self: *Self, id: nux.ID, alignment: nux.Widget.Alignment) !void
     const widget = try self.components.get(id);
     widget.alignment_y = alignment;
 }
-pub fn setChildGap(self: *Self, id: nux.ID, gap: i32) !void {
+pub fn setChildGap(self: *Self, id: nux.ID, gap: u32) !void {
     const widget = try self.components.get(id);
-    widget.gap = @max(0, gap);
-}
-pub fn setWidth(
-    self: *Self,
-    id: nux.ID,
-    sizing: nux.Widget.Sizing,
-    width: f32,
-) !void {
-    const widget = try self.components.get(id);
-    widget.sizing_x = sizing;
-    widget.size_x = @max(width, 0);
-}
-pub fn setHeight(
-    self: *Self,
-    id: nux.ID,
-    sizing: nux.Widget.Sizing,
-    height: f32,
-) !void {
-    const widget = try self.components.get(id);
-    widget.sizing_y = sizing;
-    widget.size_y = @max(height, 0);
+    widget.gap = @intCast(gap);
 }
 pub fn setBorder(self: *Self, id: nux.ID, width: nux.Vec4i) !void {
     const widget = try self.components.get(id);
@@ -269,4 +264,8 @@ pub fn setBorderColor(self: *Self, id: nux.ID, color: nux.Color) !void {
 pub fn setBorderRadius(self: *Self, id: nux.ID, radius: nux.Vec4i) !void {
     const widget = try self.components.get(id);
     widget.border_radius = radius;
+}
+pub fn setLayout(self: *Self, id: nux.ID, layout: nux.Widget.Layout) !void {
+    const widget = try self.components.get(id);
+    widget.layout = layout;
 }

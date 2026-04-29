@@ -15,9 +15,10 @@ function M:onInit()
     Widget.setBackgroundColor(self.panel, Math.vec4(1, 1, 0, 1))
     Widget.setPadding(self.panel, Math.vec4(10))
     Widget.setChildGap(self.panel, 5)
+    -- Widget.setHeight(self.panel, Widget.SIZING_GROW, 0)
 
     -- Create panel
-    for i=0,10 do
+    for i=0,2 do
         local n = Node.createNamed(self.panel, "item"..i)
         Component.add(n, Widget)
         Component.add(n, Label)

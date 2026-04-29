@@ -14,35 +14,19 @@ pub const Alignment = enum(u32) {
     center = 2,
 };
 
-pub const Sizing = enum(u32) {
-    fit = 0,
-    grow = 1,
-    percent = 2,
-    fixed = 3,
-};
-
-const Dimension = enum(usize) {
-    const size: usize = 2;
-    x = 0,
-    y = 1,
-};
-
 const Component = struct {
     background_color: nux.Color = .transparent,
     padding: nux.Vec4i = .zero(), // left, right, top, bottom
+    direction: Direction = .column,
+    gap: i32 = 0,
     border_sizes: nux.Vec4i = .zero(),
     border_color: nux.Color = .white,
     border_radius: nux.Vec4i = .zero(),
-    direction: Direction = .column,
-    alignment: [Dimension.size]Alignment = .{.start} ** Dimension.size,
-    gap: u32 = 0,
-    sizing: [Dimension.size]Sizing = .{.fit} ** Dimension.size,
-    size: [Dimension.size]f32 = .{0} ** Dimension.size, // float to support percent
-};
+    alignment_x: Alignment = .start,
+    alignment_y: Alignment = .start,
 
-const Available = struct {
-    min: nux.Vec2i,
-    max: nux.Vec2i,
+    // Computed size
+    box: nux.Box2i = .empty(0, 0),
 };
 
 components: nux.Components(Component),
@@ -58,70 +42,38 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
 
-fn measureWidget(self: *Self, available: u32, id: nux.ID) i32 {
+fn layoutRecursive(self: *Self, id: nux.ID, available: nux.Vec2i) !nux.Vec2i {
+    const widget = self.components.getOptional(id) orelse return .zero();
+    var size_x: i32 = available.x();
+    var size_y: i32 = available.y();
+
+    // Remove padding
+    size_x -= @max(0, widget.padding.x() - widget.padding.y());
+    size_y -= @max(0, widget.padding.z() - widget.padding.w());
+
+    // Label
     if (self.label.components.getOptional(id)) |label| {
-        _ = label;
-        return 24;
-    }
-    return @intCast(available);
-}
-fn resolveSizing(
-    self: *Self,
-    sizing: Sizing,
-    size: f32,
-    available: u32,
-    id: nux.ID,
-) i32 {
-    const raw: i32 = switch (sizing) {
-        .fixed => @intFromFloat(size),
-        .percent => @intFromFloat((@as(f32, @floatFromInt(available)) * size)),
-        .grow => @intCast(available), // temporary, refined later
-        .fit => self.measureWidget(available, id),
-    };
-    return @max(0, @min(available, raw));
-}
-
-// - Constraints are given by parent with available parameter (min and max size).
-// - The widget compute its size using parent constraints.
-// - Parent position its children.
-fn layoutWidgetRecursive(self: *Self, id: nux.ID, available: Available) !nux.Vec2i {
-    const widget = self.components.get(id) catch return;
-
-    // Apply padding
-    var inner: nux.Vec2i = undefined;
-    switch (widget.sizing[0]) {
-        .fit => {
-            // iter childs and add children
-        },
-        .grow => {
-            inner = available.max;
-        },
-        .fixed => {
-            inner = widget.size;
-        },
-        .percent => {
-            inner = available.max.mul
-        },
+        return .init(@intCast(label.text.items.len * 8), 24);
     }
 
-    var child_count: usize = 0;
+    // Iterate children
     var it = try self.node.iterChildren(id);
     while (it.next()) |child_id| {
-        const child = self.components.getOptional(child_id) orelse continue;
+        const consumed = try self.layoutRecursive(child_id, .init(size_x, size_y)); 
+        size_x -= consumed.x();
+        size_y -= consumed.y();
 
-        child_count += 1;
-
-        const child_size = self.layoutWidgetRecursive(child_id, inner);
-
-        switch (sizing) {
-            .fixed => total_fixed += @intFromFloat(size_val),
-            .percent => total_fixed += @intFromFloat(@as(f32, @floatFromInt(avail)) * size_val),
-            .grow => grow_count += 1,
-            .fit => grow_count += 1, // treat like grow for now
+        // Gap
+        if (widget.direction == .row) {
+            size_x -= widget.gap;
+        } else {
+            size_y -= widget.gap;
         }
     }
-    if (child_count == 0) return;
+
+    return .init(size_x, size_y);
 }
+
 pub fn layoutWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) !void {
 
     // Compute viewport size
@@ -133,8 +85,8 @@ pub fn layoutWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) 
         height = texture.info.height;
     }
 
-    // Recursive compute
-    try self.layoutWidgetRecursive(id, .init(0, 0, @intCast(width), @intCast(height)));
+    // Compute widget layout
+    try self.layoutRecursive(id, .init(0, 0, width, height));
 }
 fn renderWidgetRecursive(
     self: *Self,
@@ -274,17 +226,17 @@ pub fn setDirection(self: *Self, id: nux.ID, direction: nux.Widget.Direction) !v
     const widget = try self.components.get(id);
     widget.direction = direction;
 }
-pub fn setAlignX(self: *Self, id: nux.ID, alignment: nux.Widget.AlignmentX) !void {
+pub fn setAlignX(self: *Self, id: nux.ID, alignment: nux.Widget.Alignment) !void {
     const widget = try self.components.get(id);
-    widget.alignX = alignment;
+    widget.alignment_x = alignment;
 }
-pub fn setAlignY(self: *Self, id: nux.ID, alignment: nux.Widget.AlignmentY) !void {
+pub fn setAlignY(self: *Self, id: nux.ID, alignment: nux.Widget.Alignment) !void {
     const widget = try self.components.get(id);
-    widget.alignY = alignment;
+    widget.alignment_y = alignment;
 }
-pub fn setChildGap(self: *Self, id: nux.ID, gap: u32) !void {
+pub fn setChildGap(self: *Self, id: nux.ID, gap: i32) !void {
     const widget = try self.components.get(id);
-    widget.gap = gap;
+    widget.gap = @max(0, gap);
 }
 pub fn setWidth(
     self: *Self,

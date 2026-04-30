@@ -7,8 +7,6 @@ function M:onInit()
     Widget.setPadding(self.ui, Math.vec4(10))
     Viewport.setWidget(self.ui, self.ui)
 
-
-
     -- Create panel
     self.panel = Node.createNamed(self.ui, "panel")
     Component.add(self.panel, Widget)
@@ -19,14 +17,13 @@ function M:onInit()
     -- Widget.setHeight(self.panel, Widget.SIZING_GROW, 0)
 
     -- Create panel
-    -- for i=0,2 do
-    --     local n = Node.createNamed(self.panel, "item"..i)
-    --     Component.add(n, Widget)
-    --     Component.add(n, Label)
-    --     Label.setText(n, "hello")
-    --     Widget.setBackgroundColor(n, Math.vec4(0, 0, 1, 1))
-    -- end
-end
+    for i=0,2 do
+        local n = Node.createNamed(self.panel, "item"..i)
+        Component.add(n, Widget)
+        Component.add(n, Label)
+        Label.setText(n, "hello")
+        Widget.setBackgroundColor(n, Math.vec4(0, 0, 1, 1))
+    end
 
-function M:onUpdate()
+    Node.dump(Node.getRoot())
 end

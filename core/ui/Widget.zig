@@ -19,6 +19,11 @@ pub const Layout = enum(u32) {
     stack,
 };
 
+const Available = struct {
+    min: nux.Vec2i,
+    max: nux.Vec2i,
+};
+
 const Component = struct {
     background_color: nux.Color = .transparent,
     padding: nux.Vec4i = .zero(), // left, right, top, bottom
@@ -32,7 +37,7 @@ const Component = struct {
     layout: Layout = .container,
 
     // Computed size
-    box: nux.Box2i = .empty(0, 0),
+    box: nux.Box2i= .empty(0, 0), // Relative to parent
 };
 
 components: nux.Components(Component),
@@ -48,10 +53,14 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
 
-fn layoutRecursive(self: *Self, id: nux.ID, available: nux.Vec2i) !nux.Vec2i {
-    const widget = self.components.getOptional(id) orelse return .zero();
-    var size_x: i32 = available.x();
-    var size_y: i32 = available.y();
+fn layoutRecursive(
+    self: *Self,
+    widget: *Component,
+    id: nux.ID,
+    available: Available,
+) !nux.Vec2i {
+    var size_x: i32 = available.min.x();
+    var size_y: i32 = available.min.y();
 
     switch (widget.layout) {
         .container => {},
@@ -59,8 +68,8 @@ fn layoutRecursive(self: *Self, id: nux.ID, available: nux.Vec2i) !nux.Vec2i {
     }
 
     // Remove padding
-    size_x -= @max(0, widget.padding.x() - widget.padding.y());
-    size_y -= @max(0, widget.padding.z() - widget.padding.w());
+    size_x += widget.padding.x() + widget.padding.y();
+    size_y += widget.padding.z() + widget.padding.w();
 
     // Label
     if (self.label.components.getOptional(id)) |label| {
@@ -69,18 +78,29 @@ fn layoutRecursive(self: *Self, id: nux.ID, available: nux.Vec2i) !nux.Vec2i {
 
     // Iterate children
     var it = try self.node.iterChildren(id);
+    var cursor = available.pos;
     while (it.next()) |child_id| {
-        _ = child_id;
-        // const consumed = try self.layoutRecursive(child_id, .init(size_x, size_y));
-        // size_x -= consumed.x();
-        // size_y -= consumed.y();
+        const child = self.components.getOptional(child_id) orelse continue;
+        const consumed = try self.layoutRecursive(child_id, .{.pos});
 
-        // // Gap
-        // if (widget.direction == .row) {
-        //     size_x -= widget.gap;
-        // } else {
-        //     size_y -= widget.gap;
-        // }
+        // Consume available size
+        size_x += consumed.x();
+        size_y += consumed.y();
+
+        // Gap
+        if (widget.direction == .row) {
+            size_x += widget.gap;
+        } else {
+            size_y += widget.gap;
+        }
+    }
+
+    // Place children
+    var cursor: i32 = 0;
+    it = try self.node.iterChildren(id);
+    while (it.next()) |child_id| {
+        const child = self.components.getOptional(child_id) orelse continue;
+        child.box.pos = .init(cursor, 0);
     }
 
     return .init(size_x, size_y);
@@ -98,10 +118,14 @@ pub fn layoutWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) 
     }
 
     // Compute widget layout
-    _ = try self.layoutRecursive(id, .init(
-        @intCast(width),
-        @intCast(height),
-    ));
+    _ = try self.layoutRecursive(id, .{
+        .min = .zero(),
+        .max = .init(
+            @intCast(width),
+            @intCast(height),
+        ),
+        .pos = .zero(),
+    });
 }
 fn renderWidgetRecursive(
     self: *Self,

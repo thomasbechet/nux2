@@ -14,9 +14,9 @@ pub const Alignment = enum(u32) {
     center = 2,
 };
 
-pub const Layout = enum(u32) {
-    container,
-    stack,
+pub const Sizing = enum(u32) {
+    grow = 1,
+    fixed = 3,
 };
 
 const Available = struct {
@@ -34,10 +34,13 @@ const Component = struct {
     border_radius: nux.Vec4i = .zero(),
     alignment_x: Alignment = .start,
     alignment_y: Alignment = .start,
-    layout: Layout = .container,
+    sizing_x: Sizing = .grow,
+    sizing_y: Sizing = .grow,
+    size_x: f32 = 0, // float for grow weights
+    size_y: f32 = 0, // float for grow weights
 
     // Computed size
-    box: nux.Box2i= .empty(0, 0), // Relative to parent
+    box: nux.Box2i = .empty(0, 0), // Relative to parent
 };
 
 components: nux.Components(Component),
@@ -53,57 +56,145 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
 
-fn layoutRecursive(
-    self: *Self,
-    widget: *Component,
-    id: nux.ID,
-    available: Available,
-) !nux.Vec2i {
-    var size_x: i32 = available.min.x();
-    var size_y: i32 = available.min.y();
+fn resolveSizing(sizing: Sizing, size: f32, available: i32) i32 {
+    const raw: i32 = switch (sizing) {
+        .fixed => @intFromFloat(size),
+        .percent => @intFromFloat(@as(f32, @floatFromInt(available)) * size),
+        .grow, .fit => available, // refined later
+    };
+    return @max(0, @min(available, raw));
+}
 
-    switch (widget.layout) {
-        .container => {},
-        .stack => {},
-    }
+fn layoutRecursive(self: *Self, widget: *Component, id: nux.ID, available: Available) !nux.Vec2i {
 
-    // Remove padding
-    size_x += widget.padding.x() + widget.padding.y();
-    size_y += widget.padding.z() + widget.padding.w();
+    // 1. Resolve own size
+    var size = nux.Vec2i.init(
+        resolveSizing(widget.sizing_x, widget.size_x, available.max.x()),
+        resolveSizing(widget.sizing_y, widget.size_y, available.max.y()),
+    );
+    widget.box.size = size.as(nux.vec.Vec2(u32));
 
-    // Label
-    if (self.label.components.getOptional(id)) |label| {
-        return .init(@intCast(label.text.items.len * 8), 24);
-    }
+    // 2. Inner box (with padding)
+    const pad = widget.padding;
 
-    // Iterate children
+    const inner = nux.Box2i.init(
+        available.max.x() + pad.x(),
+        available.max.y() + pad.z(),
+        @intCast(size.x() - pad.x() - pad.y()),
+        @intCast(size.y() - pad.z() - pad.w()),
+    );
+
+    // 3. Count children
+    const is_row = widget.direction == .row;
+    var total_fixed: i32 = 0;
+    var total_weight: f32 = 0;
+    var child_count: i32 = 0;
+
     var it = try self.node.iterChildren(id);
-    var cursor = available.pos;
     while (it.next()) |child_id| {
         const child = self.components.getOptional(child_id) orelse continue;
-        const consumed = try self.layoutRecursive(child_id, .{.pos});
 
-        // Consume available size
-        size_x += consumed.x();
-        size_y += consumed.y();
+        const sizing = if (is_row) child.sizing_x else child.sizing_y;
+        const size_val = if (is_row) child.size_x else child.size_y;
 
-        // Gap
-        if (widget.direction == .row) {
-            size_x += widget.gap;
-        } else {
-            size_y += widget.gap;
+        switch (sizing) {
+            .fixed => total_fixed += @intFromFloat(size_val),
+            .grow => total_weight += if (size_val == 0) 1 else size_val,
         }
+
+        child_count += 1;
     }
 
-    // Place children
-    var cursor: i32 = 0;
-    it = try self.node.iterChildren(id);
+    const gap_total: i32 = @intCast((child_count - 1) * widget.gap);
+    const main_available: i32 = if (is_row) @intCast(inner.w()) else @intCast(inner.h());
+
+    var remaining = main_available - total_fixed - gap_total;
+    if (remaining < 0) remaining = 0;
+
+    const grow_size: i32 = if (grow_count > 0) @divTrunc(remaining, grow_count) else 0;
+
+    // 4. Alignment offset (main axis)
+    const content_size: i32 = total_fixed + gap_total + (grow_size * grow_count);
+
+    const alignment = if (is_row) widget.alignment_x else widget.alignment_y;
+    var cursor: i32 = switch (alignment) {
+        .start => 0,
+        .center => @divTrunc(main_available - content_size, 2),
+        .end => (main_available - content_size),
+    };
+
+    // 5. Layout children
     while (it.next()) |child_id| {
         const child = self.components.getOptional(child_id) orelse continue;
-        child.box.pos = .init(cursor, 0);
+
+        var child_w: i32 = 0;
+        var child_h: i32 = 0;
+
+        // size
+        if (is_row) {
+            child_w = switch (child.sizing_x) {
+                .fixed => @intFromFloat(child.size_x),
+                .percent => @intFromFloat(@as(f32, @floatFromInt(inner.w())) * child.size_x),
+                .grow, .fit => grow_size,
+            };
+            child_h = resolveSizing(child.sizing_y, child.size_y, @intCast(inner.h()));
+        } else {
+            child_h = switch (child.sizing_y) {
+                .fixed => @intFromFloat(child.size_y),
+                .percent => @intFromFloat(@as(f32, @floatFromInt(inner.h())) * child.size_y),
+                .grow, .fit => grow_size,
+            };
+            child_w = resolveSizing(child.sizing_x, child.size_x, @intCast(inner.w()));
+        }
+
+        // cross axis alignment
+        var offset_cross: i32 = 0;
+        if (is_row) {
+            const free = @as(i32, @intCast(inner.h())) - child_h;
+            offset_cross = switch (widget.alignment_y) {
+                .start => 0,
+                .center => @divTrunc(free, 2),
+                .end => free,
+            };
+        } else {
+            const free = @as(i32, @intCast(inner.w())) - child_w;
+            offset_cross = switch (widget.alignment_x) {
+                .start => 0,
+                .center => @divTrunc(free, 2),
+                .end => free,
+            };
+        }
+
+        // position
+        const child_x = if (is_row)
+            inner.x() + cursor
+        else
+            inner.x() + offset_cross;
+
+        const child_y = if (is_row)
+            inner.y() + offset_cross
+        else
+            inner.y() + cursor;
+
+        const child_box = nux.Box2i.init(
+            child_x,
+            child_y,
+            @intCast(child_w),
+            @intCast(child_h),
+        );
+        _ = child_box;
+
+        // recurse
+        _ = try self.layoutRecursive(child, child_id, .{
+            .min = .zero(),
+            .max = .init(child_w, child_h),
+        });
+
+        // advance
+        cursor += (if (is_row) child_w else child_h) + @as(i32, @intCast(widget.gap));
     }
 
-    return .init(size_x, size_y);
+    return size;
 }
 
 pub fn layoutWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) !void {
@@ -118,14 +209,15 @@ pub fn layoutWidget(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) 
     }
 
     // Compute widget layout
-    _ = try self.layoutRecursive(id, .{
+    const widget = try self.components.get(id);
+    const consumed = try self.layoutRecursive(widget, id, .{
         .min = .zero(),
         .max = .init(
             @intCast(width),
             @intCast(height),
         ),
-        .pos = .zero(),
     });
+    widget.box = .init(0, 0, @intCast(consumed.x()), @intCast(consumed.y()));
 }
 fn renderWidgetRecursive(
     self: *Self,
@@ -288,8 +380,4 @@ pub fn setBorderColor(self: *Self, id: nux.ID, color: nux.Color) !void {
 pub fn setBorderRadius(self: *Self, id: nux.ID, radius: nux.Vec4i) !void {
     const widget = try self.components.get(id);
     widget.border_radius = radius;
-}
-pub fn setLayout(self: *Self, id: nux.ID, layout: nux.Widget.Layout) !void {
-    const widget = try self.components.get(id);
-    widget.layout = layout;
 }

@@ -33,7 +33,7 @@ function M:onInit()
     Widget.setBackgroundColor(self.panel3, Math.vec4(0.5, 0.5, 1, 1))
     Widget.setPadding(self.panel3, Math.vec4(10))
     Widget.setChildGap(self.panel3, 5)
-    Widget.setSizeY(self.panel3, Widget.SIZING_GROW, 2)
+    Widget.setSizeY(self.panel3, Widget.SIZING_GROW, 1)
 
     -- Create panel
     -- for i=0,10 do

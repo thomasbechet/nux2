@@ -40,8 +40,8 @@ pub fn onUpdate(self: *Self) !void {
     var it = self.components.iterator();
     while (it.next()) |entry| {
         if (entry.component.widget) |widget| {
-            try self.widget.layoutWidget(widget, entry.component);
-            try self.widget.renderWidget(widget, entry.component);
+            try self.widget.layout(widget, entry.component);
+            try self.widget.render(widget, entry.component);
         }
     }
 }

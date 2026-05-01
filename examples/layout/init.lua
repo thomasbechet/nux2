@@ -6,7 +6,7 @@ function M:onInit()
     Widget.setBackgroundColor(self.ui, Math.vec4(0.5, 0, 0, 1))
     Widget.setPadding(self.ui, Math.vec4(10))
     Widget.setChildGap(self.ui, 10)
-    Widget.setAlignX(self.ui, Widget.ALIGNMENT_CENTER)
+    Widget.setAlignX(self.ui, Widget.ALIGNMENT_START)
     Viewport.setWidget(self.ui, self.ui)
 
     -- Create panel
@@ -19,19 +19,30 @@ function M:onInit()
     -- Create panel 2
     self.panel2 = Node.createNamed(self.ui, "panel2")
     Component.add(self.panel2, Widget)
+    Component.add(self.panel2, Label)
+    Label.setText(self.panel2, "TEST")
     Widget.setBackgroundColor(self.panel2, Math.vec4(0.5, 0, 1, 1))
     Widget.setPadding(self.panel2, Math.vec4(10))
     Widget.setChildGap(self.panel2, 5)
-    Widget.setSizeX(self.panel2, Widget.SIZING_FIXED, 100)
+    Widget.setSizeX(self.panel2, Widget.SIZING_GROW, 0)
+    Widget.setSizeY(self.panel2, Widget.SIZING_FIT, 0)
+
+    -- Create panel 3
+    self.panel3 = Node.createNamed(self.ui, "panel3")
+    Component.add(self.panel3, Widget)
+    Widget.setBackgroundColor(self.panel3, Math.vec4(0.5, 0.5, 1, 1))
+    Widget.setPadding(self.panel3, Math.vec4(10))
+    Widget.setChildGap(self.panel3, 5)
+    Widget.setSizeY(self.panel3, Widget.SIZING_GROW, 2)
 
     -- Create panel
-    for i=0,10 do
-        local n = Node.createNamed(self.panel, "item"..i)
-        Component.add(n, Widget)
-        Component.add(n, Label)
-        Label.setText(n, "hello"..i)
-        Widget.setBackgroundColor(n, Math.vec4(0, 0, 0.5, 1))
-    end
+    -- for i=0,10 do
+    --     local n = Node.createNamed(self.panel, "item"..i)
+    --     Component.add(n, Widget)
+    --     Component.add(n, Label)
+    --     Label.setText(n, "hello"..i)
+    --     Widget.setBackgroundColor(n, Math.vec4(0, 0, 0.5, 1))
+    -- end
 
     Node.dump(Node.getRoot())
 end

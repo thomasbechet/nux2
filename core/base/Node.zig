@@ -601,28 +601,22 @@ const Dumper = struct {
         }
     }
 
-    fn printComponents(self: *@This(), id: ID) !void {
+    fn printComponents(self: *@This(), id: ID, w: *std.Io.Writer) !void {
 
         // Print components
         var it = try self.node.iterComponents(id);
         while (it.next()) |cid| {
-            const typ = try self.node.component.get(cid);
-
-            // Print header
-            var buf: [256]u8 = undefined;
-            var w = std.Io.Writer.fixed(&buf);
-            try self.writeHeader(&w);
+            const typ = try self.node.component.getModule(cid);
 
             // Write type
             try w.print("\x1b[31m", .{}); // red
             try w.print("{s} ", .{typ.name});
-
-            // Write description
-            try w.print("\x1b[90m", .{}); // light gray
-            try typ.v_description(typ.v_ptr, id, &w);
             try w.print("\x1b[37m", .{}); // white
 
-            self.node.logger.info("{s}", .{buf[0..w.end]});
+            // Write description
+            // try w.print("\x1b[90m", .{}); // light gray
+            // try typ.v_description(typ.v_ptr, id, &w);
+            // try w.print("\x1b[37m", .{}); // white
         }
     }
 
@@ -654,7 +648,7 @@ const Dumper = struct {
         try w.print("\x1b[37m", .{}); // white
 
         // Print components
-        // try self.printComponents(id);
+        try self.printComponents(id, &w);
 
         // Print entry
         self.node.logger.info("{s}", .{buf[0..w.end]});

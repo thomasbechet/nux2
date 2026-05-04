@@ -35,8 +35,8 @@ const Component = struct {
     border_radius: nux.Vec4i = .zero(),
     alignment_x: Alignment = .start,
     alignment_y: Alignment = .start,
-    sizing_x: Sizing = .grow,
-    sizing_y: Sizing = .grow,
+    sizing_x: Sizing = .fit,
+    sizing_y: Sizing = .fit,
     size_x: f32 = 0, // float for grow weights
     size_y: f32 = 0, // float for grow weights
 
@@ -58,14 +58,12 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
 }
 
-fn measureWidget(self: *Self, available: nux.Vec2i, id: nux.ID) nux.Vec2i {
+fn measureWidget(self: *Self, available: nux.Vec2i, id: nux.ID) !nux.Vec2i {
     _ = available;
     if (self.label.components.getOptional(id)) |label| {
-        // const font = try self.font.components.get(try self.font.default());
-        return .init(
-            @intCast(label.text.items.len * 8),
-            24,
-        );
+        var size = try self.font.measure(try self.font.default(), label.text.items);
+        size.mulAssign(.scalar(3));
+        return size;
     }
     return .zero();
 }
@@ -83,7 +81,7 @@ fn layoutRecursive(self: *Self, widget: *Component, id: nux.ID, available: Avail
     const main_inner = if (is_row) inner.x() else inner.y();
 
     // Measure content
-    const content = self.measureWidget(inner, id);
+    const content = try self.measureWidget(inner, id);
     var main_size = if (is_row) content.x() else content.y();
     var cross_size = if (is_row) content.y() else content.x();
 
@@ -208,7 +206,6 @@ fn layoutRecursive(self: *Self, widget: *Component, id: nux.ID, available: Avail
         .fit => (if (is_row) cross_size else main_size) + pad.z() + pad.w(),
         .fixed => @intFromFloat(widget.size_y),
     };
-
     widget.size = nux.Vec2i.init(size_x, size_y);
     return widget.size;
 }
@@ -245,7 +242,7 @@ fn renderRecursive(
     const pos = widget.pos.add(offset);
     const box = nux.Box2i.initVector(
         pos,
-        widget.size.as(nux.vec.Vec(2, u32)),
+        widget.size,
     );
 
     // Background

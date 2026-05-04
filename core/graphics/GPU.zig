@@ -323,12 +323,12 @@ pub fn deinit(self: *Self) void {
     self.pipelines.canvas.deinit();
     self.gpu.vtable.delete_device(self.gpu.ptr);
 }
-fn pushQuad(self: *Self, box: nux.Box2i, tex: nux.Vec2i, scale: u32) !void {
+fn pushQuad(self: *Self, box: nux.Box2i, tex: nux.Vec2i, scale: i32) !void {
     try self.quads.push(.{
-        .pos = @as(u32, @intCast(box.y())) << 16 | @as(u32, @intCast(box.x())),
-        .tex = @as(u32, @intCast(tex.y())) << 16 | @as(u32, @intCast(tex.x())),
-        .size = @as(u32, @intCast(box.h())) << 16 | @as(u32, @intCast(box.w())),
-        .scale = scale,
+        .pos = @as(u32, @bitCast(box.y())) << 16 | @as(u32, @bitCast(box.x())),
+        .tex = @as(u32, @bitCast(tex.y())) << 16 | @as(u32, @bitCast(tex.x())),
+        .size = @as(u32, @bitCast(box.h())) << 16 | @as(u32, @bitCast(box.w())),
+        .scale = @intCast(scale),
     });
     self.active_batch.count += 1;
 }
@@ -418,25 +418,30 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
                 try self.beginTexturedBatch(font.texture, info.color);
 
                 var pos: nux.Vec2i = info.position.as(nux.Vec2i);
-                var line_height: u32 = 0;
+                var line_height: i32 = 0;
                 const text = cb.dataSlice(info.data);
                 var it = font.iterate(text);
-                while (it.next()) |entry| {
-                    const glyph = entry.glyph;
+                while (it.next()) |item| {
+                    if (item.glyph) |glyph| {
 
-                    // Push quad
-                    const quad = nux.Box2i.init(
-                        pos.x(),
-                        pos.y(),
-                        glyph.box.w(),
-                        glyph.box.h(),
-                    );
-                    try self.pushQuad(quad, glyph.box.pos, info.scale);
+                        // Push quad
+                        const quad = nux.Box2i.init(
+                            pos.x(),
+                            pos.y(),
+                            glyph.box.w(),
+                            glyph.box.h(),
+                        );
+                        try self.pushQuad(quad, glyph.box.pos, info.scale);
 
-                    // Advance text box
-                    line_height = @max(line_height, glyph.box.h());
-                    const advance = (glyph.box.w() + 1) * info.scale;
-                    pos = pos.add(.init(@intCast(advance), 0));
+                        // Advance text box
+                        line_height = @max(line_height, glyph.box.h());
+                        const advance = glyph.advance * info.scale;
+                        pos = pos.add(.init(advance, 0));
+                    } else if (item.codepoint == '\n') {
+                        pos.data[1] += line_height * info.scale;
+                        pos.data[0] = info.position.x();
+                        line_height = 0;
+                    }
                 }
 
                 try self.endBatch();

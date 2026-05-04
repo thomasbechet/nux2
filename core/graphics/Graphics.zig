@@ -27,14 +27,14 @@ pub const CommandBuffer = struct {
         text: []const u8,
         color: nux.Color = .white,
         pos: nux.Vec2i = .zero(),
-        scale: u32 = 1,
+        scale: i32 = 1,
     };
 
     const Blit = struct {
         source: nux.ID,
         box: nux.Box2i,
         pos: nux.Vec2i = .zero(),
-        scale: u32 = 1,
+        scale: i32 = 1,
     };
 
     const Command = union(enum) {
@@ -46,7 +46,7 @@ pub const CommandBuffer = struct {
             data: DataSlice,
             position: nux.Vec2i,
             color: nux.Color,
-            scale: u32,
+            scale: i32,
         },
         line: Line,
         rectangle: Rectangle,

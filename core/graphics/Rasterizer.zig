@@ -34,10 +34,10 @@ pub const Framebuffer = struct {
 pub fn renderBitmap(fb: Framebuffer, bitmap: []const u8, box: nux.Box2i) void {
     const clip = fb.box().intersect(box) orelse return;
 
-    for (0..clip.size.y()) |row| {
+    for (0..@intCast(clip.size.y())) |row| {
         const dst_y = @as(usize, @intCast(clip.y())) + row;
 
-        for (0..clip.w()) |col| {
+        for (0..@intCast(clip.w())) |col| {
             const dst_x = @as(usize, @intCast(clip.x())) + col;
 
             const isset = ((bitmap[row] >> @intCast(col)) & 1) != 0;

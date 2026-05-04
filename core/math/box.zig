@@ -3,24 +3,19 @@ const nux = @import("../nux.zig");
 pub fn Box(n: comptime_int, comptime T: type) type {
     return struct {
         const Self = @This();
-        const ST = if (T == i32 or T == u32)
-            u32
-        else
-            f32;
-        const VP = nux.vec.Vec(n, T);
-        const VS = nux.vec.Vec(n, ST);
+        const Vec = nux.vec.Vec(2, T);
         pub const N = n;
 
-        pos: VP,
-        size: VS,
+        pos: Vec,
+        size: Vec,
 
-        pub fn init(vx: T, vy: T, vw: ST, vh: ST) Self {
+        pub fn init(vx: T, vy: T, vw: T, vh: T) Self {
             return .{
                 .pos = .init(vx, vy),
                 .size = .init(vw, vh),
             };
         }
-        pub fn initVector(pos: VP, size: VS) Self {
+        pub fn initVector(pos: Vec, size: Vec) Self {
             return .{
                 .pos = pos,
                 .size = size,
@@ -29,10 +24,10 @@ pub fn Box(n: comptime_int, comptime T: type) type {
         pub fn empty(vx: T, vy: T) Self {
             return .init(vx, vy, 0, 0);
         }
-        pub fn emptyVector(pos: VP) Self {
+        pub fn emptyVector(pos: Vec) Self {
             return .initVector(pos, .zero());
         }
-        pub fn translate(self: *Self, t: VP) void {
+        pub fn translate(self: *Self, t: Vec) void {
             self.pos = self.pos.add(t);
         }
         pub fn x(self: Self) T {
@@ -41,28 +36,28 @@ pub fn Box(n: comptime_int, comptime T: type) type {
         pub fn y(self: Self) T {
             return self.pos.y();
         }
-        pub fn w(self: Self) ST {
+        pub fn w(self: Self) T {
             return self.size.x();
         }
-        pub fn h(self: Self) ST {
+        pub fn h(self: Self) T {
             return self.size.y();
         }
-        pub fn tl(self: Self) VP {
+        pub fn tl(self: Self) Vec {
             return .init(self.x(), self.y());
         }
-        pub fn tr(self: Self) VP {
+        pub fn tr(self: Self) Vec {
             return .init(
                 self.x() + @as(T, @intCast(self.w())),
                 self.y(),
             );
         }
-        pub fn bl(self: Self) VP {
+        pub fn bl(self: Self) Vec {
             return .init(
                 self.x(),
                 self.y() + @as(T, @intCast(self.h())),
             );
         }
-        pub fn br(self: Self) VP {
+        pub fn br(self: Self) Vec {
             return .init(
                 self.x() + @as(T, @intCast(self.w())),
                 self.y() + @as(T, @intCast(self.h())),
@@ -81,13 +76,13 @@ pub fn Box(n: comptime_int, comptime T: type) type {
 
             return Self{
                 .pos = p1,
-                .size = p2.sub(p1).as(VS),
+                .size = p2.sub(p1).as(Vec),
             };
         }
         pub fn as(self: Self, B: type) B {
             return .{
-                .pos = self.pos.as(B.VP),
-                .size = self.size.as(B.VS),
+                .pos = self.pos.as(B.Vec),
+                .size = self.size.as(B.Vec),
             };
         }
     };

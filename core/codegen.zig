@@ -395,7 +395,7 @@ const Modules = struct {
         // Try resolve primitive
         const Primitive = enum {
             bool,
-            u32,
+            i32,
             f32,
             string,
             Vec2,
@@ -413,7 +413,7 @@ const Modules = struct {
         if (std.meta.stringToEnum(Primitive, name)) |primitive| {
             const primitive_type: nux.Primitive.Type = switch (primitive) {
                 Primitive.bool => .bool,
-                Primitive.u32 => .int,
+                Primitive.i32 => .int,
                 Primitive.f32 => .real,
                 Primitive.string => .string,
                 Primitive.Vec2 => .vec2,

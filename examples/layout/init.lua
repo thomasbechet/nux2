@@ -4,10 +4,13 @@ function M:onInit()
     Component.add(self.ui, Viewport)
     Component.add(self.ui, Widget)
     Widget.setBackgroundColor(self.ui, Math.vec4(0.5, 0, 0, 1))
-    -- Widget.setPadding(self.ui, Math.vec4(10))
-    Widget.setChildGap(self.ui, 10)
+    Widget.setPadding(self.ui, Math.vec4(10))
+    Widget.setChildGap(self.ui, 20)
+    Widget.setBorder(self.ui, Math.vec4(1))
     Widget.setAlignX(self.ui, Widget.ALIGNMENT_CENTER)
     Widget.setAlignY(self.ui, Widget.ALIGNMENT_CENTER)
+    Widget.setSizeX(self.ui, Widget.SIZING_GROW, 0)
+    Widget.setSizeY(self.ui, Widget.SIZING_GROW, 0)
     Viewport.setWidget(self.ui, self.ui)
 
     -- -- Create panel
@@ -40,17 +43,30 @@ function M:onInit()
     -- Widget.setBorder(self.panel3, Math.vec4(2))
 
     -- Create panel
-    for i=0,0 do
-        local n = Node.createNamed(self.ui, "item"..i)
-        Component.add(n, Widget)
-        Component.add(n, Label)
-        Label.setText(n, "First line\nSecond line\nThird line"..i)
-        -- Widget.setSizeX(n, Widget.SIZING_FIT, 0)
-        -- Widget.setSizeY(n, Widget.SIZING_FIT, 0)
-        Widget.setBackgroundColor(n, Math.vec4(0, 0, 0.5, 1))
-        -- Widget.setBorder(n, Math.vec4(1))
-        Widget.setPadding(n, Math.vec4(10))
-    end
+    self:addLabel(self.ui)
+    self:addSpacer(self.ui)
+    self:addLabel(self.ui)
+    self:addLabel(self.ui)
+    self:addLabel(self.ui)
 
     Node.dump(Node.getRoot())
+end
+
+function M:addSpacer(parent)
+    local widget = Node.create(parent)
+    Component.add(widget, Widget)
+    -- Widget.setSizeX(widget, Widget.SIZING_GROW, 0)
+    Widget.setSizeY(widget, Widget.SIZING_GROW, 0)
+end
+
+function M:addLabel(parent)
+    local label = Node.create(parent)
+    Component.add(label, Widget)
+    Component.add(label, Label)
+    Label.setText(label, "First line\nSecond line\nThird line")
+    -- Widget.setSizeX(n, Widget.SIZING_FIT, 0)
+    -- Widget.setSizeY(n, Widget.SIZING_FIT, 0)
+    Widget.setBackgroundColor(label, Math.vec4(0, 0, 0.5, 1))
+    -- Widget.setBorder(n, Math.vec4(1))
+    Widget.setPadding(label, Math.vec4(10))
 end

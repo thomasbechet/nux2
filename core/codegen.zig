@@ -396,6 +396,7 @@ const Modules = struct {
         const Primitive = enum {
             bool,
             i32,
+            u32,
             f32,
             string,
             Vec2,
@@ -414,6 +415,7 @@ const Modules = struct {
             const primitive_type: nux.Primitive.Type = switch (primitive) {
                 Primitive.bool => .bool,
                 Primitive.i32 => .int,
+                Primitive.u32 => .int,
                 Primitive.f32 => .real,
                 Primitive.string => .string,
                 Primitive.Vec2 => .vec2,

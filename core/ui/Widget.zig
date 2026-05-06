@@ -25,6 +25,28 @@ const Available = struct {
     max: nux.Vec2i,
 };
 
+const Size = struct {
+    main: i32,
+    cross: i32,
+
+    fn update(self: *Size, consumed: nux.Vec2i, is_row: bool) void {
+        self.main += if (is_row) consumed.x() else consumed.y();
+        self.cross += @max(self.cross, if (is_row) consumed.y() else consumed.x());
+    }
+    fn fromVec2(v: nux.Vec2i, is_row: bool) Size {
+        return .{
+            .main = if (is_row) v.x() else v.y(),
+            .cross = if (is_row) v.y() else v.x(),
+        };
+    }
+    fn toVec2(self: Size, is_row: bool) nux.Vec2i {
+        return .init(
+            if (is_row) self.main else self.cross,
+            if (is_row) self.cross else self.main,
+        );
+    }
+};
+
 const Component = struct {
     background_color: nux.Color = .transparent,
     padding: nux.Vec4i = .zero(), // left, right, top, bottom
@@ -73,17 +95,18 @@ fn layoutRecursive(self: *Self, widget: *Component, id: nux.ID, available: Avail
 
     // Inner
     const pad = widget.padding;
-    const available_inner = nux.Vec2i.init(
-        available.max.x() - pad.x() - pad.y(),
-        available.max.y() - pad.z() - pad.w(),
+    const border = widget.border_sizes;
+    const inner_size = nux.Vec2i.init(
+        available.max.x() - pad.x() - pad.y() - border.x() - border.y(),
+        available.max.y() - pad.z() - pad.w() - border.z() - border.w(),
+    );
+    const inner: Size = .fromVec2(
+        inner_size,
+        is_row,
     );
 
-    const main_inner = if (is_row) available_inner.x() else available_inner.y();
-
     // Measure content
-    const content = try self.measureWidget(available_inner, id);
-    var main_size = if (is_row) content.x() else content.y();
-    var cross_size = if (is_row) content.y() else content.x();
+    var content: Size = .fromVec2(try self.measureWidget(inner_size, id), is_row);
 
     // Layout intrinsic children
     var total_weight: f32 = 0;
@@ -101,10 +124,9 @@ fn layoutRecursive(self: *Self, widget: *Component, id: nux.ID, available: Avail
                 // Compute consumed space from inner
                 const consumed = try self.layoutRecursive(child, child_id, .{
                     .min = .zero(),
-                    .max = available_inner,
+                    .max = inner_size,
                 });
-                main_size += if (is_row) consumed.x() else consumed.y();
-                cross_size = @max(cross_size, if (is_row) consumed.y() else consumed.x());
+                content.update(consumed, is_row);
             },
             .grow => {
                 // Keep track of weights and grow count
@@ -120,22 +142,19 @@ fn layoutRecursive(self: *Self, widget: *Component, id: nux.ID, available: Avail
                         @intFromFloat(child.size_y),
                     ),
                 });
-                main_size += if (is_row) consumed.x() else consumed.y();
-                cross_size = @max(cross_size, if (is_row) consumed.y() else consumed.x());
+                content.update(consumed, is_row);
             },
         }
 
         child_count += 1;
     }
 
-    // Add gap
-    main_size += (child_count - 1) * widget.gap;
-
     // Compute remaining space
-    const main_remaining = @max(0, main_inner - main_size);
+    content.main += (child_count - 1) * widget.gap;
+    const remaining = @max(0, inner.main - content.main);
 
     // Layout grow children
-    if (main_remaining > 0) {
+    if (remaining > 0) {
         it = try self.node.iterChildren(id);
         while (it.next()) |child_id| {
             const child = self.components.getOptional(child_id) orelse continue;
@@ -145,76 +164,73 @@ fn layoutRecursive(self: *Self, widget: *Component, id: nux.ID, available: Avail
                 .grow => {
                     var weight = if (is_row) child.size_x else child.size_y;
                     if (weight == 0) weight = 1;
-                    const grow_size_weighted: i32 = @intFromFloat((weight / total_weight) * @as(f32, @floatFromInt(main_remaining)));
-                    const max = nux.Vec2i.init(
-                        if (is_row) grow_size_weighted else available_inner.x(),
-                        if (!is_row) grow_size_weighted else available_inner.y(),
-                    );
+                    const grow_size_weighted: i32 = @intFromFloat((weight / total_weight) * @as(f32, @floatFromInt(remaining)));
+                    const max = (Size{
+                        .main = grow_size_weighted,
+                        .cross = inner.cross,
+                    }).toVec2(is_row);
                     const consumed = try self.layoutRecursive(child, child_id, .{
                         .min = max,
                         .max = max,
                     });
-                    main_size += if (is_row) consumed.x() else consumed.y();
-                    cross_size = @max(cross_size, if (is_row) consumed.y() else consumed.x());
+                    content.update(consumed, is_row);
                 },
                 else => {},
             }
         }
     }
 
-    // Compute self size
-    const size_x: i32 = switch (widget.sizing_x) {
-        .grow => available.max.x(),
-        .fit => (if (is_row) main_size else cross_size) + pad.x() + pad.y(),
-        .fixed => @intFromFloat(widget.size_x),
-    };
-    const size_y: i32 = switch (widget.sizing_y) {
-        .grow => available.max.y(),
-        .fit => (if (is_row) cross_size else main_size) + pad.z() + pad.w(),
-        .fixed => @intFromFloat(widget.size_y),
-    };
-    widget.size = nux.Vec2i.init(size_x, size_y);
-    const main_self_size = if (is_row) size_x else size_y;
-    const cross_self_size = if (is_row) size_y else size_x;
+    // Fit content
+    const fit_size = content.toVec2(is_row).add(.init(
+        pad.x() + pad.y() + border.x() + border.y(),
+        pad.z() + pad.w() + border.z() + border.w(),
+    ));
+    widget.size = .init(
+        switch (widget.sizing_x) {
+            .grow => available.max.x(),
+            .fit => fit_size.x(),
+            .fixed => @intFromFloat(widget.size_x),
+        },
+        switch (widget.sizing_y) {
+            .grow => available.max.y(),
+            .fit => fit_size.y(),
+            .fixed => @intFromFloat(widget.size_y),
+        },
+    );
 
     // Alignment offset (main axis)
-    const alignment = if (is_row) widget.alignment_x else widget.alignment_y;
-    var cursor: i32 = switch (alignment) {
+    const main_alignment = if (is_row) widget.alignment_x else widget.alignment_y;
+    const cross_alignment = if (is_row) widget.alignment_y else widget.alignment_x;
+    var cursor: i32 = switch (main_alignment) {
         .start => 0,
-        .center => @divTrunc(main_self_size - main_size, 2),
-        .end => main_self_size - main_size,
+        .center => @divTrunc(inner.main - content.main, 2),
+        .end => inner.main - content.main,
     };
 
     // Place children
     it = try self.node.iterChildren(id);
     while (it.next()) |child_id| {
         const child = self.components.getOptional(child_id) orelse continue;
+        const child_size = Size.fromVec2(child.size, is_row);
 
         // Alignment offset (cross axis)
-        var offset_cross: i32 = 0;
-        if (is_row) {
-            const free = cross_self_size - child.size.y();
-            offset_cross = switch (widget.alignment_y) {
-                .start => 0,
-                .center => @divTrunc(free, 2),
-                .end => free,
-            };
-        } else {
-            const free = cross_self_size - child.size.x();
-            offset_cross = switch (widget.alignment_x) {
-                .start => 0,
-                .center => @divTrunc(free, 2),
-                .end => free,
-            };
-        }
+        const free = inner.cross - child_size.cross;
+        const offset_cross: i32 = switch (cross_alignment) {
+            .start => 0,
+            .center => @divTrunc(free, 2),
+            .end => free,
+        };
 
         // Position
         const child_x = if (is_row) cursor else offset_cross;
         const child_y = if (is_row) offset_cross else cursor;
-        child.pos = .init(pad.x() + child_x, pad.z() + child_y);
+        child.pos = .init(
+            pad.x() + border.x() + child_x,
+            pad.z() + border.z() + child_y,
+        );
 
         // Advance
-        cursor += (if (is_row) child.size.x() else child.size.y()) + widget.gap;
+        cursor += child_size.main + widget.gap;
     }
 
     return widget.size;

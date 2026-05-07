@@ -81,11 +81,13 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 }
 
 fn measureWidget(self: *Self, available: nux.Vec2i, id: nux.ID) !nux.Vec2i {
-    _ = available;
     if (self.label.components.getOptional(id)) |label| {
         var size = try self.font.measure(try self.font.default(), label.text.items);
-        size.mulAssign(.scalar(3));
+        size.mulAssign(.scalar(label.scale));
         return size;
+    } else if (self.button.components.getOptional(id)) |button| {
+        _ = button;
+        return available;
     }
     return .zero();
 }
@@ -302,7 +304,7 @@ fn renderRecursive(
         try viewport.commands.text(.{
             .text = label.text.items,
             .pos = box.pos,
-            .scale = 24 / 8,
+            .scale = label.scale,
             .color = label.color,
         });
     }
@@ -329,64 +331,6 @@ pub fn render(self: *Self, id: nux.ID, viewport: *nux.Viewport.Component) !void 
 
     // Render root widget
     try self.renderRecursive(id, viewport, .zero());
-
-    // // Generate graphics commands
-    // const cb = &viewport.commands;
-    // for (commands) |command| {
-    //     const box = nux.Box2i.init(
-    //         @intFromFloat(command.bounding_box.x),
-    //         @intFromFloat(command.bounding_box.y),
-    //         @intFromFloat(command.bounding_box.width),
-    //         @intFromFloat(command.bounding_box.height),
-    //     );
-    //     switch (command.command_type) {
-    //         .none => {},
-    //         .rectangle => {
-    //             try cb.rectangle(.{
-    //                 .box = box,
-    //                 .color = .fromRGBA255(command.render_data.rectangle.background_color),
-    //             });
-    //         },
-    //         .border => {
-    //             const color = nux.Color.fromRGBA255(command.render_data.border.color);
-    //             const border = command.render_data.border.width;
-    //             const rectangles: [4]nux.Box2i = .{
-    //                 .init(box.x(), box.y(), border.left, box.h()), // left
-    //                 .init(box.tr().x() - border.left, box.y(), border.left, box.h()), // right
-    //                 .init(box.x(), box.y(), box.w(), border.top), // top
-    //                 .init(box.x(), box.br().y() - border.bottom, box.w(), border.bottom), // bottom
-    //             };
-    //             for (rectangles) |rect| {
-    //                 try cb.rectangle(.{
-    //                     .box = rect,
-    //                     .color = color,
-    //                 });
-    //             }
-    //         },
-    //         .text => {
-    //             const len: usize = @intCast(command.render_data.text.string_contents.length);
-    //             try cb.text(.{
-    //                 .text = command.render_data.text.string_contents.chars[0..len],
-    //                 .pos = box.pos,
-    //                 .scale = command.render_data.text.font_size / 8,
-    //                 .color = .fromRGBA255(command.render_data.text.text_color),
-    //             });
-    //         },
-    //         .image => {
-    //             // try cb.blit(.{
-    //             //     .box = box,
-    //             //     .pos = box.pos,
-    //             // });
-    //         },
-    //         .scissor_start => {
-    //             try cb.scissor(box);
-    //         },
-    //         .scissor_end => {
-    //             try cb.scissor(null);
-    //         },
-    //         .custom => {},
-    //     }
-    // }
 }
 
 pub fn setBackgroundColor(self: *Self, id: nux.ID, color: nux.Color) !void {

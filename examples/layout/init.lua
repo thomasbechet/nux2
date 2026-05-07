@@ -1,4 +1,12 @@
 function M:onInit()
+    -- Create stylesheet
+    self.stylesheet = Node.createNamed("/", "stylesheet")
+    Component.add(self.stylesheet, StyleSheet)
+    StyleSheet.setImage(self.stylesheet,
+        StyleSheet.PROPERTY_BUTTON_PRESSED,
+        "/fonts/default", Math.vec4(0), Math.vec4(0)
+    )
+
     -- Create UI
     self.ui = Node.createPath(Node.getRoot(), "ui")
     Component.add(self.ui, Viewport)
@@ -64,9 +72,8 @@ function M:addLabel(parent)
     Component.add(label, Widget)
     Component.add(label, Label)
     Label.setText(label, "First line\nSecond line\nThird line")
-    -- Widget.setSizeX(n, Widget.SIZING_FIT, 0)
-    -- Widget.setSizeY(n, Widget.SIZING_FIT, 0)
+    Label.setScale(label, 4)
     Widget.setBackgroundColor(label, Math.vec4(0, 0, 0.5, 1))
-    -- Widget.setBorder(n, Math.vec4(1))
+    Widget.setBorder(label, Math.vec4(1))
     Widget.setPadding(label, Math.vec4(10))
 end

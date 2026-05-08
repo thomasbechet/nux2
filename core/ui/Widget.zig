@@ -99,7 +99,7 @@ fn layoutRecursive(self: *Self, widget: *Component, id: nux.ID, available: Avail
     const inner_size = nux.Vec2i.init(
         available.max.x() - pad.x() - pad.y() - border.x() - border.y(),
         available.max.y() - pad.z() - pad.w() - border.z() - border.w(),
-    );
+    ).max(.zero());
     const inner: Size = .fromVec2(
         inner_size,
         is_row,
@@ -301,7 +301,7 @@ fn renderRecursive(
         // const font = try self.font.components.get(try self.font.default());
         try viewport.commands.text(.{
             .text = label.text.items,
-            .box = box,
+            .box = box.inset(widget.padding),
             .scale = label.scale,
             .color = label.color,
         });

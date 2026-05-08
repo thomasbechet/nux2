@@ -12,15 +12,15 @@ pub fn Box(n: comptime_int, comptime T: type) type {
         size: Vec,
 
         pub fn init(vx: T, vy: T, vw: T, vh: T) Self {
-            return .{
-                .pos = .init(vx, vy),
-                .size = .init(vw, vh),
-            };
+            return .initVector(
+                .init(vx, vy),
+                .init(vw, vh),
+            );
         }
         pub fn initVector(pos: Vec, size: Vec) Self {
             return .{
                 .pos = pos,
-                .size = size,
+                .size = size.max(.zero()),
             };
         }
         pub fn empty(vx: T, vy: T) Self {
@@ -111,6 +111,14 @@ pub fn Box(n: comptime_int, comptime T: type) type {
                     v.w(),
                 );
             }
+        }
+        pub fn inset(self: Self, distance: nux.Vec4i) Self {
+            return .init(
+                self.pos.x() + distance.x(),
+                self.pos.y() + distance.z(),
+                self.size.x() - distance.x() - distance.y(),
+                self.size.y() - distance.z() - distance.w(),
+            );
         }
     };
 }

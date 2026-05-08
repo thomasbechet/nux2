@@ -22,12 +22,72 @@ pub const Component = struct {
 
         font: *Component,
         scale: i32,
-        available: ?nux.Vec2i,
+        available: nux.Vec2i,
         iterator: std.unicode.Utf8Iterator,
-        line_size: nux.Vec2i = .zero(),
         cursor: nux.Vec2i = .zero(),
+        line_size: nux.Vec2i = .zero(),
+
+        fn measureLineSize(self: *GlyphIterator) nux.Vec2i {
+            var it = self.iterator;
+
+            var line_width: i32 = 0;
+            var line_height: i32 = 0;
+            var word_width: i32 = 0;
+            var space_width: i32 = 0;
+
+            var in_word: bool = false;
+            while (it.nextCodepoint()) |codepoint| {
+                const glyph = self.font.getGlyph(codepoint) orelse continue;
+                const advance = glyph.advance * self.scale;
+                const height = glyph.box.h() * self.scale;
+
+                // Add glyph size
+                if (codepoint == ' ') {
+                    if (in_word) { // Leaving word
+                        space_width = 0;
+                        word_width = 0;
+                        in_word = false;
+                    }
+                    space_width += advance;
+                } else {
+                    if (!in_word) { // Entering word (keep space width)
+                        word_width = 0;
+                        in_word = true;
+                    }
+                    word_width += advance;
+                }
+                line_width += advance;
+
+                // Detect line wrap
+                if (line_width > self.available.x()) { // line wrap
+                    // Remove last word and space
+                    line_width -= advance;
+                    line_width -= word_width; // if in word
+                    line_width -= space_width; // if in space or remaining space or word
+                    break;
+                } else if (codepoint == '\n') { // new line
+                    break;
+                }
+
+                line_height = @max(line_height, height);
+            }
+
+            return .init(line_width, line_height);
+        }
 
         pub fn next(self: *GlyphIterator) ?Item {
+
+            // Measure line
+            if (self.line_size.x() == 0) {
+                self.line_size = self.measureLineSize();
+                // TODO: set offset based on aligment
+            }
+
+            // Check end of available height
+            if (self.cursor.y() + self.line_size.y() > self.available.y()) {
+                return null;
+            }
+
             while (self.iterator.nextCodepoint()) |codepoint| {
 
                 // Fetch glyph
@@ -36,20 +96,12 @@ pub const Component = struct {
                 const height = glyph.box.h() * self.scale;
 
                 // Check new line
-                if (codepoint == '\n' or (self.available != null and self.line_size.x() + advance > self.available.?.x())) {
+                if (self.cursor.x() >= self.line_size.x()) {
                     self.cursor.data[0] = 0;
+
                     self.cursor.data[1] += self.line_size.y();
                     self.line_size = .zero();
                 }
-
-                // Check end of available height
-                if (self.available != null and self.cursor.y() + height > self.available.?.y()) {
-                    return null;
-                }
-
-                // Update line size
-                self.line_size.data[0] += advance;
-                self.line_size.data[1] = @max(self.line_size.y(), height);
 
                 const item = Item{
                     .glyph = glyph,
@@ -63,6 +115,7 @@ pub const Component = struct {
 
                 return item;
             }
+
             return null;
         }
     };
@@ -79,7 +132,7 @@ pub const Component = struct {
             .font = self,
             .iterator = std.unicode.Utf8View.initUnchecked(text).iterator(),
             .scale = scale,
-            .available = available,
+            .available = available orelse .maxValue(),
         };
     }
 

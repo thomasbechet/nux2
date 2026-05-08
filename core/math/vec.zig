@@ -1,3 +1,4 @@
+const std = @import("std");
 const math = @import("std").math;
 
 pub fn Vec(n: comptime_int, comptime Type: type) type {
@@ -44,6 +45,22 @@ pub fn Vec(n: comptime_int, comptime Type: type) type {
 
         pub fn zero() Self {
             return .scalar(0);
+        }
+
+        pub fn maxValue() Self {
+            if (is_integer) {
+                return .scalar(std.math.maxInt(T));
+            } else {
+                return .scalar(std.math.floatMax(T));
+            }
+        }
+
+        pub fn minValue() Self {
+            if (is_integer) {
+                return .scalar(std.math.minInt(T));
+            } else {
+                return .scalar(std.math.floatMin(T));
+            }
         }
 
         pub fn scalar(v: T) Self {

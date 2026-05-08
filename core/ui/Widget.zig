@@ -82,9 +82,7 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 
 fn measureWidget(self: *Self, available: nux.Vec2i, id: nux.ID) !nux.Vec2i {
     if (self.label.components.getOptional(id)) |label| {
-        var size = try self.font.measure(try self.font.default(), label.text.items);
-        size.mulAssign(.scalar(label.scale));
-        return size;
+        return try self.font.measure(try self.font.default(), label.text.items, label.scale, available);
     } else if (self.button.components.getOptional(id)) |button| {
         _ = button;
         return available;
@@ -303,7 +301,7 @@ fn renderRecursive(
         // const font = try self.font.components.get(try self.font.default());
         try viewport.commands.text(.{
             .text = label.text.items,
-            .pos = box.pos,
+            .box = box,
             .scale = label.scale,
             .color = label.color,
         });

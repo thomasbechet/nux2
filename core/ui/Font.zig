@@ -14,19 +14,54 @@ pub const Component = struct {
 
     pub const GlyphIterator = struct {
         const Item = struct {
-            glyph: ?Glyph = null, // null if no associated glyph (such as newline)
-            codepoint: u32,
+            position: nux.Vec2i,
+            glyph: Glyph,
+            advance_x: i32,
+            advance_y: i32,
         };
+
         font: *Component,
+        scale: i32,
+        available: ?nux.Vec2i,
         iterator: std.unicode.Utf8Iterator,
+        line_size: nux.Vec2i = .zero(),
+        cursor: nux.Vec2i = .zero(),
 
         pub fn next(self: *GlyphIterator) ?Item {
             while (self.iterator.nextCodepoint()) |codepoint| {
-                if (self.font.getGlyph(codepoint)) |glyph| {
-                    return .{ .glyph = glyph, .codepoint = codepoint };
-                } else {
-                    return .{ .glyph = null, .codepoint = codepoint };
+
+                // Fetch glyph
+                const glyph = self.font.getGlyph(codepoint) orelse continue;
+                const advance = glyph.advance * self.scale;
+                const height = glyph.box.h() * self.scale;
+
+                // Check new line
+                if (codepoint == '\n' or (self.available != null and self.line_size.x() + advance > self.available.?.x())) {
+                    self.cursor.data[0] = 0;
+                    self.cursor.data[1] += self.line_size.y();
+                    self.line_size = .zero();
                 }
+
+                // Check end of available height
+                if (self.available != null and self.cursor.y() + height > self.available.?.y()) {
+                    return null;
+                }
+
+                // Update line size
+                self.line_size.data[0] += advance;
+                self.line_size.data[1] = @max(self.line_size.y(), height);
+
+                const item = Item{
+                    .glyph = glyph,
+                    .position = self.cursor,
+                    .advance_x = advance,
+                    .advance_y = height,
+                };
+
+                // Update cursor position
+                self.cursor.data[0] += advance;
+
+                return item;
             }
             return null;
         }
@@ -39,10 +74,12 @@ pub const Component = struct {
         mod.allocator.free(self.glyphs);
     }
 
-    pub fn iterate(self: *Component, text: []const u8) GlyphIterator {
+    pub fn render(self: *Component, text: []const u8, scale: i32, available: ?nux.Vec2i) GlyphIterator {
         return .{
             .font = self,
             .iterator = std.unicode.Utf8View.initUnchecked(text).iterator(),
+            .scale = scale,
+            .available = available,
         };
     }
 
@@ -113,24 +150,13 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
 pub fn default(self: *Self) !nux.ID {
     return self.node.findGlobal(default_font_id);
 }
-pub fn measure(self: *Self, id: nux.ID, text: []const u8) !nux.Vec2i {
+pub fn measure(self: *Self, id: nux.ID, text: []const u8, scale: i32, available: ?nux.Vec2i) !nux.Vec2i {
     const font = try self.components.get(id);
+    var it = font.render(text, scale, available);
     var size: nux.Vec2i = .zero();
-    var it = font.iterate(text);
-    var line_height: i32 = 0;
-    var line_width: i32 = 0;
     while (it.next()) |item| {
-        if (item.glyph) |glyph| {
-            line_width += glyph.advance;
-            line_height = @max(line_height, glyph.box.h());
-        } else if (item.codepoint == '\n') {
-            size.data[0] = @max(size.data[0], line_width);
-            size.data[1] += line_height;
-            line_height = 0;
-            line_width = 0;
-        }
+        size.data[0] = @max(size.x(), item.position.x() + item.advance_x);
+        size.data[1] = @max(size.y(), item.position.y() + item.advance_y);
     }
-    size.data[0] = @max(size.data[0], line_width);
-    size.data[1] += line_height;
     return size;
 }

@@ -26,7 +26,7 @@ pub const CommandBuffer = struct {
     const Text = struct {
         text: []const u8,
         color: nux.Color = .white,
-        pos: nux.Vec2i = .zero(),
+        box: nux.Box2i = .emptyZero(),
         scale: i32 = 1,
     };
 
@@ -44,7 +44,7 @@ pub const CommandBuffer = struct {
         blit: Blit,
         text: struct {
             data: DataSlice,
-            position: nux.Vec2i,
+            box: nux.Box2i,
             color: nux.Color,
             scale: i32,
         },
@@ -103,7 +103,7 @@ pub const CommandBuffer = struct {
         try self.commands.append(self.allocator, .{
             .text = .{
                 .data = .{ .start = start, .end = self.data.items.len },
-                .position = info.pos,
+                .box = info.box,
                 .color = info.color,
                 .scale = info.scale,
             },

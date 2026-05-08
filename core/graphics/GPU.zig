@@ -417,31 +417,20 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
 
                 try self.beginTexturedBatch(font.texture, info.color);
 
-                var pos: nux.Vec2i = info.position.as(nux.Vec2i);
-                var line_height: i32 = 0;
                 const text = cb.dataSlice(info.data);
-                var it = font.iterate(text);
+                var it = font.render(text, info.scale, info.box.size);
                 while (it.next()) |item| {
-                    if (item.glyph) |glyph| {
 
-                        // Push quad
-                        const quad = nux.Box2i.init(
-                            pos.x(),
-                            pos.y(),
-                            glyph.box.w(),
-                            glyph.box.h(),
-                        );
-                        try self.pushQuad(quad, glyph.box.pos, info.scale);
+                    const pos = item.position.add(info.box.pos);
 
-                        // Advance text box
-                        line_height = @max(line_height, glyph.box.h());
-                        const advance = glyph.advance * info.scale;
-                        pos = pos.add(.init(advance, 0));
-                    } else if (item.codepoint == '\n') {
-                        pos.data[1] += line_height * info.scale;
-                        pos.data[0] = info.position.x();
-                        line_height = 0;
-                    }
+                    // Push quad
+                    const quad = nux.Box2i.init(
+                        pos.x(),
+                        pos.y(),
+                        item.glyph.box.w(),
+                        item.glyph.box.h(),
+                    );
+                    try self.pushQuad(quad, item.glyph.box.pos, info.scale);
                 }
 
                 try self.endBatch();

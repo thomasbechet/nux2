@@ -91,30 +91,9 @@ const Component = struct {
         return texture;
     }
     fn initFromFile(mod: *Self, path: []const u8) !Component {
-
-        // Read file
         const data = try mod.file.read(path, mod.allocator);
-        errdefer mod.allocator.free(data);
-
-        // Load image
-        var x: c_int = undefined;
-        var y: c_int = undefined;
-        var channels_in_file: c_int = undefined;
-        const image = c.stbi_load_from_memory(
-            @ptrCast(data),
-            @intCast(data.len),
-            &x,
-            &y,
-            &channels_in_file,
-            c.STBI_rgb_alpha,
-        );
-        defer c.stbi_image_free(image);
-
-        // Set as source
-        return .{
-            .data = data,
-            .path = try mod.allocator.dupe(u8, path),
-        };
+        defer mod.allocator.free(data);
+        return .initFromData(mod, data);
     }
     fn initFromData(mod: *Self, data: []const u8) !Component {
 
@@ -152,10 +131,12 @@ const Component = struct {
     }
     pub fn syncGPU(self: *Component, gpu: *nux.GPU) !void {
         if (!self.sync) {
+
             // Check renderer allocation
             if (self.handle == null) {
                 self.handle = try .init(gpu, self.info);
             }
+
             // Upload data
             if (self.data != null) {
                 try self.handle.?.update(
@@ -166,6 +147,7 @@ const Component = struct {
                     self.data.?,
                 );
             }
+
             // Reset sync flag
             self.sync = true;
         }

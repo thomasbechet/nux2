@@ -213,19 +213,27 @@ fn createDefaultFont(self: *Self) !void {
     }
 
     // Generate sprite font
-    const width =
-        monogram.glyphs.len * monogram.width;
-    const height = monogram.height;
-    try self.texture.addTransparent(id, width, height);
+    const advance = monogram.width + 1;
+    const glyph_width = monogram.width;
+    const glyph_height = monogram.height;
+    const texture_width = monogram.glyphs.len * glyph_width;
+    const texture_height = glyph_height;
+    try self.texture.addTransparent(id, texture_width, texture_height);
     const texture = try self.texture.components.get(id);
 
+    var framebuffer = nux.Rasterizer.Framebuffer{
+        .pixels = texture.data.?,
+        .width = texture_width,
+        .height = texture_height,
+    };
+
     // Find min/max char index
-    var box: nux.Box2i = .init(0, 0, monogram.width, monogram.height);
+    var box: nux.Box2i = .init(0, 0, glyph_width, glyph_height);
     for (monogram.glyphs) |glyph| {
 
         // Render glyph
         nux.Rasterizer.renderBitmap(
-            .{ .pixels = texture.data.?, .width = width, .height = height },
+            &framebuffer,
             glyph.bitmap,
             box,
         );
@@ -233,11 +241,11 @@ fn createDefaultFont(self: *Self) !void {
         // Setup glyph
         font.glyphs[@intCast(glyph.char)] = .{
             .box = box,
-            .advance = box.w() + 1,
+            .advance = advance,
         };
 
         // Move to next glyph box
-        box.translate(.init(monogram.width, 0));
+        box.translate(.init(glyph_width, 0));
     }
 }
 pub fn init(self: *Self, core: *const nux.Core) !void {

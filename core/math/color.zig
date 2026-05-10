@@ -4,7 +4,7 @@ pub const Color = struct {
     rgba: nux.Vec4,
 
     pub const white: Color = .init(1, 1, 1, 1);
-    pub const black: Color = .init(1, 1, 1, 0);
+    pub const black: Color = .init(0, 0, 0, 1);
     pub const red: Color = .init(1, 0, 0, 1);
     pub const green: Color = .init(0, 1, 0, 1);
     pub const blue: Color = .init(0, 0, 1, 1);
@@ -23,6 +23,14 @@ pub const Color = struct {
             value[2] / 255,
             value[3] / 255,
         );
+    }
+    pub fn toRGBA255(self: Color) struct { r: u8, g: u8, b: u8, a: u8 } {
+        return .{
+            .r = @intFromFloat(self.r() * 255),
+            .g = @intFromFloat(self.g() * 255),
+            .b = @intFromFloat(self.b() * 255),
+            .a = @intFromFloat(self.a() * 255),
+        };
     }
     pub fn r(self: Color) f32 {
         return self.rgba.x();

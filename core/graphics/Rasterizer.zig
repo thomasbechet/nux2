@@ -18,8 +18,8 @@ pub fn render(self: *Self, cmds: nux.Graphics.CommandBuffer) !void {
 
 pub const Framebuffer = struct {
     pixels: []u8,
-    width: usize,
-    height: usize,
+    width: i32,
+    height: i32,
 
     pub fn box(self: *const Framebuffer) nux.Box2i {
         return nux.Box2i.init(
@@ -29,25 +29,32 @@ pub const Framebuffer = struct {
             @intCast(self.height),
         );
     }
+
+    pub fn setColor(self: *Framebuffer, x: i32, y: i32, color: nux.Color) void {
+        const pi: i32 = (y * self.width + x) * 4;
+        if (pi >= self.pixels.len) return;
+        const index: usize = @intCast(pi);
+        const rgba = color.toRGBA255();
+        self.pixels[index + 0] = rgba.r;
+        self.pixels[index + 1] = rgba.g;
+        self.pixels[index + 2] = rgba.b;
+        self.pixels[index + 3] = rgba.a;
+    }
 };
 
-pub fn renderBitmap(fb: Framebuffer, bitmap: []const u8, box: nux.Box2i) void {
+pub fn renderBitmap(fb: *Framebuffer, bitmap: []const u8, box: nux.Box2i) void {
     const clip = fb.box().intersect(box) orelse return;
 
     for (0..@intCast(clip.size.y())) |row| {
-        const dst_y = @as(usize, @intCast(clip.y())) + row;
+        const dst_y = clip.y() + @as(i32, @intCast(row));
 
         for (0..@intCast(clip.w())) |col| {
-            const dst_x = @as(usize, @intCast(clip.x())) + col;
+            const dst_x = clip.x() + @as(i32, @intCast(col));
 
             const isset = ((bitmap[row] >> @intCast(col)) & 1) != 0;
-            const dst_index = dst_y * fb.width + dst_x;
-            const pi = dst_index * 4;
-            const value: u8 = if (isset) 255 else 0;
-            fb.pixels[pi + 0] = value;
-            fb.pixels[pi + 1] = value;
-            fb.pixels[pi + 2] = value;
-            fb.pixels[pi + 3] = value;
+            if (isset) {
+                fb.setColor(dst_x, dst_y, .white);
+            }
         }
     }
 }

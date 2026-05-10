@@ -21,6 +21,7 @@ pub const Type = enum(u32) {
     module,
     function,
     enumeration,
+    property,
 
     fn fromType(comptime T: type) Type {
         if (@typeInfo(T) == .@"enum") {
@@ -50,6 +51,7 @@ pub const Type = enum(u32) {
                 nux.ID => .id,
                 nux.ModuleID => .module,
                 nux.FunctionID => .function,
+                nux.EnumID => .enumeration,
                 else => @compileError("Unsupported type " ++ @typeName(T)),
             };
         }
@@ -73,7 +75,8 @@ pub const Value = union(Type) {
     id: nux.ID,
     module: nux.ModuleID,
     function: nux.FunctionID,
-    enumeration: u64,
+    enumeration: nux.EnumID,
+    property: nux.PropertyID,
 
     pub fn from(comptime T: type, value: T) Value {
         if (@typeInfo(T) == .@"enum") {
@@ -95,12 +98,16 @@ pub const Value = union(Type) {
             nux.Vec4 => return .{ .vec4 = value.as(nux.Vec4) },
             nux.Vec4i => return .{ .vec4 = value.as(nux.Vec4) },
             nux.Quat => return .{ .quat = value },
-            nux.Box2i => return .{ .vec4 = value.asVec4(), },
+            nux.Box2i => return .{
+                .vec4 = value.asVec4(),
+            },
             []const u8 => return .{ .string = value },
             nux.Color => return .{ .color = value },
             nux.ID => return .{ .id = value },
             nux.ModuleID => return .{ .module = value },
             nux.FunctionID => return .{ .function = value },
+            nux.EnumID => return .{ .enumeration = value },
+            nux.PropertyID => return .{ .property = value },
             else => @compileError("Unsupported type " ++ @typeName(T)),
         }
     }
@@ -131,6 +138,8 @@ pub const Value = union(Type) {
             nux.ID => return value.id,
             nux.ModuleID => return value.module,
             nux.FunctionID => return value.function,
+            nux.EnumID => return value.enumeration,
+            nux.PropertyID => return value.property,
             else => @compileError("Unsupported type " ++ @typeName(T)),
         }
     }

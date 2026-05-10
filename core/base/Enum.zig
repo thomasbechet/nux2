@@ -1,7 +1,8 @@
 const nux = @import("../nux.zig");
 
+const Self = @This();
+
 pub const ID = struct {
-    module: nux.ModuleID,
     index: usize,
 };
 
@@ -34,4 +35,34 @@ pub fn getValues(comptime T: type) []const Value {
     }
     const result = tmp;
     return &result;
+}
+
+core: *nux.Core,
+
+fn getEnum(self: *Self, module: nux.ModuleID, enu: nux.EnumID) !*Type {
+    const mod = try self.core.getModule(module);
+    if (enu.index >= mod.enums.items.len) {
+        return error.InvalidEnumID;
+    }
+    return &mod.enums.items[enu.index];
+}
+
+pub fn count(self: *Self, module: nux.ModuleID) !u32 {
+    const mod = try self.core.getModule(module);
+    return @intCast(mod.enums.items.len);
+}
+pub fn getName(self: *Self, module: nux.ModuleID, id: nux.EnumID) ![]const u8 {
+    const enu = try self.getEnum(module, id);
+    return enu.name;
+}
+pub fn getValueCount(self: *Self, module: nux.ModuleID, id: nux.EnumID) !u32 {
+    const enu = try self.getEnum(module, id);
+    return @intCast(enu.values.len);
+}
+pub fn getValueName(self: *Self, module: nux.ModuleID, id: nux.EnumID, index: u32) ![]const u8 {
+    const enu = try self.getEnum(module, id);
+    if (index >= enu.values.len) {
+        return error.InvalidEnumValueID;
+    }
+    return enu.values[@intCast(index)].name;
 }

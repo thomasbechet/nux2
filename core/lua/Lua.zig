@@ -493,6 +493,20 @@ fn checkFunctionID(self: *Self, index: c_int) nux.FunctionID {
     _ = c.luaL_error(self.L, "invalid function id value");
     unreachable;
 }
+fn checkEnumID(self: *Self, index: c_int) nux.EnumID {
+    if (c.lua_isinteger(self.L, index) != 0) {
+        return .{ .index = @intCast(c.luaL_checkinteger(self.L, index)) };
+    }
+    _ = c.luaL_error(self.L, "invalid enum id value");
+    unreachable;
+}
+fn checkPropertyID(self: *Self, index: c_int) nux.PropertyID {
+    if (c.lua_isinteger(self.L, index) != 0) {
+        return .{ .index = @intCast(c.luaL_checkinteger(self.L, index)) };
+    }
+    _ = c.luaL_error(self.L, "invalid property id value");
+    unreachable;
+}
 
 const LuaArgParser = struct {
     lua: *Self,
@@ -518,7 +532,8 @@ const LuaArgParser = struct {
             .id => .{ .id = self.lua.checkID(index) },
             .module => .{ .module = self.lua.checkModuleID(index) },
             .function => .{ .function = self.lua.checkFunctionID(index) },
-            .enumeration => .{ .enumeration = @as(u64, @intCast(c.luaL_checkinteger(self.lua.L, index))) },
+            .enumeration => .{ .enumeration = self.lua.checkEnumID(index) },
+            .property => .{ .property = self.lua.checkPropertyID(index) },
             else => .{ .int = 0 },
         };
     }
@@ -567,7 +582,8 @@ fn apiCall(lua: ?*c.lua_State) callconv(.c) c_int {
             .id => |v| c.lua_pushinteger(lua, @intCast(@as(u32, @bitCast(v)))),
             .module => |v| c.lua_pushinteger(lua, @intCast(v.index)),
             .function => |v| c.lua_pushinteger(lua, @intCast(v.index)),
-            .enumeration => |v| c.lua_pushinteger(lua, @intCast(v)),
+            .enumeration => |v| c.lua_pushinteger(lua, @intCast(v.index)),
+            .property => |v| c.lua_pushinteger(lua, @intCast(v.index)),
         }
         return 1;
     } else {

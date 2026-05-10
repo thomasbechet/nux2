@@ -41,6 +41,7 @@ pub const ID = Node.ID;
 pub const ModuleID = Module.ID;
 pub const FunctionID = Function.ID;
 pub const EnumID = Enum.ID;
+pub const PropertyID = Property.ID;
 pub const Components = Component.Components;
 pub const Writer = Node.Writer;
 pub const Reader = Node.Reader;

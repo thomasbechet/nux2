@@ -2,7 +2,10 @@ const std = @import("std");
 const nux = @import("../nux.zig");
 
 const Self = @This();
-pub const ID = u8;
+
+pub const ID = struct {
+    index: usize,
+};
 
 /// Use cases:
 /// - Bind property to a widget

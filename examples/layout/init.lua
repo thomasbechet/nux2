@@ -54,6 +54,29 @@ function M:onInit()
     self.time = 0
 
     Node.dump(Node.getRoot())
+
+    local modulecount = Module.count()
+    for m = 0, modulecount - 1 do
+        print(Module.getName(m))
+        local functioncount = Function.count(m)
+        for f = 0, functioncount - 1 do
+            print(" function " .. Function.getName(m, f))
+            local paramcount = Function.getParamCount(m, f)
+            for p = 0, paramcount - 1 do
+                local paramname = Function.getParamName(m, f, p)
+                local paramtype = Function.getParamType(m, f, p)
+                print("  param " .. paramname .. " " .. paramtype)
+            end
+        end
+        local enumcount = Enum.count(m)
+        for e = 0, enumcount - 1 do
+            print(" enum " .. Enum.getName(m, e))
+            local valuecount = Enum.getValueCount(m, e)
+            for v = 0, valuecount - 1 do
+                print("  value " .. Enum.getValueName(m, e, v))
+            end
+        end
+    end
 end
 
 function M:onUpdate()

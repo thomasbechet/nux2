@@ -411,6 +411,8 @@ const Modules = struct {
             ID,
             ModuleID,
             FunctionID,
+            EnumID,
+            PropertyID,
         };
         if (std.meta.stringToEnum(Primitive, name)) |primitive| {
             const primitive_type: nux.Primitive.Type = switch (primitive) {
@@ -431,6 +433,8 @@ const Modules = struct {
                 Primitive.ID => .id,
                 Primitive.ModuleID => .module,
                 Primitive.FunctionID => .function,
+                Primitive.EnumID => .enumeration,
+                Primitive.PropertyID => .property,
             };
             typ.resolved = .{ .primitive = primitive_type };
             return;
@@ -728,6 +732,21 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
                 module.name,
                 function.key_ptr.*,
             });
+            if (function.value_ptr.ret) |ret| {
+                switch (ret.resolved.?) {
+                    .primitive => |primitive| {
+                        try writer.print("\t\t\tpub const returntype: ?nux.Primitive.Type = .{s};\n", .{@tagName(
+                            primitive,
+                        )});
+                    },
+                    .@"enum" => |_| {
+                        try writer.print("\t\t\tpub const returntype: ?nux.Primitive.Type = .enumeration;\n", .{});
+                    },
+                }
+            } else {
+                try writer.print("\t\t\tpub const returntype: ?nux.Primitive.Type = null;\n", .{});
+            }
+
             try writer.print("\t\t\tpub const Params = struct {{\n", .{});
             for (function.value_ptr.params) |param| {
                 try writer.print("\t\t\t\tpub const {s} = struct {{\n", .{param.ident});

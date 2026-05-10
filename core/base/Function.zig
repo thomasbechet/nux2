@@ -89,7 +89,7 @@ pub const Type = struct {
                     if (type_info == .@"enum") {
                         @field(call_args, field_name) = std.enums.fromInt(
                             ParamType,
-                            (try args.next(args, .enumeration)).enumeration,
+                            (try args.next(args, .enumeration)).enumeration.index,
                         ) orelse return error.InvalidEnumValue;
                     } else {
                         @field(call_args, field_name) = (try args.next(
@@ -143,9 +143,26 @@ pub fn getName(self: *Self, module: nux.ModuleID, id: nux.FunctionID) ![]const u
 }
 pub fn getReturnType(self: *Self, module: nux.ModuleID, id: nux.FunctionID) !nux.Primitive.Type {
     // const func = try self.getFunction(module, id);
-    // func.return_type;
     _ = module;
     _ = self;
     _ = id;
     return .bool;
+}
+pub fn getParamCount(self: *Self, module: nux.ModuleID, id: nux.FunctionID) !u32 {
+    const func = try self.getFunction(module, id);
+    return @intCast(func.params.len);
+}
+pub fn getParamName(self: *Self, module: nux.ModuleID, id: nux.FunctionID, index: u32) ![]const u8 {
+    const func = try self.getFunction(module, id);
+    if (index >= func.params.len) {
+        return error.InvalidFunctionParamID;
+    }
+    return func.params[@intCast(index)].name;
+}
+pub fn getParamType(self: *Self, module: nux.ModuleID, id: nux.FunctionID, index: u32) !nux.Primitive.Type {
+    const func = try self.getFunction(module, id);
+    if (index >= func.params.len) {
+        return error.InvalidFunctionParamID;
+    }
+    return func.params[@intCast(index)].typ;
 }

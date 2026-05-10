@@ -39,6 +39,9 @@
             ]
         },
         {
+            "path": "base/Enum.zig"
+        },
+        {
             "path": "base/Node.zig",
             "ignore": [
                 "ID",
@@ -88,7 +91,7 @@
             "path": "input/Input.zig",
             "no_enum_prefix": [
                 "Input"
-            ] 
+            ]
         },
         {
             "path": "input/InputMap.zig"

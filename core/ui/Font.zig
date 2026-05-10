@@ -46,15 +46,17 @@ const LineIterator = struct {
             const advance_x = glyph.advance * self.scale;
             const advance_y = glyph.box.h() * self.scale;
 
+            // Trim leading spaces
             if (trim) {
                 if (cp == ' ') {
                     start += 1;
+                    continue;
                 } else {
                     trim = false;
                 }
-                continue;
             }
 
+            // Update line width / height
             line_width += advance_x;
             line_height = @max(line_height, advance_y);
 
@@ -66,7 +68,6 @@ const LineIterator = struct {
             // Detect end of word
             const is_word = cp != ' ';
             if (!is_word and was_word) {
-                // Save line break
                 size.data[0] = line_width;
                 size.data[1] = line_height;
                 break_pos = index;
@@ -74,12 +75,14 @@ const LineIterator = struct {
             was_word = is_word;
         }
 
+        // Special case for end word
         if (index == self.text.len) {
             size.data[0] = line_width;
             size.data[1] = line_height;
             break_pos = index;
         }
 
+        // No characters = no line
         if (start >= break_pos) {
             return null;
         }
@@ -92,7 +95,7 @@ const LineIterator = struct {
     }
 };
 
-pub const GlyphIterator = struct {
+const GlyphIterator = struct {
     const Item = struct {
         position: nux.Vec2i,
         glyph: Glyph,
@@ -264,4 +267,15 @@ pub fn measure(self: *Self, id: nux.ID, text: []const u8, scale: i32, available:
         size.data[1] += line.size.y();
     }
     return size;
+}
+pub fn render(
+    self: *Self,
+    id: nux.ID,
+    text: []const u8,
+    scale: i32,
+    alignment: nux.Widget.Alignment,
+    available: nux.Vec2i,
+) !GlyphIterator {
+    const font = try self.components.get(id);
+    return .init(text, font, scale, alignment, available);
 }

@@ -298,7 +298,6 @@ fn renderRecursive(
 
     // Label
     if (self.label.components.getOptional(id)) |label| {
-        // const font = try self.font.components.get(try self.font.default());
         try viewport.commands.text(.{
             .text = label.text.items,
             .box = box.inset(widget.padding),
@@ -306,13 +305,13 @@ fn renderRecursive(
             .color = label.color,
             .alignment = widget.alignment_x,
         });
-    }
-
-    // Render children
-    var it = try self.node.iterChildren(id);
-    while (it.next()) |child| {
-        if (self.components.has(child)) {
-            try self.renderRecursive(child, viewport, offset);
+    } else {
+        // Render children
+        var it = try self.node.iterChildren(id);
+        while (it.next()) |child| {
+            if (self.components.has(child)) {
+                try self.renderRecursive(child, viewport, offset);
+            }
         }
     }
 }

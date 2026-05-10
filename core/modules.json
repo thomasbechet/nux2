@@ -126,7 +126,10 @@
             "path": "ui/Viewport.zig"
         },
         {
-            "path": "ui/Font.zig"
+            "path": "ui/Font.zig",
+            "ignore": [
+                "render"
+            ]
         },
         {
             "path": "ui/Widget.zig",

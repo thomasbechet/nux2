@@ -418,9 +418,9 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
                 try self.beginTexturedBatch(font.texture, info.color);
 
                 const text = cb.dataSlice(info.data);
-                var it = nux.Font.GlyphIterator.init(
+                var it = try self.font.render(
+                    try self.font.default(),
                     text,
-                    font,
                     info.scale,
                     info.alignment,
                     info.box.size,

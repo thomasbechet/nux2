@@ -1,83 +1,62 @@
+local function createWidget(parent, type)
+    local widget = Node.create(parent)
+    Component.add(widget, Widget)
+    Component.add(widget, type)
+    return widget
+end
+
 function M:onInit()
     -- Create stylesheet
+    local ui_atlas = Node.createNamed("/", "ui_atlas")
+    Texture.addFromFile(ui_atlas, "GUI.png")
     self.stylesheet = Node.createNamed("/", "stylesheet")
     Component.add(self.stylesheet, StyleSheet)
     StyleSheet.setImage(self.stylesheet,
         StyleSheet.PROPERTY_BUTTON_PRESSED,
         "/fonts/default", Math.vec4(0), Math.vec4(0)
     )
+    --     stylesheet.set(style, stylesheet.BUTTON_PRESSED, gui_tex,
+    --     { 113, 97, 30, 14 },
+    --     { 115, 100, 26, 8 })
+    -- stylesheet.set(style, stylesheet.BUTTON_RELEASED, gui_tex,
+    --     { 113, 81, 30, 14 },
+    --     { 115, 83, 26, 8 })
+    -- stylesheet.set(style, stylesheet.BUTTON_HOVERED, gui_tex,
+    --     { 113, 113, 30, 14 },
+    --     { 115, 115, 26, 8 })
+    -- stylesheet.set(style, stylesheet.CHECKBOX_CHECKED, gui_tex,
+    --     { 97, 257, 14, 14 },
+    --     { 99, 260, 10, 8 })
+    -- stylesheet.set(style, stylesheet.CHECKBOX_UNCHECKED, gui_tex,
+    --     { 81, 257, 14, 14 },
+    --     { 99, 261, 10, 8 })
+    -- stylesheet.set(style, stylesheet.CURSOR, gui_tex,
+    --     { 52, 83, 8, 7 },
+    --     { 52, 83, 8, 7 })
+
 
     -- Create UI
     self.ui = Node.createPath(Node.getRoot(), "ui")
     Component.add(self.ui, Viewport)
     Component.add(self.ui, Widget)
     Widget.setBackgroundColor(self.ui, Math.vec4(0.5, 0, 0, 1))
-    Widget.setPadding(self.ui, Math.vec4(50))
     Widget.setChildGap(self.ui, 20)
-    Widget.setBorder(self.ui, Math.vec4(10))
-    Widget.setBorderColor(self.ui, Math.vec4(0, 0, 0, 1))
     Widget.setAlignX(self.ui, Widget.ALIGNMENT_CENTER)
     Widget.setAlignY(self.ui, Widget.ALIGNMENT_CENTER)
     Widget.setSizeX(self.ui, Widget.SIZING_GROW, 0)
     Widget.setSizeY(self.ui, Widget.SIZING_GROW, 0)
     Viewport.setWidget(self.ui, self.ui)
 
-    -- -- Create panel
-    -- self.panel = Node.createNamed(self.ui, "panel")
-    -- Component.add(self.panel, Widget)
-    -- Widget.setBackgroundColor(self.panel, Math.vec4(1, 1, 0, 1))
-    -- Widget.setPadding(self.panel, Math.vec4(10))
-    -- Widget.setChildGap(self.panel, 5)
-    --
-    -- -- Create panel 2
-    -- self.panel2 = Node.createNamed(self.ui, "panel2")
-    -- Component.add(self.panel2, Widget)
-    -- Component.add(self.panel2, Label)
-    -- Label.setText(self.panel2, "TEST")
-    -- Widget.setBackgroundColor(self.panel2, Math.vec4(0.5, 0, 1, 1))
-    -- Widget.setPadding(self.panel2, Math.vec4(10))
-    -- Widget.setChildGap(self.panel2, 5)
-    -- -- Widget.setSizeX(self.panel2, Widget.SIZING_GROW, 0)
-    -- Widget.setSizeY(self.panel2, Widget.SIZING_FIT, 0)
-    -- Widget.setSizeX(self.panel2, Widget.SIZING_FIT, 0)
-    --
-    -- -- Create panel 3
-    -- self.panel3 = Node.createNamed(self.ui, "panel3")
-    -- Component.add(self.panel3, Widget)
-    -- Widget.setBackgroundColor(self.panel3, Math.vec4(0.5, 0.5, 1, 1))
-    -- Widget.setPadding(self.panel3, Math.vec4(10))
-    -- Widget.setChildGap(self.panel3, 5)
-    -- Widget.setSizeY(self.panel3, Widget.SIZING_GROW, 1)
-    -- -- Widget.setSizeX(self.panel3, Widget.SIZING_FIXED, 400)
-    -- Widget.setBorder(self.panel3, Math.vec4(2))
-
-    -- Create panel
-    self:addLabel(self.ui,
-        -- "test")
-        "It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout. The point of using Lorem Ipsum is that it has a more-or-less normal distribution of letters, as opposed to using 'Content here, content here', making it look like readable English. Many desktop publishing packages and web page editors now use Lorem Ipsum as their default model text, and a search for 'lorem ipsum' will uncover many web sites still in their infancy. Various versions have evolved over the years, sometimes by accident, sometimes on purpose (injected humour and the like). It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout. The point of using Lorem Ipsum is that it has a more-or-less normal distribution of letters, as opposed to using 'Content here, content here', making it look like readable English. Many desktop publishing packages and web page editors now use Lorem Ipsum as their default model text, and a search for 'lorem ipsum' will uncover many web sites still in their infancy. Various versions have evolved over the years, sometimes by accident, sometimes on purpose (injected humour and the like). It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout. The point of using Lorem Ipsum is that it has a more-or-less normal distribution of letters, as opposed to using 'Content here, content here', making it look like readable English. Many desktop publishing packages and web page editors now use Lorem Ipsum as their default model text, and a search for 'lorem ipsum' will uncover many web sites still in their infancy. Various versions have evolved over the years, sometimes by accident, sometimes on purpose (injected humour and the like).")
-    -- self:addSpacer(self.ui)
-    -- self:addLabel(self.ui)
-    -- self:addLabel(self.ui)
-    -- self:addLabel(self.ui)
+    -- Label
+    self.label = createWidget(self.ui, Label)
+    Label.setScale(self.label, 5)
+    Widget.setBackgroundColor(self.label, Math.vec4(0, 0, 0, 1))
+    self.time = 0
 
     Node.dump(Node.getRoot())
 end
 
-function M:addSpacer(parent)
-    local widget = Node.create(parent)
-    Component.add(widget, Widget)
-    -- Widget.setSizeX(widget, Widget.SIZING_GROW, 0)
-    Widget.setSizeY(widget, Widget.SIZING_GROW, 0)
-end
-
-function M:addLabel(parent, text)
-    local label = Node.create(parent)
-    Component.add(label, Widget)
-    Component.add(label, Label)
-    Label.setText(label, text)
-    Label.setScale(label, 2)
-    Widget.setAlignX(label, Widget.ALIGNMENT_START)
-    Widget.setBackgroundColor(label, Math.vec4(0, 0, 0.5, 1))
-    -- Widget.setBorder(label, Math.vec4(1))
-    Widget.setPadding(label, Math.vec4(40))
+function M:onUpdate()
+    self.time = self.time + 1
+    Label.setText(self.label, self.time)
 end

@@ -16,7 +16,7 @@ const LineIterator = struct {
     font: *const Component,
     scale: i32,
     available: nux.Vec2i,
-    iterator: std.unicode.Utf8Iterator,
+    start: usize = 0,
 
     fn init(text: []const u8, font: *const Component, scale: i32, available: nux.Vec2i) LineIterator {
         return .{
@@ -24,46 +24,69 @@ const LineIterator = struct {
             .font = font,
             .scale = scale,
             .available = available,
-            .iterator = std.unicode.Utf8View.initUnchecked(text).iterator(),
         };
     }
 
     fn next(self: *LineIterator) ?Line {
+        if (self.start >= self.text.len) {
+            return null;
+        }
+
         var size: nux.Vec2i = .zero();
         var line_width: i32 = 0;
         var line_height: i32 = 0;
         var was_word: bool = false;
-        var line_break: bool = false;
-        while (self.iterator.nextCodepoint()) |cp| {
+        var index: usize = self.start;
+        var start = self.start;
+        var break_pos: usize = 0;
+        var it = std.unicode.Utf8View.initUnchecked(self.text[self.start..]).iterator();
+        var trim: bool = true;
+        while (it.nextCodepoint()) |cp| : (index += 1) {
             const glyph = self.font.getGlyph(cp) orelse continue;
             const advance_x = glyph.advance * self.scale;
             const advance_y = glyph.box.h() * self.scale;
+
+            if (trim) {
+                if (cp == ' ') {
+                    start += 1;
+                } else {
+                    trim = false;
+                }
+                continue;
+            }
 
             line_width += advance_x;
             line_height = @max(line_height, advance_y);
 
             // Detect wrap
             if (line_width > self.available.x()) {
-                line_break = true;
                 break;
             }
 
             // Detect end of word
             const is_word = cp != ' ';
             if (!is_word and was_word) {
+                // Save line break
                 size.data[0] = line_width;
                 size.data[1] = line_height;
+                break_pos = index;
             }
             was_word = is_word;
         }
 
-        if (!line_break) {
+        if (index == self.text.len) {
             size.data[0] = line_width;
             size.data[1] = line_height;
+            break_pos = index;
         }
 
+        if (start >= break_pos) {
+            return null;
+        }
+        self.start = break_pos;
+
         return .{
-            .iterator = undefined,
+            .iterator = std.unicode.Utf8View.initUnchecked(self.text[start..break_pos]).iterator(),
             .size = size,
         };
     }
@@ -72,18 +95,27 @@ const LineIterator = struct {
 pub const GlyphIterator = struct {
     const Item = struct {
         position: nux.Vec2i,
-        glyph: Component.Glyph,
+        glyph: Glyph,
         advance_x: i32,
         advance_y: i32,
     };
 
     lines: LineIterator,
     line: ?LineIterator.Line,
+    alignment: nux.Widget.Alignment,
     cursor: nux.Vec2i = .zero(),
 
-    fn init(text: []const u8, font: *const Component, scale: i32, available: nux.Vec2i) GlyphIterator {
+    pub fn init(
+        text: []const u8,
+        font: *const Component,
+        scale: i32,
+        alignment: nux.Widget.Alignment,
+        available: nux.Vec2i,
+    ) GlyphIterator {
         return .{
             .lines = .init(text, font, scale, available),
+            .line = null,
+            .alignment = alignment,
         };
     }
 
@@ -92,34 +124,42 @@ pub const GlyphIterator = struct {
 
             // Fetch line
             if (self.line == null) {
-                self.line = self.line_iterator.next();
+                self.line = self.lines.next();
                 if (self.line == null) {
                     return null;
+                }
+                switch (self.alignment) {
+                    .start => self.cursor.data[0] = 0,
+                    .center => self.cursor.data[0] = @divTrunc(self.lines.available.x() - self.line.?.size.x(), 2),
+                    .end => self.cursor.data[0] = self.lines.available.x() - self.line.?.size.x(),
                 }
             }
             const line = &self.line.?;
 
             // Check end of available height
-            if (self.cursor.y() + line.height > self.available.y()) {
+            if (self.cursor.y() + line.size.y() > self.lines.available.y()) {
                 return null;
             }
 
             if (line.iterator.nextCodepoint()) |codepoint| {
-                // Fetch glyph
-                const glyph = self.font.getGlyph(codepoint) orelse continue;
-                const advance = glyph.advance * self.scale;
 
+                // Fetch glyph
+                const glyph = self.lines.font.getGlyph(codepoint) orelse continue;
+                const advance = glyph.advance * self.lines.scale;
                 const item = Item{
                     .glyph = glyph,
                     .position = self.cursor,
                     .advance_x = advance,
-                    .advance_y = self.line.?.height,
+                    .advance_y = self.line.?.size.y(),
                 };
 
                 // Update cursor position
                 self.cursor.data[0] += advance;
 
                 return item;
+            } else {
+                self.cursor.data[1] += line.size.y();
+                self.line = null;
             }
         }
 
@@ -140,16 +180,7 @@ pub const Component = struct {
         mod.allocator.free(self.glyphs);
     }
 
-    pub fn render(self: *Component, text: []const u8, scale: i32, available: ?nux.Vec2i) GlyphIterator {
-        return .{
-            .font = self,
-            .iterator = std.unicode.Utf8View.initUnchecked(text).iterator(),
-            .scale = scale,
-            .available = available orelse .maxValue(),
-        };
-    }
-
-    pub fn getGlyph(self: *Component, codepoint: u32) ?Glyph {
+    pub fn getGlyph(self: *const Component, codepoint: u32) ?Glyph {
         const index: usize = @intCast(codepoint);
         if (index >= self.glyphs.len) {
             return null;
@@ -175,7 +206,7 @@ fn createDefaultFont(self: *Self) !void {
     // Create font
     const font = try self.components.addPtr(id);
     font.texture = id;
-    font.glyphs = try self.allocator.alloc(?Component.Glyph, max + 1);
+    font.glyphs = try self.allocator.alloc(?Glyph, max + 1);
     errdefer self.allocator.free(font.glyphs);
     for (0..font.glyphs.len) |i| {
         font.glyphs[i] = null;
@@ -218,11 +249,11 @@ pub fn default(self: *Self) !nux.ID {
 }
 pub fn measure(self: *Self, id: nux.ID, text: []const u8, scale: i32, available: ?nux.Vec2i) !nux.Vec2i {
     const font = try self.components.get(id);
+    var lines = LineIterator.init(text, font, scale, available orelse .maxValue());
     var size: nux.Vec2i = .zero();
-    var it = LineIterator.init(text, font, scale, available);
-    while (it.next()) |line| {
-        size.data[0] = @max(size.x(), line.width);
-        size.data[1] += line.height;
+    while (lines.next()) |line| {
+        size.data[0] = @max(size.x(), line.size.x());
+        size.data[1] += line.size.y();
     }
     return size;
 }

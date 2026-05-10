@@ -28,6 +28,7 @@ pub const CommandBuffer = struct {
         color: nux.Color = .white,
         box: nux.Box2i = .emptyZero(),
         scale: i32 = 1,
+        alignment: nux.Widget.Alignment = .start,
     };
 
     const Blit = struct {
@@ -47,6 +48,7 @@ pub const CommandBuffer = struct {
             box: nux.Box2i,
             color: nux.Color,
             scale: i32,
+            alignment: nux.Widget.Alignment,
         },
         line: Line,
         rectangle: Rectangle,
@@ -106,6 +108,7 @@ pub const CommandBuffer = struct {
                 .box = info.box,
                 .color = info.color,
                 .scale = info.scale,
+                .alignment = info.alignment,
             },
         });
     }

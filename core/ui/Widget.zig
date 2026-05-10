@@ -304,6 +304,7 @@ fn renderRecursive(
             .box = box.inset(widget.padding),
             .scale = label.scale,
             .color = label.color,
+            .alignment = widget.alignment_x,
         });
     }
 

@@ -418,12 +418,17 @@ pub fn render(self: *Self, cb: *nux.Graphics.CommandBuffer) !void {
                 try self.beginTexturedBatch(font.texture, info.color);
 
                 const text = cb.dataSlice(info.data);
-                var it = font.render(text, info.scale, info.box.size);
+                var it = nux.Font.GlyphIterator.init(
+                    text,
+                    font,
+                    info.scale,
+                    info.alignment,
+                    info.box.size,
+                );
                 while (it.next()) |item| {
 
-                    const pos = item.position.add(info.box.pos);
-
                     // Push quad
+                    const pos = item.position.add(info.box.pos);
                     const quad = nux.Box2i.init(
                         pos.x(),
                         pos.y(),

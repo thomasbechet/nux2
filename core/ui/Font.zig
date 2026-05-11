@@ -41,10 +41,12 @@ const LineIterator = struct {
         var break_pos: usize = 0;
         var it = std.unicode.Utf8View.initUnchecked(self.text[self.start..]).iterator();
         var trim: bool = true;
+        var last_advance_x: i32 = 0;
         while (it.nextCodepoint()) |cp| : (index += 1) {
             const glyph = self.font.getGlyph(cp) orelse continue;
+            const width = glyph.box.w() * self.scale;
+            const height = glyph.box.h() * self.scale;
             const advance_x = glyph.advance * self.scale;
-            const advance_y = glyph.box.h() * self.scale;
 
             // Trim leading spaces
             if (trim) {
@@ -56,15 +58,6 @@ const LineIterator = struct {
                 }
             }
 
-            // Update line width / height
-            line_width += advance_x;
-            line_height = @max(line_height, advance_y);
-
-            // Detect wrap
-            if (line_width > self.available.x()) {
-                break;
-            }
-
             // Detect end of word
             const is_word = cp != ' ';
             if (!is_word and was_word) {
@@ -73,6 +66,19 @@ const LineIterator = struct {
                 break_pos = index;
             }
             was_word = is_word;
+
+            // Update line width / height
+            line_width += width;
+            line_height = @max(line_height, height);
+
+            // Detect wrap
+            if (line_width > self.available.x()) {
+                break;
+            }
+
+            // Advance line
+            last_advance_x = @max(0, advance_x - width);
+            line_width += last_advance_x;
         }
 
         // Special case for end word
@@ -87,6 +93,9 @@ const LineIterator = struct {
             return null;
         }
         self.start = break_pos;
+
+        // Remove remaining advance
+        size.data[0] = @max(0, size.data[0] - last_advance_x);
 
         return .{
             .iterator = std.unicode.Utf8View.initUnchecked(self.text[start..break_pos]).iterator(),
@@ -259,6 +268,7 @@ pub fn default(self: *Self) !nux.ID {
     return self.node.findGlobal(default_font_id);
 }
 pub fn measure(self: *Self, id: nux.ID, text: []const u8, scale: i32, available: ?nux.Vec2i) !nux.Vec2i {
+    // Take maximum of each line
     const font = try self.components.get(id);
     var lines = LineIterator.init(text, font, scale, available orelse .maxValue());
     var size: nux.Vec2i = .zero();

@@ -126,10 +126,10 @@
             "path": "graphics/StaticMesh.zig"
         },
         {
-            "path": "ui/Viewport.zig"
+            "path": "graphics/Viewport.zig"
         },
         {
-            "path": "ui/Font.zig",
+            "path": "graphics/Font.zig",
             "ignore": [
                 "render"
             ]

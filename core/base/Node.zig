@@ -356,8 +356,10 @@ collection: *nux.Scene,
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.entries = .init(self.allocator);
+
     // Reserve index 0 for null id.
     _ = try self.entries.add(.{});
+
     // Create root node manually.
     self.root = ID{
         .index = 1,
@@ -415,6 +417,7 @@ fn addEntry(self: *Self, parent: ID) !ID {
 }
 fn removeEntry(self: *Self, id: ID) !void {
     var node = self.entries.get(id.index);
+
     // Remove from parent
     if (node.parent != 0) {
         const p = self.entries.get(node.parent);
@@ -431,6 +434,7 @@ fn removeEntry(self: *Self, id: ID) !void {
             self.entries.get(node.prev).next = node.next;
         }
     }
+
     // Update version and add to freelist
     node.version += 1;
     self.entries.remove(id.index);

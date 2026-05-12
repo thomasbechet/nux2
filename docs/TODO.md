@@ -1,10 +1,8 @@
-- [ ] YAML parser instead of JSON
-- [ ] Define OS interface with core
-- [ ] Generate Lua bindings from modules
-- [ ] WASM core build
-- [ ] Font binary generator
-- [ ] Cartridge loading
-
-- [x] Fix GPU corruption bug
+- [ ] Event API
+- [ ] UI Stylesheet
+- [ ] Simplify ModuleID / FunctionID / PropertyID
+- [ ] Simplify node creation API
+- [ ] YAML parser or modules.json instead of JSON
 - [ ] GPU API : transfer buffers using slices (no need size)
-- [x] Normalize gamepad triggers (to 0-1)
+- [ ] Handle node instancing
+- [ ] Update to 0.16

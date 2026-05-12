@@ -33,24 +33,30 @@ pub fn deinit(self: *Self) void {
 }
 pub fn onPostUpdate(self: *Self) !void {
     while (self.signal_queue.popFront()) |event| {
+
         // Keep reference to signal
         var active_signal = ActiveSignal{
             .signal = event.signal,
             .index = 0,
         };
         self.active_signal = &active_signal;
+
         // Iterate callbacks
         while (true) {
             const signal = self.components.get(active_signal.signal) catch break;
+
             // Check end
             if (active_signal.index >= signal.callables.items.len) {
                 break;
             }
+
             // Call
             try signal.callables.items[active_signal.index].call();
+
             // Next callback
             active_signal.index += 1;
         }
+
         // Reset active signal
         self.active_signal = null;
     }
@@ -66,6 +72,7 @@ pub fn connect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
 }
 pub fn disconnect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
     const component = try self.components.get(id);
+
     // Find callback index
     var index: ?usize = null;
     for (component.callables.items, 0..) |item, idx| {
@@ -74,8 +81,9 @@ pub fn disconnect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
             break;
         }
     }
+
+    // Check active signal
     if (index) |idx| {
-        // Check active signal
         if (self.active_signal) |active_signal| {
             if (active_signal.signal == id) {
                 if (idx < active_signal.index) {

@@ -4,14 +4,20 @@ const std = @import("std");
 const Self = @This();
 
 const Component = struct {
-    onClick: nux.ID = .null,
+    onClick: nux.EventID = .null,
+
+    pub fn init(mod: *Self) !Component {
+        return .{
+            // .onClick = mod.event.create()
+        };
+    }
 };
 
 node: *nux.Node,
 components: nux.Components(Component),
-signal: *nux.Signal,
+event: *nux.Event,
 
 pub fn click(self: *Self, id: nux.ID) !void {
     const component = try self.components.get(id);
-    try self.signal.emit(component.onClick, id);
+    try self.event.emit(component.onClick, id);
 }

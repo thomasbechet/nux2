@@ -11,15 +11,17 @@ pub const max_component = 128;
 pub const path_separator = '/';
 
 pub const ID = packed struct(u32) {
-    pub const @"null" = @This(){ .version = 0, .index = 0 };
+    pub const @"null" = ID{ .version = 0, .index = 0 };
 
-    pub fn isNull(self: *const @This()) bool {
+    pub fn isNull(self: *const ID) bool {
         return self.index == 0;
     }
-    pub fn setNull(self: *@This()) void {
+
+    pub fn setNull(self: *ID) void {
         self.index = 0;
     }
-    pub fn value(self: @This()) u32 {
+
+    pub fn value(self: ID) u32 {
         return @bitCast(self);
     }
 
@@ -44,6 +46,7 @@ const Entry = struct {
     fn getName(self: *@This()) []const u8 {
         return self.name[0..self.name_len];
     }
+
     fn setName(self: *@This(), name: []const u8) void {
         self.name_len = @min(name.len, self.name.len);
         @memcpy(self.name[0..self.name_len], name[0..self.name_len]);
@@ -259,12 +262,14 @@ pub const Reader = struct {
 const ChildIterator = struct {
     self: *Self,
     current: NodeIndex,
+
     fn init(mod: *Self, id: ID) !@This() {
         return .{
             .self = mod,
             .current = (try mod.getEntry(id)).first_child,
         };
     }
+
     pub fn next(it: *@This()) ?ID {
         const index = it.current;
         if (index == 0) return null;
@@ -281,6 +286,7 @@ const ComponentIterator = struct {
     self: *Self,
     entry: *Entry,
     current: usize,
+
     fn init(mod: *Self, id: ID) !@This() {
         return .{
             .self = mod,
@@ -288,6 +294,7 @@ const ComponentIterator = struct {
             .current = 0,
         };
     }
+
     pub fn next(it: *@This()) ?nux.ModuleID {
         while (it.current < it.entry.components.len) {
             const index = it.current;
@@ -300,50 +307,81 @@ const ComponentIterator = struct {
     }
 };
 
-pub fn iterChildren(self: *Self, id: ID) !ChildIterator {
-    return try .init(self, id);
-}
-pub fn iterComponents(self: *Self, id: ID) !ComponentIterator {
-    return try .init(self, id);
-}
-pub fn visit(self: *Self, id: ID, visitor: anytype) !void {
-    const T = @typeInfo(@TypeOf(visitor)).pointer.child;
-    if (@hasDecl(T, "onPreOrder")) {
-        try visitor.onPreOrder(id);
-    }
-    var it = try self.iterChildren(id);
-    while (it.next()) |next| {
-        try self.visit(next, visitor);
-    }
-    if (@hasDecl(T, "onPostOrder")) {
-        try visitor.onPostOrder(id);
-    }
-}
-pub fn collect(self: *Self, allocator: std.mem.Allocator, id: ID) !std.ArrayList(ID) {
-    var nodes = try std.ArrayList(ID).initCapacity(allocator, 32);
-    errdefer nodes.deinit(allocator);
-    try self.collectInto(&nodes, allocator, id);
-    return nodes;
-}
-pub fn collectInto(
-    self: *Self,
-    array_list: *std.ArrayList(ID),
-    allocator: std.mem.Allocator,
-    id: ID,
-) !void {
-    const Collector = struct {
-        nodes: *std.ArrayList(ID),
-        allocator: std.mem.Allocator,
-        fn onPreOrder(collector: *@This(), node: ID) !void {
-            try collector.nodes.append(collector.allocator, node);
+const Dumper = struct {
+    node: *Self,
+    depth: u32 = 0,
+    header: [256]u8 = undefined,
+
+    fn writeHeader(self: *@This(), w: *std.Io.Writer) !void {
+        for (1..(self.depth + 1)) |i| {
+            switch (self.header[i]) {
+                0 => try w.print("├─ ", .{}),
+                1 => try w.print("└─ ", .{}),
+                2 => try w.print("│  ", .{}),
+                3 => try w.print("   ", .{}),
+                else => {},
+            }
         }
-    };
-    var collector = Collector{
-        .allocator = allocator,
-        .nodes = array_list,
-    };
-    try self.visit(id, &collector);
-}
+    }
+
+    fn printComponents(self: *@This(), id: ID, w: *std.Io.Writer) !void {
+
+        // Print components
+        var it = try self.node.iterComponents(id);
+        while (it.next()) |cid| {
+            const typ = try self.node.component.getModule(cid);
+
+            // Write type
+            try w.print("\x1b[31m", .{}); // red
+            try w.print("{s} ", .{typ.name});
+            try w.print("\x1b[37m", .{}); // white
+
+            // Write description
+            // try w.print("\x1b[90m", .{}); // light gray
+            // try typ.v_description(typ.v_ptr, id, &w);
+            // try w.print("\x1b[37m", .{}); // white
+        }
+    }
+
+    fn onPreOrder(self: *@This(), id: ID) !void {
+        const entry = try self.node.getEntry(id);
+
+        // Append header
+        if (entry.next != 0) {
+            self.header[self.depth] = 0;
+        } else {
+            self.header[self.depth] = 1;
+        }
+
+        // Print header
+        var buf: [256]u8 = undefined;
+        var w = std.Io.Writer.fixed(&buf);
+        try self.writeHeader(&w);
+
+        // Replace header
+        if (entry.next != 0) {
+            self.header[self.depth] = 2;
+        } else {
+            self.header[self.depth] = 3;
+        }
+
+        // Write name
+        try w.print("\x1b[36m", .{}); // cyan
+        try w.print("{s} ", .{entry.getName()});
+        try w.print("\x1b[37m", .{}); // white
+
+        // Print components
+        try self.printComponents(id, &w);
+
+        // Print entry
+        self.node.logger.info("{s}", .{buf[0..w.end]});
+        self.depth += 1;
+    }
+
+    fn onPostOrder(self: *@This(), _: ID) !void {
+        self.depth -= 1;
+    }
+};
 
 allocator: std.mem.Allocator,
 entries: nux.ObjectPool(Entry),
@@ -351,7 +389,7 @@ root: ID,
 component: *nux.Component,
 file: *nux.File,
 logger: *nux.Logger,
-collection: *nux.Scene,
+scene: *nux.Scene,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -460,11 +498,13 @@ pub fn getRoot(self: *Self) ID {
 pub fn create(self: *Self, parent: ID) !ID {
     return self.addEntry(parent);
 }
+
 pub fn createNamed(self: *Self, parent: ID, name: []const u8) !ID {
     const id = try self.create(parent);
     try self.setName(id, name);
     return id;
 }
+
 pub fn createPath(self: *Self, base: ID, path: []const u8) !ID {
     var it = std.mem.splitScalar(u8, path, path_separator);
     var node = base;
@@ -478,9 +518,11 @@ pub fn createPath(self: *Self, base: ID, path: []const u8) !ID {
     }
     return node;
 }
+
 pub fn createInstanceOf(self: *Self, parent: ID, collection: ID) !ID {
-    return self.collection.instantiate(collection, parent);
+    return self.scene.instantiate(collection, parent);
 }
+
 pub fn delete(self: *Self, id: ID) !void {
 
     // Delete children
@@ -499,14 +541,17 @@ pub fn delete(self: *Self, id: ID) !void {
     // Delete entry
     try self.removeEntry(id);
 }
+
 pub fn valid(self: *Self, id: ID) bool {
     _ = self.getEntry(id) catch return false;
     return true;
 }
+
 pub fn exists(self: *Self, path: []const u8) bool {
     _ = self.findGlobal(path) catch return false;
     return true;
 }
+
 pub fn getParent(self: *Self, id: ID) !ID {
     const node = try self.getEntry(id);
     if (node.parent != 0) {
@@ -517,6 +562,7 @@ pub fn getParent(self: *Self, id: ID) !ID {
     }
     return error.NoParent;
 }
+
 pub fn find(self: *Self, relativeTo: ID, path: []const u8) !ID {
     const entry = try self.getEntry(relativeTo);
     _ = entry;
@@ -529,9 +575,11 @@ pub fn find(self: *Self, relativeTo: ID, path: []const u8) !ID {
     }
     return ret;
 }
+
 pub fn findGlobal(self: *Self, path: []const u8) !ID {
     return self.find(self.getRoot(), path);
 }
+
 pub fn findChild(self: *Self, id: ID, name: []const u8) !ID {
     var it = try self.iterChildren(id);
     while (it.next()) |child| {
@@ -541,6 +589,7 @@ pub fn findChild(self: *Self, id: ID, name: []const u8) !ID {
     }
     return error.ChildNotFound;
 }
+
 pub fn setNameFormat(
     self: *Self,
     id: ID,
@@ -552,6 +601,7 @@ pub fn setNameFormat(
     try w.print(format, args);
     try self.setName(id, buf[0..w.end]);
 }
+
 pub fn setName(self: *Self, id: ID, name: []const u8) !void {
     const entry = try self.getEntry(id);
     if (self.getParent(id)) |parent| {
@@ -567,10 +617,12 @@ pub fn setName(self: *Self, id: ID, name: []const u8) !void {
     } else |_| {}
     entry.setName(name);
 }
+
 pub fn getName(self: *Self, id: ID) ![]const u8 {
     const entry = try self.getEntry(id);
     return entry.getName();
 }
+
 fn writeEntryPath(self: *Self, entry: *Entry, writer: *std.Io.Writer) !void {
     if (entry.parent == 0) { // root node
         return;
@@ -579,6 +631,7 @@ fn writeEntryPath(self: *Self, entry: *Entry, writer: *std.Io.Writer) !void {
     _ = try writer.write("/");
     _ = try writer.write(entry.getName());
 }
+
 fn writePath(self: *Self, id: ID, writer: *std.Io.Writer) !void {
     const entry = try self.getEntry(id);
     if (self.root == id) {
@@ -588,81 +641,54 @@ fn writePath(self: *Self, id: ID, writer: *std.Io.Writer) !void {
     }
 }
 
-const Dumper = struct {
-    node: *Self,
-    depth: u32 = 0,
-    header: [256]u8 = undefined,
+pub fn iterChildren(self: *Self, id: ID) !ChildIterator {
+    return try .init(self, id);
+}
 
-    fn writeHeader(self: *@This(), w: *std.Io.Writer) !void {
-        for (1..(self.depth + 1)) |i| {
-            switch (self.header[i]) {
-                0 => try w.print("├─ ", .{}),
-                1 => try w.print("└─ ", .{}),
-                2 => try w.print("│  ", .{}),
-                3 => try w.print("   ", .{}),
-                else => {},
-            }
-        }
+pub fn iterComponents(self: *Self, id: ID) !ComponentIterator {
+    return try .init(self, id);
+}
+
+pub fn visit(self: *Self, id: ID, visitor: anytype) !void {
+    const T = @typeInfo(@TypeOf(visitor)).pointer.child;
+    if (@hasDecl(T, "onPreOrder")) {
+        try visitor.onPreOrder(id);
     }
-
-    fn printComponents(self: *@This(), id: ID, w: *std.Io.Writer) !void {
-
-        // Print components
-        var it = try self.node.iterComponents(id);
-        while (it.next()) |cid| {
-            const typ = try self.node.component.getModule(cid);
-
-            // Write type
-            try w.print("\x1b[31m", .{}); // red
-            try w.print("{s} ", .{typ.name});
-            try w.print("\x1b[37m", .{}); // white
-
-            // Write description
-            // try w.print("\x1b[90m", .{}); // light gray
-            // try typ.v_description(typ.v_ptr, id, &w);
-            // try w.print("\x1b[37m", .{}); // white
-        }
+    var it = try self.iterChildren(id);
+    while (it.next()) |next| {
+        try self.visit(next, visitor);
     }
-
-    fn onPreOrder(self: *@This(), id: ID) !void {
-        const entry = try self.node.getEntry(id);
-
-        // Append header
-        if (entry.next != 0) {
-            self.header[self.depth] = 0;
-        } else {
-            self.header[self.depth] = 1;
-        }
-
-        // Print header
-        var buf: [256]u8 = undefined;
-        var w = std.Io.Writer.fixed(&buf);
-        try self.writeHeader(&w);
-
-        // Replace header
-        if (entry.next != 0) {
-            self.header[self.depth] = 2;
-        } else {
-            self.header[self.depth] = 3;
-        }
-
-        // Write name
-        try w.print("\x1b[36m", .{}); // cyan
-        try w.print("{s} ", .{entry.getName()});
-        try w.print("\x1b[37m", .{}); // white
-
-        // Print components
-        try self.printComponents(id, &w);
-
-        // Print entry
-        self.node.logger.info("{s}", .{buf[0..w.end]});
-        self.depth += 1;
+    if (@hasDecl(T, "onPostOrder")) {
+        try visitor.onPostOrder(id);
     }
+}
 
-    fn onPostOrder(self: *@This(), _: ID) !void {
-        self.depth -= 1;
-    }
-};
+pub fn collect(self: *Self, allocator: std.mem.Allocator, id: ID) !std.ArrayList(ID) {
+    var nodes = try std.ArrayList(ID).initCapacity(allocator, 32);
+    errdefer nodes.deinit(allocator);
+    try self.collectInto(&nodes, allocator, id);
+    return nodes;
+}
+
+pub fn collectInto(
+    self: *Self,
+    array_list: *std.ArrayList(ID),
+    allocator: std.mem.Allocator,
+    id: ID,
+) !void {
+    const Collector = struct {
+        nodes: *std.ArrayList(ID),
+        allocator: std.mem.Allocator,
+        fn onPreOrder(collector: *@This(), node: ID) !void {
+            try collector.nodes.append(collector.allocator, node);
+        }
+    };
+    var collector = Collector{
+        .allocator = allocator,
+        .nodes = array_list,
+    };
+    try self.visit(id, &collector);
+}
 
 pub fn dump(self: *Self, id: ID) void {
     var dumper = Dumper{ .node = self };

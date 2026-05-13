@@ -80,6 +80,7 @@ pub fn Components(T: type) type {
                 .id = module_id,
             };
         }
+
         pub fn deinit(self: *@This()) void {
             self.data.deinit();
             self.bitset.deinit();
@@ -92,11 +93,13 @@ pub fn Components(T: type) type {
                 data.* = .{};
             }
         }
+
         fn deinitComponent(self: *@This(), data: *T) void {
             if (@hasDecl(T, "deinit")) {
                 data.deinit(@fieldParentPtr(module_components_field, self));
             }
         }
+
         fn addUninitialized(self: *@This(), id: nux.ID) !*T {
 
             // Check node entry

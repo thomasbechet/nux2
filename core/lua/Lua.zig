@@ -30,7 +30,7 @@ pub const Module = struct {
 allocator: std.mem.Allocator,
 logger: *nux.Logger,
 file: *nux.File,
-signal: *nux.Signal,
+event: *nux.Event,
 node: *nux.Node,
 L: *c.lua_State,
 modules: std.StringHashMap(*Module),

@@ -3,29 +3,33 @@ const nux = @import("../nux.zig");
 
 const Self = @This();
 
+pub const ID = struct {
+    index: usize,
+};
+
 const Component = struct {
     callables: std.ArrayList(nux.Callable) = .empty,
 };
 
-const SignalEvent = struct {
-    signal: nux.ID,
+const Event = struct {
+    event: nux.ID,
     source: nux.ID,
 };
 
-const ActiveSignal = struct {
-    signal: nux.ID,
+const ActiveEvent = struct {
+    event: nux.ID,
     index: usize,
 };
 
 components: nux.Components(Component),
 allocator: nux.Platform.Allocator,
-signal_queue: nux.Deque(SignalEvent),
-active_signal: ?*ActiveSignal,
+signal_queue: nux.Deque(Event),
+active_event: ?*ActiveEvent,
 logger: *nux.Logger,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
-    self.active_signal = null;
+    self.active_event = null;
     self.signal_queue = try .initCapacity(self.allocator, 64);
 }
 pub fn deinit(self: *Self) void {
@@ -35,15 +39,15 @@ pub fn onPostUpdate(self: *Self) !void {
     while (self.signal_queue.popFront()) |event| {
 
         // Keep reference to signal
-        var active_signal = ActiveSignal{
-            .signal = event.signal,
+        var active_signal = ActiveEvent{
+            .event = event.event,
             .index = 0,
         };
-        self.active_signal = &active_signal;
+        self.active_event = &active_signal;
 
         // Iterate callbacks
         while (true) {
-            const signal = self.components.get(active_signal.signal) catch break;
+            const signal = self.components.get(active_signal.event) catch break;
 
             // Check end
             if (active_signal.index >= signal.callables.items.len) {
@@ -58,19 +62,29 @@ pub fn onPostUpdate(self: *Self) !void {
         }
 
         // Reset active signal
-        self.active_signal = null;
+        self.active_event = null;
     }
 }
 
+pub fn create(self: *Self, id: nux.ID, name: []const u8) !nux.EventID {
+    _ = self;
+    _ = id;
+    _ = name;
+    return .{ .index = 0 };
+}
+pub fn delete(self: *Self, id: nux.EventID) !void {
+    _ = self;
+    _ = id;
+}
 pub fn emit(self: *Self, id: nux.ID, source: nux.ID) !void {
     _ = try self.components.get(id);
-    try self.signal_queue.pushBack(self.allocator, .{ .signal = id, .source = source });
+    try self.signal_queue.pushBack(self.allocator, .{ .event = id, .source = source });
 }
-pub fn connect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
+pub fn bind(self: *Self, id: nux.ID, callable: nux.Callable) !void {
     const component = try self.components.get(id);
     try component.callables.append(self.allocator, callable);
 }
-pub fn disconnect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
+pub fn unbind(self: *Self, id: nux.ID, callable: nux.Callable) !void {
     const component = try self.components.get(id);
 
     // Find callback index
@@ -82,10 +96,10 @@ pub fn disconnect(self: *Self, id: nux.ID, callable: nux.Callable) !void {
         }
     }
 
-    // Check active signal
+    // Check active event
     if (index) |idx| {
-        if (self.active_signal) |active_signal| {
-            if (active_signal.signal == id) {
+        if (self.active_event) |active_signal| {
+            if (active_signal.event == id) {
                 if (idx < active_signal.index) {
                     active_signal.index -= 1;
                 }

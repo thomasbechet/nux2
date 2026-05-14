@@ -65,10 +65,11 @@
             "path": "base/Scene.zig"
         },
         {
-            "path": "base/Signal.zig",
+            "path": "base/Event.zig",
             "ignore": [
-                "connect",
-                "disconnect"
+                "dispatch",
+                "bind",
+                "unbind"
             ]
         },
         {

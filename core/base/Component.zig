@@ -141,9 +141,11 @@ pub fn Components(T: type) type {
         pub fn remove(self: *@This(), id: nux.ID) void {
             const entry = self.node.getEntry(id) catch return;
             const index = entry.components[self.id.index] orelse return;
+
             // Deinit component
             const data = &self.data.get(index).data;
             self.deinitComponent(data);
+
             // Remove from pool
             self.data.remove(index);
             self.bitset.unset(@intCast(index));

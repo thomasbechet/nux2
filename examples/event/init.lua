@@ -1,13 +1,15 @@
 function M:onInit()
-    self.inventoryOpened = Event.create(self.id, "onInventoryOpened")
-    Event.bind(self.inventoryOpened, onInventoryOpened)
-    Event.unbind(self.inventoryOpened, onInventoryOpened)
+    self.inventoryOpened = Event.create("inventoryOpened")
+    -- Event.bind(self.inventoryOpened, onInventoryOpened)
+
+    Event.create(self.id)
 end
 
 function M:onUpdate()
-    Event.send(self.inventoryOpened)
+    Event.emit(self.inventoryOpened)
 end
 
 function M:onInventoryOpened()
+    local node = Event.getSource()
     print("inventory opened !")
 end

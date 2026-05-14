@@ -584,6 +584,7 @@ fn apiCall(lua: ?*c.lua_State) callconv(.c) c_int {
             .function => |v| c.lua_pushinteger(lua, @intCast(v.index)),
             .enumeration => |v| c.lua_pushinteger(lua, @intCast(v.index)),
             .property => |v| c.lua_pushinteger(lua, @intCast(v.index)),
+            .event => |v| c.lua_pushinteger(lua, @intCast(v.index)),
         }
         return 1;
     } else {

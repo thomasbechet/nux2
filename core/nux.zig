@@ -98,19 +98,9 @@ pub const Platform = struct {
     config: Platform.Config = .{},
 };
 
-const Stage = enum {
-    start,
-    pre_update,
-    update,
-    post_update,
-    render,
-    stop,
-};
-
 pub const Core = struct {
     platform: Platform,
     running: bool = false,
-    stages: std.EnumMap(Stage, std.ArrayList(Callable)),
     modules: std.ArrayList(Module.Module),
 
     fn log(

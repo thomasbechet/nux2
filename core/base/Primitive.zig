@@ -22,6 +22,7 @@ pub const Type = enum(u32) {
     function,
     enumeration,
     property,
+    event,
 
     fn fromType(comptime T: type) Type {
         if (@typeInfo(T) == .@"enum") {
@@ -52,6 +53,7 @@ pub const Type = enum(u32) {
                 nux.ModuleID => .module,
                 nux.FunctionID => .function,
                 nux.EnumID => .enumeration,
+                nux.EventID => .event,
                 else => @compileError("Unsupported type " ++ @typeName(T)),
             };
         }
@@ -77,6 +79,7 @@ pub const Value = union(Type) {
     function: nux.FunctionID,
     enumeration: nux.EnumID,
     property: nux.PropertyID,
+    event: nux.EventID,
 
     pub fn from(comptime T: type, value: T) Value {
         if (@typeInfo(T) == .@"enum") {
@@ -108,6 +111,7 @@ pub const Value = union(Type) {
             nux.FunctionID => return .{ .function = value },
             nux.EnumID => return .{ .enumeration = value },
             nux.PropertyID => return .{ .property = value },
+            nux.EventID => return .{ .event = value },
             else => @compileError("Unsupported type " ++ @typeName(T)),
         }
     }
@@ -140,6 +144,7 @@ pub const Value = union(Type) {
             nux.FunctionID => return value.function,
             nux.EnumID => return value.enumeration,
             nux.PropertyID => return value.property,
+            nux.EventID => return value.event,
             else => @compileError("Unsupported type " ++ @typeName(T)),
         }
     }

@@ -303,10 +303,6 @@ pub const Core = struct {
     pub fn init(platform: Platform) !*Core {
         var core = try platform.allocator.create(@This());
         core.platform = platform;
-        core.stages = .{};
-        inline for (std.meta.fields(Stage)) |field| {
-            core.stages.put(@field(Stage, field.name), .empty);
-        }
         core.modules = .empty;
         errdefer core.deinit();
 
@@ -370,12 +366,6 @@ pub const Core = struct {
             module.destroy(self.platform.allocator);
         }
         self.modules.deinit(self.platform.allocator);
-
-        // Deinit stages
-        var it = self.stages.iterator();
-        while (it.next()) |entry| {
-            entry.value.deinit(self.platform.allocator);
-        }
 
         // Free core
         self.platform.allocator.destroy(self);

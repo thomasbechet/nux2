@@ -17,7 +17,7 @@ pub const Stage = enum(u32) {
 };
 
 const Event = struct {
-    stage: nux.Stage,
+    stage: Stage,
     callables: std.ArrayList(nux.Callable) = .empty,
 };
 
@@ -31,28 +31,46 @@ const ActiveEventCall = struct {
     index: usize,
 };
 
+const StageEvent = struct {
+    udpate_event: nux.EventID,
+    queue: nux.Deque(EventCall) = .empty,
+};
+
 allocator: nux.Platform.Allocator,
-stages: std.EnumMap(Stage, nux.Deque(EventCall)),
-active_event: ?*ActiveEventCall,
 logger: *nux.Logger,
+stages: std.EnumMap(Stage, StageEvent),
+active_event: ?*ActiveEventCall,
 events: nux.ObjectPool(Event),
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
     self.active_event = null;
+    self.events = .init(self.allocator);
+
+    // Setup stages
     self.stages = .{};
     inline for (std.meta.fields(Stage)) |field| {
-        self.stages.put(@field(Stage, field.name), .empty);
+        self.stages.put(@field(Stage, field.name), .{});
     }
-    self.events = .init(self.allocator);
+    var it = self.stages.iterator();
+    while (it.next()) |entry| {
+        entry.value.queue = .empty;
+        entry.value.update = try self.create(entry.key);
+    }
 }
 pub fn deinit(self: *Self) void {
     self.events.deinit();
-    self.event_queue.deinit(self.allocator);
+
+    // Deinit stages
+    var it = self.stages.iterator();
+    while (it.next()) |entry| {
+        self.delete(entry.value.udpate_event);
+        entry.value.queue.deinit(self.allocator);
+    }
 }
 pub fn dispatch(self: *Self, stage: nux.Event.Stage) !void {
-    const event_queue = self.stages.getPtr(stage) orelse unreachable;
-    while (event_queue.popFront()) |e| {
+    const event_stage = self.stages.getPtr(stage) orelse unreachable;
+    while (event_stage.queue.popFront()) |e| {
 
         // Keep reference to event
         var active_event = ActiveEventCall{
@@ -126,10 +144,13 @@ pub fn unbind(self: *Self, id: nux.EventID, callable: nux.Callable) !void {
         }
     }
 }
-pub fn getSource(self: *Self) nux.ID {
-    if (self.active_event) |event| {}
-    const event = try self.events.get(id.index);
+// pub fn getSource(self: *Self) nux.ID {
+//     if (self.active_event) |event| {
+//         // return event.
+//     }
+//     const event = try self.events.get(id.index);
+// }
+pub fn getStageUpdate(self: *Self, stage: nux.Event.Stage) !nux.EventID {
+    const event_stage = self.stages.getPtr(stage) orelse return .null;
+    return event_stage.udpate_event;
 }
-pub fn getUpdate(self: *Self) nux.EventID {}
-pub fn getPreUpdate(self: *Self) nux.EventID {}
-pub fn getPostUpdate(self: *Self) nux.EventID {}

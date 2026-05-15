@@ -273,7 +273,7 @@ const ChildIterator = struct {
     pub fn next(it: *@This()) ?ID {
         const index = it.current;
         if (index == 0) return null;
-        const entry = it.self.entries.get(index);
+        const entry = it.self.entries.getAsserted(index);
         it.current = entry.next;
         return .{
             .index = index,
@@ -426,7 +426,7 @@ fn addEntry(self: *Self, parent: ID) !ID {
     const index: NodeIndex = @intCast(try self.entries.add(.{}));
 
     // Init node
-    const node = self.entries.get(index);
+    const node = self.entries.getAsserted(index);
     node.parent = parent.index;
     const id = ID{
         .index = index,
@@ -435,9 +435,9 @@ fn addEntry(self: *Self, parent: ID) !ID {
 
     // Update parent
     if (parent.index != 0) {
-        const p = self.entries.get(parent.index);
+        const p = self.entries.getAsserted(parent.index);
         if (p.last_child != 0) {
-            self.entries.get(p.last_child).next = index;
+            self.entries.getAsserted(p.last_child).next = index;
             node.prev = p.last_child;
             p.last_child = index;
         } else {
@@ -454,11 +454,11 @@ fn addEntry(self: *Self, parent: ID) !ID {
     return id;
 }
 fn removeEntry(self: *Self, id: ID) !void {
-    var node = self.entries.get(id.index);
+    var node = self.entries.getAsserted(id.index);
 
     // Remove from parent
     if (node.parent != 0) {
-        const p = self.entries.get(node.parent);
+        const p = self.entries.getAsserted(node.parent);
         if (p.first_child == id.index) {
             p.first_child = node.next;
         }
@@ -466,10 +466,10 @@ fn removeEntry(self: *Self, id: ID) !void {
             p.last_child = node.prev;
         }
         if (node.next != 0) {
-            self.entries.get(node.next).prev = node.prev;
+            self.entries.getAsserted(node.next).prev = node.prev;
         }
         if (node.prev != 0) {
-            self.entries.get(node.prev).next = node.next;
+            self.entries.getAsserted(node.prev).next = node.next;
         }
     }
 
@@ -481,10 +481,7 @@ pub fn getEntry(self: *Self, id: ID) !*Entry {
     if (id.isNull()) {
         return error.NullId;
     }
-    if (id.index >= self.entries.items.items.len) {
-        return error.InvalidIndex;
-    }
-    const node = self.entries.get(id.index);
+    const node = self.entries.get(id.index) orelse return error.InvalidIndex;
     if (node.version != id.version) {
         return error.InvalidVersion;
     }
@@ -557,7 +554,7 @@ pub fn getParent(self: *Self, id: ID) !ID {
     if (node.parent != 0) {
         return .{
             .index = node.parent,
-            .version = self.entries.get(node.parent).version,
+            .version = self.entries.getAsserted(node.parent).version,
         };
     }
     return error.NoParent;
@@ -627,7 +624,10 @@ fn writeEntryPath(self: *Self, entry: *Entry, writer: *std.Io.Writer) !void {
     if (entry.parent == 0) { // root node
         return;
     }
-    try self.writeEntryPath(self.entries.get(entry.parent), writer);
+    try self.writeEntryPath(
+        self.entries.getAsserted(entry.parent),
+        writer,
+    );
     _ = try writer.write("/");
     _ = try writer.write(entry.getName());
 }

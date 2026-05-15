@@ -67,7 +67,7 @@
         {
             "path": "base/Event.zig",
             "ignore": [
-                "dispatch",
+                "update",
                 "bind",
                 "unbind"
             ]

@@ -413,7 +413,7 @@ const Modules = struct {
             FunctionID,
             EnumID,
             PropertyID,
-            EventID,
+            SignalID,
         };
         if (std.meta.stringToEnum(Primitive, name)) |primitive| {
             const primitive_type: nux.Primitive.Type = switch (primitive) {
@@ -436,7 +436,7 @@ const Modules = struct {
                 Primitive.FunctionID => .function,
                 Primitive.EnumID => .enumeration,
                 Primitive.PropertyID => .property,
-                Primitive.EventID => .event,
+                Primitive.SignalID => .signal,
             };
             typ.resolved = .{ .primitive = primitive_type };
             return;

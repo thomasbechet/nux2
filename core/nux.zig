@@ -42,7 +42,7 @@ pub const ModuleID = Module.ID;
 pub const FunctionID = Function.ID;
 pub const EnumID = Enum.ID;
 pub const PropertyID = Property.ID;
-pub const EventID = Event.ID;
+pub const SignalID = Event.SignalID;
 pub const Components = Component.Components;
 pub const Writer = Node.Writer;
 pub const Reader = Node.Reader;
@@ -114,16 +114,6 @@ pub const Core = struct {
             }
         }
     }
-    fn registerStageCallback(self: *Core, phase: Stage, callable: Callable) !void {
-        var callbacks = self.stages.getPtr(phase) orelse unreachable;
-        try callbacks.append(self.platform.allocator, callable);
-    }
-    fn callStage(self: *Core, phase: Stage) !void {
-        const callbacks = self.stages.get(phase) orelse unreachable;
-        for (callbacks.items) |callback| {
-            try callback.call();
-        }
-    }
     fn register(self: *Core, comptime ModuleInfo: anytype) !void {
         const T = @field(ModuleInfo, "module");
         const module_name = @field(ModuleInfo, "name");
@@ -159,18 +149,22 @@ pub const Core = struct {
                 }
 
                 // Register callbacks
-                if (@hasDecl(T, "onPreUpdate")) {
-                    try core.registerStageCallback(.pre_update, .wrap(T, T.onPreUpdate, mod));
+                if (core.getModuleByType(Event)) |event| {
+                    if (@hasDecl(T, "onPreUpdate")) {
+                        try event.bind(event.getStageSignal(.pre_update), .wrap(T, T.onPreUpdate, mod));
+                    }
+                    if (@hasDecl(T, "onUpdate")) {
+                        try event.bind(event.getStageSignal(.update), .wrap(T, T.onUpdate, mod));
+                    }
+                    if (@hasDecl(T, "onPostUpdate")) {
+                        try event.bind(event.getStageSignal(.post_update), .wrap(T, T.onPostUpdate, mod));
+                    }
+                    if (@hasDecl(T, "onRender")) {
+                        try event.bind(event.getStageSignal(.render), .wrap(T, T.onRender, mod));
+                    }
                 }
-                if (@hasDecl(T, "onUpdate")) {
-                    try core.registerStageCallback(.update, .wrap(T, T.onUpdate, mod));
-                }
-                if (@hasDecl(T, "onPostUpdate")) {
-                    try core.registerStageCallback(.post_update, .wrap(T, T.onPostUpdate, mod));
-                }
-                if (@hasDecl(T, "onRender")) {
-                    try core.registerStageCallback(.render, .wrap(T, T.onRender, mod));
-                }
+
+                // Initialize module
                 if (@hasDecl(T, "init")) {
                     const ccore: *const Core = core;
                     try mod.init(ccore);
@@ -352,12 +346,14 @@ pub const Core = struct {
         while (i > 0) {
             i -= 1;
             const module = &self.modules.items[i];
+            self.log("STOP {s}", .{module.name});
             module.stop();
         }
         i = self.modules.items.len;
         while (i > 0) {
             i -= 1;
             const module = &self.modules.items[i];
+            self.log("DEINIT {s}", .{module.name});
             module.deinit();
         }
 
@@ -377,10 +373,8 @@ pub const Core = struct {
 
     pub fn update(self: *Core) !void {
         if (self.running) {
-            try self.callStage(.pre_update);
-            try self.callStage(.update);
-            try self.callStage(.post_update);
-            try self.callStage(.render);
+            const event = self.getModuleByType(Event) orelse unreachable;
+            try event.update();
         }
     }
 

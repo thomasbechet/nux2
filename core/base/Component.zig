@@ -46,7 +46,7 @@ pub fn Components(T: type) type {
             }
             pub fn next(self: *@This()) ?struct { component: *T, id: nux.ID } {
                 const index = self.iterator.next() orelse return null;
-                const component = self.components.data.get(index);
+                const component = self.components.data.get(index) orelse unreachable;
                 return .{
                     .component = &component.data,
                     .id = component.id,
@@ -107,7 +107,8 @@ pub fn Components(T: type) type {
             var index: Index = undefined;
             if (entry.components[self.id.index]) |previous_index| { // Reuse index
                 index = previous_index;
-                const data = &self.data.get(previous_index).data;
+                const data = &self.data.getAsserted(previous_index).data;
+
                 // Deinit previous component
                 self.deinitComponent(data);
             } else {
@@ -123,7 +124,7 @@ pub fn Components(T: type) type {
             }
             self.bitset.set(@intCast(index));
             entry.components[self.id.index] = index;
-            return &self.data.get(index).data;
+            return &self.data.getAsserted(index).data;
         }
 
         pub fn addPtr(self: *@This(), id: nux.ID) !*T {
@@ -143,7 +144,7 @@ pub fn Components(T: type) type {
             const index = entry.components[self.id.index] orelse return;
 
             // Deinit component
-            const data = &self.data.get(index).data;
+            const data = &self.data.getAsserted(index).data;
             self.deinitComponent(data);
 
             // Remove from pool
@@ -163,7 +164,7 @@ pub fn Components(T: type) type {
         pub fn getOptional(self: *@This(), id: nux.ID) ?*T {
             const entry = self.node.getEntry(id) catch return null;
             const index = entry.components[@intCast(self.id.index)] orelse return null;
-            return &self.data.get(index).data;
+            return &self.data.getAsserted(index).data;
         }
         pub fn get(self: *@This(), id: nux.ID) !*T {
             return self.getOptional(id) orelse return error.ComponentNotFound;

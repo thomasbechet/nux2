@@ -12,6 +12,7 @@ const Node = struct {
     component_data_start: usize,
     component_data_end: usize,
 };
+
 const Component = struct {
     path: []const u8 = "",
     nodes: std.ArrayList(Node) = .empty,
@@ -34,7 +35,7 @@ components: nux.Components(Component),
 node: *nux.Node,
 file: *nux.File,
 component: *nux.Component,
-ids: std.ArrayList(nux.ID), // Temporary id pool for node_index <> id mapping
+ids: std.ArrayList(nux.ID), // Temporary id pool for node_index <---> id mapping
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;

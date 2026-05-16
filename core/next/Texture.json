@@ -1,0 +1,17 @@
+{
+    "component": {
+        "name": "Texture",
+        "fields": {
+            "width": "integer",
+            "height": "integer",
+            "type": {
+                "type": "enum",
+                "values": [
+                    "nearest",
+                    "linear"
+                ]
+            }
+        }
+    },
+    "api": {}
+}

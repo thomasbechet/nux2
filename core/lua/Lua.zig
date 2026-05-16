@@ -465,7 +465,6 @@ fn openRequire(lua: *c.lua_State) !void {
     c.lua_pushcfunction(lua, require);
     c.lua_setglobal(lua, "require");
 }
-fn openEvent(lua: *c.lua_State) !void {}
 
 fn checkID(self: *Self, index: c_int) nux.ID {
     if (c.lua_isinteger(self.L, index) != 0) {
@@ -604,7 +603,6 @@ pub fn init(self: *Self, core: *const nux.Core) !void {
     c.luaL_openlibs(self.L);
     try openMath(self.L);
     try openRequire(self.L);
-    try openEvent(self.L);
 
     // Open modules api
     for (core.modules.items, 0..) |*module, id| {

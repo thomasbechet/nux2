@@ -1,0 +1,8 @@
+{
+    "name": "Transform",
+    "fields": {
+        "position": "vec3",
+        "rotation": "quat",
+        "scale": "vec3"
+    }
+}

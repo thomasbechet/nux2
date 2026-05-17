@@ -118,6 +118,13 @@ pub fn update(self: *Self) !void {
     try self.dispatch(.update);
     try self.dispatch(.post_update);
     try self.dispatch(.render);
+
+    // Clear stage queues
+    stage_it = self.stages.iterator();
+    while (stage_it.next()) |entry| {
+        entry.value.queue.head = 0;
+        entry.value.queue.len = 0;
+    }
 }
 
 pub fn createSignal(

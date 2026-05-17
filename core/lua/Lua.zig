@@ -645,6 +645,7 @@ pub fn onUpdate(self: *Self) !void {
     while (it.next()) |entry| {
         try self.callModule(entry.value_ptr.*, "onUpdate", 0);
     }
+    _ = c.lua_gc(self.L, c.LUA_GCCOLLECT);
 }
 pub fn logModules(self: *Self) !void {
     var it = self.modules.keyIterator();

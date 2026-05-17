@@ -72,6 +72,7 @@ pub const hash = @import("utils/hash.zig");
 
 pub const Platform = struct {
     pub const Allocator = std.mem.Allocator;
+    pub const System = @import("platform/System.zig");
     pub const Logger = @import("platform/Logger.zig");
     pub const Input = @import("platform/Input.zig");
     pub const Window = @import("platform/Window.zig");
@@ -83,13 +84,15 @@ pub const Platform = struct {
         requestExit,
     };
     pub const Config = struct {
-        logModuleInitialization: bool = false, // Core logging
+        logModules: bool = false, // Log modules
+        headless: bool = false, // Disable window module
         build: bool = false, // Build a cartridge
         glob: []const u8 = "*", // Glob for cartridge building
         outpout: []const u8 = "cart.bin", // Cartridge output for building
         mount: []const u8 = ".", // Entrypoint
     };
     allocator: Platform.Allocator = std.heap.page_allocator,
+    system: Platform.System = .{},
     logger: Platform.Logger = .{},
     file: Platform.File = .{},
     window: Platform.Window = .{},
@@ -108,7 +111,7 @@ pub const Core = struct {
         comptime format: []const u8,
         args: anytype,
     ) void {
-        if (self.platform.config.logModuleInitialization) {
+        if (self.platform.config.logModules) {
             if (self.getModuleByType(Logger)) |logger| {
                 logger.info(format, args);
             }
@@ -302,21 +305,21 @@ pub const Core = struct {
 
         // Create modules
         inline for (@typeInfo(modules).@"struct".decls) |mod| {
-            core.log("CREATE {s}", .{mod.name});
+            core.log("create {s}...", .{mod.name});
             const ModuleInfo = @field(modules, mod.name);
             try core.register(ModuleInfo);
         }
 
         // Start sequence
         for (core.modules.items, 0..) |*module, index| {
-            core.log("INIT {s}", .{module.name});
+            core.log("init {s}...", .{module.name});
             module.init(core, .{ .index = index }) catch |err| {
                 core.log("Failed to init {s}: {s}", .{ module.name, @errorName(err) });
                 return error.ModuleInit;
             };
         }
         for (core.modules.items) |*module| {
-            core.log("START {s}", .{module.name});
+            core.log("starting {s}...", .{module.name});
             try module.start();
         }
 
@@ -346,14 +349,14 @@ pub const Core = struct {
         while (i > 0) {
             i -= 1;
             const module = &self.modules.items[i];
-            self.log("STOP {s}", .{module.name});
+            self.log("stopping {s}...", .{module.name});
             module.stop();
         }
         i = self.modules.items.len;
         while (i > 0) {
             i -= 1;
             const module = &self.modules.items[i];
-            self.log("DEINIT {s}", .{module.name});
+            self.log("deinit {s}...", .{module.name});
             module.deinit();
         }
 
@@ -375,6 +378,10 @@ pub const Core = struct {
         if (self.running) {
             const event = self.getModuleByType(Event) orelse unreachable;
             try event.update();
+
+            if (self.platform.system.vtable.ram_usage(self.platform.system.ptr)) |usage| {
+                self.log("RAM usage: {d:.2} MB", .{ usage });
+            }
         }
     }
 

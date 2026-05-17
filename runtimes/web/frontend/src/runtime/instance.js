@@ -1,3 +1,4 @@
+import * as system from './system.js';
 import * as gpu from './gpu.js';
 import * as file from './file.js';
 import * as window from './window.js';
@@ -73,6 +74,7 @@ export async function init(cartPath) {
   }
 
   // init modules
+  system.init(core);
   window.init(core);
   await file.init(core);
   await gpu.init(core);

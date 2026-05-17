@@ -37,7 +37,7 @@ const StageQueue = struct {
     queue: nux.Deque(Event) = .empty,
 };
 
-allocator: nux.Platform.Allocator,
+allocator: std.mem.Allocator,
 logger: *nux.Logger,
 stages: std.EnumMap(Stage, StageQueue),
 active_event: ?*ActiveEvent, // null if no active event (use by getSource)

@@ -6,8 +6,8 @@ const Self = @This();
 initialized: bool = false,
 platform: nux.Platform.Logger,
 
-pub fn init(self: *Self, ctx: *const nux.Core) !void {
-    self.platform = ctx.platform.logger;
+pub fn init(self: *Self, core: *const nux.Core) !void {
+    self.platform = core.platform.logger;
     self.initialized = true;
 }
 

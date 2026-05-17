@@ -39,11 +39,9 @@ pub fn parseArgs(args: std.process.ArgIterator) !nux.Platform.Config {
 pub fn main() !void {
 
     // Create allocator
-    var gpa: std.heap.DebugAllocator(.{
-        .stack_trace_frames = 10,
-    }) = .init;
-    const allocator = gpa.allocator();
-    defer _ = gpa.deinit();
+    var system: System = .init();
+    defer system.deinit();
+    const allocator = system.gpa.allocator();
 
     // Init window
     var window: Window = .init();
@@ -59,9 +57,9 @@ pub fn main() !void {
 
     // Configure platform
     const platform = nux.Platform{
-        .allocator = allocator,
-        .system = System.platform,
         .config = config,
+        .allocator = allocator,
+        .system = system.platform(),
         .window = window.platform(),
         .gpu = gpu.platform(),
     };

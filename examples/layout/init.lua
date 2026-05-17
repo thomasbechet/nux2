@@ -34,7 +34,6 @@ function M:onInit()
     --     { 52, 83, 8, 7 },
     --     { 52, 83, 8, 7 })
 
-
     -- Create UI
     self.ui = Node.createPath(Node.getRoot(), "ui")
     Component.add(self.ui, Viewport)
@@ -51,9 +50,11 @@ function M:onInit()
     self.label = createWidget(self.ui, Label)
     Label.setScale(self.label, 5)
     Widget.setBackgroundColor(self.label, Math.vec4(0, 0, 0, 1))
-    self.time = 0
 
-    Node.dump(Node.getRoot())
+    self.time = createWidget(self.ui, Label)
+    Label.setScale(self.time, 5)
+    Widget.setBackgroundColor(self.time, Math.vec4(0, 0, 0, 1))
+    Widget.setPadding(self.time, Math.vec4(10))
 
     local modulecount = Module.count()
     for m = 0, modulecount - 1 do
@@ -80,6 +81,6 @@ function M:onInit()
 end
 
 function M:onUpdate()
-    self.time = self.time + 1
-    Label.setText(self.label, self.time)
+    Label.setText(self.label, string.format("%.2f", System.getMemoryUsage()))
+    Label.setText(self.time, System.getTimestamp())
 end

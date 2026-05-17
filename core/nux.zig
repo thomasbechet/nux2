@@ -16,6 +16,7 @@ pub const File = @import("base/File.zig");
 pub const Cart = @import("base/Cart.zig");
 pub const Transform = @import("base/Transform.zig");
 pub const DataFrame = @import("base/DataFrame.zig");
+pub const System = @import("base/System.zig");
 pub const Input = @import("input/Input.zig");
 pub const InputMap = @import("input/InputMap.zig");
 pub const Lua = @import("lua/Lua.zig");
@@ -71,7 +72,15 @@ pub const ObjectPool = @import("utils/ObjectPool.zig").ObjectPool;
 pub const hash = @import("utils/hash.zig");
 
 pub const Platform = struct {
-    pub const Allocator = std.mem.Allocator;
+    pub const Config = struct {
+        logModules: bool = false, // Log modules
+        headless: bool = false, // Disable window module
+        build: bool = false, // Build a cartridge
+        glob: []const u8 = "*", // Glob for cartridge building
+        outpout: []const u8 = "cart.bin", // Cartridge output for building
+        mount: []const u8 = ".", // Entrypoint
+    };
+
     pub const System = @import("platform/System.zig");
     pub const Logger = @import("platform/Logger.zig");
     pub const Input = @import("platform/Input.zig");
@@ -83,22 +92,15 @@ pub const Platform = struct {
         windowResized: Platform.Window.WindowResized,
         requestExit,
     };
-    pub const Config = struct {
-        logModules: bool = false, // Log modules
-        headless: bool = false, // Disable window module
-        build: bool = false, // Build a cartridge
-        glob: []const u8 = "*", // Glob for cartridge building
-        outpout: []const u8 = "cart.bin", // Cartridge output for building
-        mount: []const u8 = ".", // Entrypoint
-    };
-    allocator: Platform.Allocator = std.heap.page_allocator,
+
+    config: Platform.Config = .{},
+
+    allocator: std.mem.Allocator = std.heap.page_allocator,
     system: Platform.System = .{},
     logger: Platform.Logger = .{},
     file: Platform.File = .{},
     window: Platform.Window = .{},
     gpu: Platform.GPU = .{},
-
-    config: Platform.Config = .{},
 };
 
 pub const Core = struct {
@@ -379,8 +381,8 @@ pub const Core = struct {
             const event = self.getModuleByType(Event) orelse unreachable;
             try event.update();
 
-            if (self.platform.system.vtable.ram_usage(self.platform.system.ptr)) |usage| {
-                self.log("RAM usage: {d:.2} MB", .{ usage });
+            if (self.platform.system.vtable.memory_usage(self.platform.system.ptr)) |usage| {
+                self.log("RAM usage: {d:.2} MB", .{usage});
             }
         }
     }

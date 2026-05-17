@@ -1,5 +1,6 @@
 const std = @import("std");
 const nux = @import("nux");
+const System = @import("System.zig");
 const Logger = @import("Logger.zig");
 const File = @import("File.zig");
 const Window = @import("Window.zig");
@@ -10,6 +11,13 @@ var core: *nux.Core = undefined;
 export fn runtime_init() void {
     core = nux.Core.init(.{
         .allocator = std.heap.wasm_allocator,
+        .system = .{
+            .ptr = undefined,
+            .vtable = &.{
+                .timestamp = System.timestamp,
+                .memory_usage = System.memoryUsage,
+            },
+        },
         .logger = .{
             .ptr = undefined,
             .vtable = &.{
@@ -56,7 +64,7 @@ export fn runtime_init() void {
         },
         .config = .{
             .mount = "cart.bin",
-            .logModuleInitialization = true,
+            .logModules = true,
         },
     }) catch return;
 }

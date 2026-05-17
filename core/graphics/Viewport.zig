@@ -24,7 +24,7 @@ pub const Component = struct {
     }
 };
 
-allocator: nux.Platform.Allocator,
+allocator: std.mem.Allocator,
 node: *nux.Node,
 texture: *nux.Texture,
 gpu: *nux.GPU,

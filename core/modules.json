@@ -62,7 +62,7 @@
             ]
         },
         {
-            "path": "base/Scene.zig"
+            "path": "base/Prefab.zig"
         },
         {
             "path": "base/Event.zig",

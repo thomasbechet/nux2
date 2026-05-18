@@ -384,7 +384,7 @@ root: ID,
 component: *nux.Component,
 file: *nux.File,
 logger: *nux.Logger,
-scene: *nux.Scene,
+prefab: *nux.Prefab,
 
 pub fn init(self: *Self, core: *const nux.Core) !void {
     self.allocator = core.platform.allocator;
@@ -512,7 +512,7 @@ pub fn createPath(self: *Self, base: ID, path: []const u8) !ID {
 }
 
 pub fn createInstanceOf(self: *Self, parent: ID, collection: ID) !ID {
-    return self.scene.instantiate(collection, parent);
+    return self.prefab.instantiate(collection, parent);
 }
 
 pub fn delete(self: *Self, id: ID) !void {

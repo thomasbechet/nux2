@@ -18,8 +18,8 @@ end
 
 function M:onInit()
     -- Gltf.loadGltf(Node.getRoot(), "industrial.glb")
-    -- local c = Scene.exportNode(Node.getRoot(), Node.getRoot())
-    -- Scene.instantiate(c, Node.getRoot())
+    -- local c = Prefab.exportNode(Node.getRoot(), Node.getRoot())
+    -- Prefab.instantiate(c, Node.getRoot())
     -- Node.dump(Node.getRoot())
 
     -- local gui = GUI.add(Node.getRoot())

@@ -1,4 +1,4 @@
-- [ ] Rename Scene to Prefab
+- [x] Rename Scene to Prefab
 - [ ] Load Prefab from json
 - [ ] Simplify node creation API (using path to detect parent / named / unamed)
 - [ ] Event API

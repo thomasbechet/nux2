@@ -17,12 +17,6 @@ const Component = struct {
             mod.gpu.vertex_span_allocator.free(span) catch {};
         }
     }
-    pub fn description(self: *const @This(), _: *Self, w: *std.Io.Writer) !void {
-        try w.print("{d} vertices ", .{self.vertices.items.len});
-        if (self.span) |span| {
-            try w.print("[{d}-{d}]", .{ span.offset, span.offset + span.length });
-        }
-    }
 
     fn initCapacity(allocator: std.mem.Allocator, capa: usize, primitive: nux.Vertex.Primitive, attributes: nux.Vertex.Attributes) !@This() {
         var node = @This(){

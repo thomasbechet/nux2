@@ -1,0 +1,8 @@
+{
+    "Transform": {
+        "Position": [ 0, 0, 0 ]
+    },
+    "StaticMesh": {
+        "Mesh": "/meshes/cubeMesh"
+    }
+}

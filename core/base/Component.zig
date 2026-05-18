@@ -19,7 +19,6 @@ pub const VTable = struct {
     has: *const fn (*anyopaque, id: nux.ID) bool,
     load: *const fn (*anyopaque, id: nux.ID, reader: *nux.Reader) anyerror!void,
     save: *const fn (*anyopaque, id: nux.ID, writer: *nux.Writer) anyerror!void,
-    description: *const fn (*anyopaque, id: nux.ID, w: *std.Io.Writer) anyerror!void,
 };
 
 pub fn Components(T: type) type {
@@ -179,12 +178,6 @@ pub fn Components(T: type) type {
             const data = try self.get(id);
             if (@hasDecl(T, "save")) {
                 try data.save(@fieldParentPtr(module_components_field, self), writer);
-            }
-        }
-        pub fn description(self: *@This(), id: nux.ID, writer: *std.Io.Writer) !void {
-            const data = try self.get(id);
-            if (@hasDecl(T, "description")) {
-                try data.description(@fieldParentPtr(module_components_field, self), writer);
             }
         }
     };

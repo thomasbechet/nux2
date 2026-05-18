@@ -1,7 +1,9 @@
+- [ ] Rename Scene to Prefab
+- [ ] Load Prefab from json
+- [ ] Simplify node creation API (using path to detect parent / named / unamed)
 - [ ] Event API
 - [ ] UI Stylesheet
 - [ ] Simplify ModuleID / FunctionID / PropertyID
-- [ ] Simplify node creation API
 - [ ] YAML parser or modules.json instead of JSON
 - [ ] GPU API : transfer buffers using slices (no need size)
 - [ ] Handle node instancing

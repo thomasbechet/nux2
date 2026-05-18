@@ -72,12 +72,6 @@ const Component = struct {
             });
         }
     }
-    pub fn description(self: *Component, _: *Self, w: *std.Io.Writer) !void {
-        try w.print("{d}x{d} ", .{ self.info.width, self.info.height });
-        if (self.path) |path| {
-            try w.print("{s}", .{path});
-        }
-    }
 
     fn initTransparent(mod: *Self, width: u32, height: u32) !Component {
         const texture = Component{

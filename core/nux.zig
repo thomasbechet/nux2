@@ -247,10 +247,6 @@ pub const Core = struct {
                     const mod: *T = @ptrCast(@alignCast(pointer));
                     try @field(mod, Component.module_components_field).save(id, writer);
                 }
-                fn description(pointer: *anyopaque, id: ID, writer: *std.Io.Writer) !void {
-                    const mod: *T = @ptrCast(@alignCast(pointer));
-                    try @field(mod, Component.module_components_field).description(id, writer);
-                }
             };
             module.v_component = .{
                 .init = component_gen.init,
@@ -260,7 +256,6 @@ pub const Core = struct {
                 .has = component_gen.has,
                 .save = component_gen.save,
                 .load = component_gen.load,
-                .description = component_gen.description,
             };
         }
 

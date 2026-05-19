@@ -780,30 +780,54 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
 
         // map: property name -> { getter?, setter? }
         var props = std.StringHashMap(struct {
+            type: ?AstIter.Type = null,
             getter: ?[]const u8 = null,
             setter: ?[]const u8 = null,
         }).init(alloc);
         defer props.deinit();
 
         // First pass: collect
-        while (function_it.next()) |function| {
-            const name = function.key_ptr.*;
+        if (module.is_component_module) {
+            while (function_it.next()) |function| {
+                const name = function.key_ptr.*;
 
-            if (std.mem.startsWith(u8, name, "get") or
-                std.mem.startsWith(u8, name, "set"))
-            {
-                const is_get = std.mem.startsWith(u8, name, "get");
-                const prop_name = name[3..];
+                if (std.mem.startsWith(u8, name, "get") or
+                    std.mem.startsWith(u8, name, "set"))
+                {
+                    const is_get = std.mem.startsWith(u8, name, "get");
+                    const prop_name = name[3..];
 
-                var entry = try props.getOrPut(prop_name);
-                if (!entry.found_existing) {
-                    entry.value_ptr.* = .{};
-                }
+                    var match = true;
 
-                if (is_get) {
-                    entry.value_ptr.getter = name;
-                } else {
-                    entry.value_ptr.setter = name;
+                    const func = function.value_ptr;
+                    var typ: ?AstIter.Type = null;
+                    if (is_get) {
+                        match = match and func.params.len == 1;
+                        const param0 = func.params[0].typ.resolved.?;
+                        match = match and param0 == .primitive and param0.primitive == .id;
+                        match = match and func.ret != null;
+                        typ = func.ret.?;
+                    } else {
+                        match = match and func.params.len == 2;
+                        const param0 = func.params[0].typ.resolved.?;
+                        match = match and param0 == .primitive and param0.primitive == .id;
+                        match = match and func.ret == null;
+                        typ = func.params[1].typ;
+                    }
+
+                    if (match) {
+                        var entry = try props.getOrPut(prop_name);
+                        if (!entry.found_existing) {
+                            entry.value_ptr.* = .{};
+                        }
+
+                        entry.value_ptr.type = typ;
+                        if (is_get) {
+                            entry.value_ptr.getter = name;
+                        } else {
+                            entry.value_ptr.setter = name;
+                        }
+                    }
                 }
             }
         }
@@ -815,6 +839,17 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
             const value = entry.value_ptr.*;
 
             try writer.print("\t\tpub const {s} = struct {{\n", .{prop});
+
+            switch (value.type.?.resolved.?) {
+                .primitive => |primitive| {
+                    try writer.print("\t\t\tpub const typ: nux.Primitive.Type = .{s};\n", .{@tagName(
+                        primitive,
+                    )});
+                },
+                .@"enum" => |_| {
+                    try writer.print("\t\t\tpub const typ: nux.Primitive.Type = .enumeration;\n", .{});
+                },
+            }
 
             if (value.getter) |g| {
                 try writer.print("\t\t\tpub const name = {s}.Functions.{s}.Name[3..];\n", .{

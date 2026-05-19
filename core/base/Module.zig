@@ -30,12 +30,14 @@ pub const Module = struct {
     v_component: ?nux.Component.VTable = null,
     functions: std.ArrayList(nux.Function.Type),
     enums: std.ArrayList(nux.Enum.Type),
+    properties: std.StringHashMap(nux.Property.Type),
 
     pub fn destroy(self: *@This(), allocator: std.mem.Allocator) void {
         if (self.state == .created) {
             self.v_module.destroy(self.v_ptr, allocator);
             self.functions.deinit(allocator);
             self.enums.deinit(allocator);
+            self.properties.deinit();
         }
     }
     pub fn init(self: *@This(), core: *nux.Core, id: nux.ModuleID) !void {

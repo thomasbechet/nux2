@@ -26,22 +26,18 @@ pub const Type = struct {
         comptime T: type,
         comptime V: type,
         comptime name: []const u8,
-        getter: *const fn (*T, id: nux.ID) anyerror!V,
-        setter: *const fn (*T, id: nux.ID, value: V) anyerror!void,
+        getter: anytype,
+        setter: anytype,
     ) Type {
-        _ = setter;
-        _ = getter;
-
         const gen = struct {
             fn get(module: *anyopaque, id: nux.ID) anyerror!nux.Primitive.Value {
-                _ = module;
-                _ = id;
-                return undefined;
+                const mod: *T = @ptrCast(@alignCast(module));
+                const val = try getter(mod, id);
+                return nux.Primitive.Value.from(V, val);
             }
             fn set(module: *anyopaque, id: nux.ID, value: nux.Primitive.Value) anyerror!void {
-                _ = module;
-                _ = id;
-                _ = value;
+                const mod: *T = @ptrCast(@alignCast(module));
+                try setter(mod, id, nux.Primitive.Value.into(value, V));
             }
         };
 

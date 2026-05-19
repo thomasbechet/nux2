@@ -129,6 +129,7 @@ pub const Core = struct {
         module.v_ptr = try self.platform.allocator.create(T);
         module.functions = .empty;
         module.enums = .empty;
+        module.properties = .empty;
         module.state = .created;
         module.v_component = null;
 
@@ -293,16 +294,26 @@ pub const Core = struct {
             ));
         }
 
-        // Register properties
-        const Properties = @field(ModuleInfo, "Properties");
-        inline for (@typeInfo(Properties).@"struct".decls) |prop_decl| {
-            const PropertyInfo = @field(Properties, prop_decl.name);
-            const name = @field(PropertyInfo, "name");
-            const typ = @field(PropertyInfo, "typ");
-            const getter = @field(PropertyInfo, "getter");
-            const setter = @field(PropertyInfo, "setter");
-            try module.properties.put(name, .init(T, typ, name, getter, setter));
-        }
+        // // Register properties
+        // const Properties = @field(ModuleInfo, "Properties");
+        // inline for (@typeInfo(Properties).@"struct".decls) |prop_decl| {
+        //     const PropertyInfo = @field(Properties, prop_decl.name);
+        //     const name = @field(PropertyInfo, "name");
+        //     const getter = @field(PropertyInfo, "getter");
+        //     const setter = @field(PropertyInfo, "setter");
+        //     const EV = @typeInfo(@TypeOf(getter)).@"fn".return_type.?;
+        //     const V = @typeInfo(EV).error_union.payload;
+        //     try module.properties.append(
+        //         self.platform.allocator,
+        //         .init(
+        //             T,
+        //             V,
+        //             name,
+        //             getter,
+        //             setter,
+        //         ),
+        //     );
+        // }
     }
 
     pub fn init(platform: Platform) !*Core {

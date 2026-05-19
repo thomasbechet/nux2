@@ -840,19 +840,8 @@ fn generateAPI(alloc: Allocator, writer: *std.Io.Writer, modules: *const Modules
 
             try writer.print("\t\tpub const {s} = struct {{\n", .{prop});
 
-            switch (value.type.?.resolved.?) {
-                .primitive => |primitive| {
-                    try writer.print("\t\t\tpub const typ: nux.Primitive.Type = .{s};\n", .{@tagName(
-                        primitive,
-                    )});
-                },
-                .@"enum" => |_| {
-                    try writer.print("\t\t\tpub const typ: nux.Primitive.Type = .enumeration;\n", .{});
-                },
-            }
-
             if (value.getter) |g| {
-                try writer.print("\t\t\tpub const name = {s}.Functions.{s}.Name[3..];\n", .{
+                try writer.print("\t\t\tpub const name = {s}.Functions.{s}.name[3..];\n", .{
                     module.name,
                     g,
                 });

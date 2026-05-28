@@ -1,0 +1,1 @@
+https://www.reddit.com/r/gameenginedevs/comments/1prxyit/game_architecture_that_is_not_ecs_or_oop/

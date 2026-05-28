@@ -197,7 +197,7 @@ const Property = struct {
     type: TypeValue,
 };
 
-const Component = struct {
+const Object = struct {
     name: []const u8,
     properties: std.ArrayList(Property),
 };
@@ -221,14 +221,14 @@ const Function = struct {
 pub const Database = struct {
     allocator: std.mem.Allocator,
     enumerations: std.ArrayList(Enumeration),
-    components: std.ArrayList(Component),
+    objects: std.ArrayList(Object),
     modules: std.ArrayList(Module),
 
     pub fn init(allocator: std.mem.Allocator) Database {
         return .{
             .allocator = allocator,
             .enumerations = .empty,
-            .components = .empty,
+            .objects = .empty,
             .modules = .empty,
         };
     }
@@ -238,10 +238,10 @@ pub const Database = struct {
             enumeration.values.deinit(self.allocator);
         }
         self.enumerations.deinit(self.allocator);
-        for (self.components.items) |*component| {
+        for (self.objects.items) |*component| {
             component.properties.deinit(self.allocator);
         }
-        self.components.deinit(self.allocator);
+        self.objects.deinit(self.allocator);
         for (self.modules.items) |*module| {
             for (module.functions.items) |*function| {
                 function.parameters.deinit(self.allocator);
@@ -291,11 +291,11 @@ pub const Database = struct {
         }
 
         // Components
-        for (self.components.items) |component| {
-            std.log.info("component {s}", .{component.name});
+        for (self.objects.items) |object| {
+            std.log.info("object {s}", .{object.name});
 
             // Properties
-            for (component.properties.items) |property| {
+            for (object.properties.items) |property| {
                 std.log.info("   property {s} {}", .{ property.name, property.type });
             }
         }
@@ -344,7 +344,7 @@ pub const Database = struct {
         });
     }
 
-    pub fn registerComponent(
+    pub fn registerObject(
         self: *Database,
         T: type,
         comptime properties: anytype,
@@ -362,7 +362,7 @@ pub const Database = struct {
             });
         }
 
-        try self.components.append(self.allocator, .{
+        try self.objects.append(self.allocator, .{
             .name = shortTypeName(T),
             .properties = props,
         });
@@ -422,17 +422,16 @@ pub const Database = struct {
     }
 };
 
-const MyComponent = struct {
+const MyObject = struct {
     position: [3]f32,
     scale: [3]f32,
 
     const properties = struct {
-        position: .{}, 
+        position: .{},
     };
 };
 
 const MyModule = struct {
-
     fn loadTexture(self: *MyModule) !void {
         _ = self;
     }
@@ -461,7 +460,7 @@ test "database" {
     defer database.deinit();
     try database.registerEnumeration(Type);
     try database.registerEnumeration(MyEnum);
-    try database.registerComponent(MyComponent, .{
+    try database.registerObject(MyObject, .{
         .position = .{},
         .scale = .{},
     });

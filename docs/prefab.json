@@ -1,0 +1,16 @@
+{
+    "objects": [
+        {
+            "type": "Transform"
+        },
+        {
+            "type": "Model",
+            "mesh": "playerMesh"
+        },
+        {
+            "type": "Mesh",
+            "id": "playerMesh",
+            "source": "player.gltf"
+        }
+    ]
+}

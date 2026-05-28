@@ -425,17 +425,12 @@ pub const Database = struct {
 const MyObject = struct {
     position: [3]f32,
     scale: [3]f32,
-
-    const properties = struct {
-        position: .{},
-    };
 };
 
 const MyModule = struct {
     fn loadTexture(self: *MyModule) !void {
         _ = self;
     }
-
     fn computeValue(self: *MyModule, param: f32) u32 {
         _ = self;
         _ = param;

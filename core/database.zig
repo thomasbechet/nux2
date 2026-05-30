@@ -6,14 +6,16 @@ const PropertyID = usize;
 const ModuleID = usize;
 const FunctionID = usize;
 
+const Self = @This();
+
 const Type = enum {
+    id,
     bool,
     u32,
     f32,
     vec3,
     quat,
-    entity,
-    component,
+    object,
     property,
     enumeration,
     function,
@@ -37,8 +39,8 @@ const Type = enum {
             .f32 => f32,
             .vec3 => [3]f32,
             .quat => [4]f32,
-            .entity => u32,
-            .component => ComponentID,
+            .id => u32,
+            .object => ComponentID,
             .property => PropertyID,
             .enumeration => EnumerationID,
             .function => FunctionID,
@@ -218,240 +220,238 @@ const Function = struct {
     parameters: std.ArrayList(Parameter),
 };
 
-pub const Database = struct {
-    allocator: std.mem.Allocator,
-    enumerations: std.ArrayList(Enumeration),
-    objects: std.ArrayList(Object),
-    modules: std.ArrayList(Module),
+allocator: std.mem.Allocator,
+enumerations: std.ArrayList(Enumeration),
+objects: std.ArrayList(Object),
+modules: std.ArrayList(Module),
 
-    pub fn init(allocator: std.mem.Allocator) Database {
-        return .{
-            .allocator = allocator,
-            .enumerations = .empty,
-            .objects = .empty,
-            .modules = .empty,
-        };
+pub fn init(allocator: std.mem.Allocator) Self {
+    return .{
+        .allocator = allocator,
+        .enumerations = .empty,
+        .objects = .empty,
+        .modules = .empty,
+    };
+}
+pub fn deinit(self: *Self) void {
+    for (self.enumerations.items) |*enumeration| {
+        enumeration.names.deinit(self.allocator);
+        enumeration.values.deinit(self.allocator);
     }
-    pub fn deinit(self: *Database) void {
-        for (self.enumerations.items) |*enumeration| {
-            enumeration.names.deinit(self.allocator);
-            enumeration.values.deinit(self.allocator);
-        }
-        self.enumerations.deinit(self.allocator);
-        for (self.objects.items) |*component| {
-            component.properties.deinit(self.allocator);
-        }
-        self.objects.deinit(self.allocator);
-        for (self.modules.items) |*module| {
-            for (module.functions.items) |*function| {
-                function.parameters.deinit(self.allocator);
-            }
-            module.functions.deinit(self.allocator);
-        }
-        self.modules.deinit(self.allocator);
+    self.enumerations.deinit(self.allocator);
+    for (self.objects.items) |*component| {
+        component.properties.deinit(self.allocator);
     }
-
-    fn findEnumeration(self: *const Database, name: []const u8) ?EnumerationID {
-        for (self.enumerations.items, 0..) |enumeration, index| {
-            if (std.mem.eql(u8, enumeration.name, name)) {
-                return index;
-            }
+    self.objects.deinit(self.allocator);
+    for (self.modules.items) |*module| {
+        for (module.functions.items) |*function| {
+            function.parameters.deinit(self.allocator);
         }
-        return null;
+        module.functions.deinit(self.allocator);
     }
+    self.modules.deinit(self.allocator);
+}
 
-    fn findModule(self: *const Database, name: []const u8) ?ModuleID {
-        for (self.modules.items, 0..) |module, index| {
-            if (std.mem.eql(u8, module.name, name)) {
-                return index;
-            }
+fn findEnumeration(self: *const Self, name: []const u8) ?EnumerationID {
+    for (self.enumerations.items, 0..) |enumeration, index| {
+        if (std.mem.eql(u8, enumeration.name, name)) {
+            return index;
         }
-        return null;
     }
+    return null;
+}
 
-    fn getType(self: *const Database, comptime T: type) !TypeValue {
-        return switch (@typeInfo(T)) {
-            .@"enum" => .{
-                .enumeration = self.findEnumeration(shortTypeName(T)) orelse return error.EnumerationNotFound,
-            },
-            else => return .{ .type = Type.fromPrimitive(T) },
-        };
+fn findModule(self: *const Self, name: []const u8) ?ModuleID {
+    for (self.modules.items, 0..) |module, index| {
+        if (std.mem.eql(u8, module.name, name)) {
+            return index;
+        }
     }
+    return null;
+}
 
-    pub fn dump(self: *Database) void {
+fn getType(self: *const Self, comptime T: type) !TypeValue {
+    return switch (@typeInfo(T)) {
+        .@"enum" => .{
+            .enumeration = self.findEnumeration(shortTypeName(T)) orelse return error.EnumerationNotFound,
+        },
+        else => return .{ .type = Type.fromPrimitive(T) },
+    };
+}
 
-        // Enumerations
-        for (self.enumerations.items) |enumeration| {
-            std.log.info("enumeration {s}", .{enumeration.name});
+pub fn dump(self: *Self) void {
 
-            // Values
-            for (enumeration.names.items, 0..) |name, index| {
-                std.log.info("   value {s} {any}", .{ name, enumeration.values.get(index) });
-            }
-        }
+    // Enumerations
+    for (self.enumerations.items) |enumeration| {
+        std.log.info("enumeration {s}", .{enumeration.name});
 
-        // Components
-        for (self.objects.items) |object| {
-            std.log.info("object {s}", .{object.name});
-
-            // Properties
-            for (object.properties.items) |property| {
-                std.log.info("   property {s} {}", .{ property.name, property.type });
-            }
-        }
-
-        // Modules
-        for (self.modules.items) |module| {
-            std.log.info("module {s}", .{module.name});
-
-            // Functions
-            for (module.functions.items) |function| {
-                std.log.info("   function {s} {any}", .{ function.name, function.return_type });
-                // Parameters
-                for (function.parameters.items) |parameter| {
-                    std.log.info("      param {s} {any}", .{ parameter.name, parameter.type });
-                }
-            }
+        // Values
+        for (enumeration.names.items, 0..) |name, index| {
+            std.log.info("   value {s} {any}", .{ name, enumeration.values.get(index) });
         }
     }
 
-    pub fn registerEnumeration(
-        self: *Database,
-        T: type,
-    ) !void {
-        const tag_type: Type =
-            switch (@typeInfo(@typeInfo(T).@"enum".tag_type)) {
-                .comptime_int => .u32,
-                .comptime_float => .f32,
-                .int => .u32,
-                .float => .f32,
-                else => @compileError("Unsupported union type " ++ @typeName(T)),
-            };
-        const fields = @typeInfo(T).@"enum".fields;
-        var names: std.ArrayList([]const u8) = try .initCapacity(self.allocator, fields.len);
-        errdefer names.deinit(self.allocator);
-        var values: ArrayListValue = try .initCapacity(tag_type, self.allocator, fields.len);
-        errdefer values.deinit(self.allocator);
-        inline for (fields) |field| {
-            names.appendAssumeCapacity(field.name);
+    // Components
+    for (self.objects.items) |object| {
+        std.log.info("object {s}", .{object.name});
 
-            @field(values.union_value, @tagName(tag_type)).appendAssumeCapacity(field.value);
+        // Properties
+        for (object.properties.items) |property| {
+            std.log.info("   property {s} {}", .{ property.name, property.type });
         }
-        try self.enumerations.append(self.allocator, .{
-            .name = shortTypeName(T),
-            .names = names,
-            .values = values,
-        });
     }
 
-    pub fn registerObject(
-        self: *Database,
-        T: type,
-        comptime properties: anytype,
-    ) !void {
-        const fields = @typeInfo(@TypeOf(properties)).@"struct".fields;
-        var props: std.ArrayList(Property) = try .initCapacity(self.allocator, fields.len);
-        errdefer props.deinit(self.allocator);
+    // Modules
+    for (self.modules.items) |module| {
+        std.log.info("module {s}", .{module.name});
 
-        // Iterate properties
-        inline for (fields) |field| {
-            const field_type = @FieldType(T, field.name);
-            try props.append(self.allocator, .{
-                .name = field.name,
-                .type = try self.getType(field_type),
-            });
-        }
-
-        try self.objects.append(self.allocator, .{
-            .name = shortTypeName(T),
-            .properties = props,
-        });
-    }
-
-    pub fn registerModule(
-        self: *Database,
-        T: type,
-        comptime functions: anytype,
-    ) !void {
-        const fields = @typeInfo(@TypeOf(functions)).@"struct".fields;
-        var funcs: std.ArrayList(Function) = try .initCapacity(self.allocator, fields.len);
-        errdefer funcs.deinit(self.allocator);
-
-        // Iterate properties
-        inline for (fields) |field| {
-
-            // Return type
-            const func_type = @TypeOf(@field(T, field.name));
-            var return_type: ?Type = null;
-            if (@typeInfo(func_type).@"fn".return_type) |typ| {
-                const RetType = switch (@typeInfo(typ)) {
-                    .error_union => |error_union| error_union.payload,
-                    else => typ,
-                };
-                if (@typeInfo(RetType) != .void) {
-                    return_type = .fromPrimitive(RetType);
-                }
-            }
-
+        // Functions
+        for (module.functions.items) |function| {
+            std.log.info("   function {s} {any}", .{ function.name, function.return_type });
             // Parameters
-            const params = @typeInfo(func_type).@"fn".params;
-            var parameters: std.ArrayList(Parameter) = try .initCapacity(self.allocator, params.len);
-            errdefer parameters.deinit(self.allocator);
-            inline for (params[1..]) |param| {
-                if (param.type) |param_type| {
-                    // const ParamType = @typeInfo(param_type);
-                    parameters.appendAssumeCapacity(.{
-                        .name = "",
-                        .type = try self.getType(param_type),
-                    });
-                }
+            for (function.parameters.items) |parameter| {
+                std.log.info("      param {s} {any}", .{ parameter.name, parameter.type });
             }
-
-            // Append function
-            try funcs.append(self.allocator, .{
-                .name = field.name,
-                .return_type = return_type,
-                .parameters = parameters,
-            });
         }
+    }
+}
 
-        try self.modules.append(self.allocator, .{
-            .name = shortTypeName(T),
-            .functions = funcs,
+pub fn registerEnumeration(
+    self: *Self,
+    T: type,
+) !void {
+    const tag_type: Type =
+        switch (@typeInfo(@typeInfo(T).@"enum".tag_type)) {
+            .comptime_int => .u32,
+            .comptime_float => .f32,
+            .int => .u32,
+            .float => .f32,
+            else => @compileError("Unsupported union type " ++ @typeName(T)),
+        };
+    const fields = @typeInfo(T).@"enum".fields;
+    var names: std.ArrayList([]const u8) = try .initCapacity(self.allocator, fields.len);
+    errdefer names.deinit(self.allocator);
+    var values: ArrayListValue = try .initCapacity(tag_type, self.allocator, fields.len);
+    errdefer values.deinit(self.allocator);
+    inline for (fields) |field| {
+        names.appendAssumeCapacity(field.name);
+
+        @field(values.union_value, @tagName(tag_type)).appendAssumeCapacity(field.value);
+    }
+    try self.enumerations.append(self.allocator, .{
+        .name = shortTypeName(T),
+        .names = names,
+        .values = values,
+    });
+}
+
+pub fn registerObject(
+    self: *Self,
+    T: type,
+    comptime properties: anytype,
+) !void {
+    const fields = @typeInfo(@TypeOf(properties)).@"struct".fields;
+    var props: std.ArrayList(Property) = try .initCapacity(self.allocator, fields.len);
+    errdefer props.deinit(self.allocator);
+
+    // Iterate properties
+    inline for (fields) |field| {
+        const field_type = @FieldType(T, field.name);
+        try props.append(self.allocator, .{
+            .name = field.name,
+            .type = try self.getType(field_type),
         });
     }
-};
 
-const MyObject = struct {
-    position: [3]f32,
-    scale: [3]f32,
-};
+    try self.objects.append(self.allocator, .{
+        .name = shortTypeName(T),
+        .properties = props,
+    });
+}
 
-const MyModule = struct {
-    fn loadTexture(self: *MyModule) !void {
-        _ = self;
-    }
-    fn computeValue(self: *MyModule, param: f32) u32 {
-        _ = self;
-        _ = param;
-        return 0;
-    }
-    fn getComponentIndex(self: *MyModule, comp: MyEnum) !u32 {
-        _ = self;
-        _ = comp;
-        return 0;
-    }
-};
+pub fn registerModule(
+    self: *Self,
+    T: type,
+    comptime functions: anytype,
+) !void {
+    const fields = @typeInfo(@TypeOf(functions)).@"struct".fields;
+    var funcs: std.ArrayList(Function) = try .initCapacity(self.allocator, fields.len);
+    errdefer funcs.deinit(self.allocator);
 
-const MyEnum = enum {
-    a,
-    b,
-    c,
-};
+    // Iterate properties
+    inline for (fields) |field| {
+
+        // Return type
+        const func_type = @TypeOf(@field(T, field.name));
+        var return_type: ?Type = null;
+        if (@typeInfo(func_type).@"fn".return_type) |typ| {
+            const RetType = switch (@typeInfo(typ)) {
+                .error_union => |error_union| error_union.payload,
+                else => typ,
+            };
+            if (@typeInfo(RetType) != .void) {
+                return_type = .fromPrimitive(RetType);
+            }
+        }
+
+        // Parameters
+        const params = @typeInfo(func_type).@"fn".params;
+        var parameters: std.ArrayList(Parameter) = try .initCapacity(self.allocator, params.len);
+        errdefer parameters.deinit(self.allocator);
+        inline for (params[1..]) |param| {
+            if (param.type) |param_type| {
+                // const ParamType = @typeInfo(param_type);
+                parameters.appendAssumeCapacity(.{
+                    .name = "",
+                    .type = try self.getType(param_type),
+                });
+            }
+        }
+
+        // Append function
+        try funcs.append(self.allocator, .{
+            .name = field.name,
+            .return_type = return_type,
+            .parameters = parameters,
+        });
+    }
+
+    try self.modules.append(self.allocator, .{
+        .name = shortTypeName(T),
+        .functions = funcs,
+    });
+}
 
 test "database" {
+    const MyObject = struct {
+        position: [3]f32,
+        scale: [3]f32,
+    };
+
+    const MyEnum = enum {
+        a,
+        b,
+        c,
+    };
+
+    const MyModule = struct {
+        fn loadTexture(self: *@This()) !void {
+            _ = self;
+        }
+        fn computeValue(self: *@This(), param: f32) u32 {
+            _ = self;
+            _ = param;
+            return 0;
+        }
+        fn getComponentIndex(self: *@This(), comp: MyEnum) !u32 {
+            _ = self;
+            _ = comp;
+            return 0;
+        }
+    };
+
     std.testing.log_level = .debug;
-    var database = Database.init(std.testing.allocator);
+    var database = Self.init(std.testing.allocator);
     defer database.deinit();
     try database.registerEnumeration(Type);
     try database.registerEnumeration(MyEnum);
@@ -476,7 +476,7 @@ test "value" {
 test "slice" {
     std.testing.log_level = .debug;
     var data = [_]u32{ 0, 1 };
-    const slice: SliceValue = .{ .entity = &data };
+    const slice: SliceValue = .{ .id = &data };
     std.log.info("{}", .{slice});
 }
 

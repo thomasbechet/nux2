@@ -1,12 +1,6 @@
 {
-    "Button": {
-        "Widget": { },
-        "Button": { }
-    },
-    "RedButton": {
-        "inherit": "Button",
-        "Widget": {
-            "BackgroundColor": "0xFF0000"
-        }
+    "type": "Widget",
+    "children": {
+        "type": "Button"
     }
 }

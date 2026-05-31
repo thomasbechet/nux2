@@ -1,8 +1,12 @@
 {
+    "type": "Transform",
     "children": [
         {
-            "type": "Widget",
-            "children": {}
+            "inherit": "/Prefabs/Player"
+        },
+        {
+            "inherit": "/Prefabs/Tree",
+            "position": [ 10, 10, 10 ]
         }
     ]
 }

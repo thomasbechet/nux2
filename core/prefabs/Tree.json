@@ -1,0 +1,9 @@
+{
+    "type": "Transform",
+    "children": {
+        "type": "StaticMesh",
+        "transform": "..",
+        "mesh": "/Meshes/Tree",
+        "texture": "/Textures/Tree"
+    }
+}

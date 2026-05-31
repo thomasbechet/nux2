@@ -1,4 +1,5 @@
 const std = @import("std");
+const Core = @import("Core.nux");
 
 const ID = usize;
 const EnumerationID = usize;
@@ -198,16 +199,6 @@ const Property = struct {
     type: TypeValue,
 };
 
-const Object = struct {
-    name: []const u8,
-    properties: std.ArrayList(Property),
-};
-
-const Module = struct {
-    name: []const u8,
-    functions: std.ArrayList(Function),
-};
-
 const Parameter = struct {
     name: []const u8,
     type: TypeValue,
@@ -219,16 +210,42 @@ const Function = struct {
     parameters: std.ArrayList(Parameter),
 };
 
+const Module = struct {
+    name: []const u8,
+    functions: std.ArrayList(Function),
+    enumerations: std.ArrayList(Enumeration),
+    properties: std.ArrayList(Property),
+    v_ptr: *anyopaque,
+    v_module: struct {
+        init: *const fn (*anyopaque, core: *Core) anyerror!void,
+        deinit: *const fn (*anyopaque) void,
+        start: *const fn (*anyopaque) anyerror!void,
+        stop: *const fn (*anyopaque) void,
+        destroy: *const fn (*anyopaque, std.mem.Allocator) void,
+    },
+    v_object: ?struct {
+        init: *const fn (
+            pointer: *anyopaque,
+            node: *nux.Node,
+            allocator: std.mem.Allocator,
+            module_id: nux.ModuleID,
+        ) anyerror!void,
+        deinit: *const fn (*anyopaque) void,
+        add: *const fn (*anyopaque, id: ID) anyerror!void,
+        remove: *const fn (*anyopaque, id: ID) void,
+        has: *const fn (*anyopaque, id: ID) bool,
+        // load: *const fn (*anyopaque, id: ID, reader: *nux.Reader) anyerror!void,
+        // save: *const fn (*anyopaque, id: ID, writer: *nux.Writer) anyerror!void,
+    },
+};
+
 allocator: std.mem.Allocator,
-enumerations: std.ArrayList(Enumeration),
-objects: std.ArrayList(Object),
 modules: std.ArrayList(Module),
 
 pub fn init(allocator: std.mem.Allocator) Self {
     return .{
         .allocator = allocator,
         .enumerations = .empty,
-        .objects = .empty,
         .modules = .empty,
     };
 }
@@ -247,6 +264,7 @@ pub fn deinit(self: *Self) void {
             function.parameters.deinit(self.allocator);
         }
         module.functions.deinit(self.allocator);
+        module.properties.deinit(self.allocator);
     }
     self.modules.deinit(self.allocator);
 }
@@ -276,6 +294,21 @@ fn getType(self: *const Self, comptime T: type) !TypeValue {
         },
         else => return .{ .type = Type.fromPrimitive(T) },
     };
+}
+
+fn getModule(self: *Self, comptime M: type) !*Module {
+    const name = shortTypeName(M);
+    if (self.findModule(name)) |id| {
+        return &self.modules.items[id];
+    }
+    const module = try self.modules.addOne(self.allocator);
+    module.* = .{
+        .name = name,
+        .functions = .empty,
+        .properties = .empty,
+        .enumerations = .empty,
+    };
+    return module;
 }
 
 pub fn dump(self: *Self) void {
@@ -315,10 +348,12 @@ pub fn dump(self: *Self) void {
     }
 }
 
-pub fn registerEnumeration(
+pub fn addEnum(
     self: *Self,
+    M: type,
     T: type,
 ) !void {
+    const module = try self.getModule(M);
     const tag_type: Type =
         switch (@typeInfo(@typeInfo(T).@"enum".tag_type)) {
             .comptime_int => .u32,
@@ -334,14 +369,21 @@ pub fn registerEnumeration(
     errdefer values.deinit(self.allocator);
     inline for (fields) |field| {
         names.appendAssumeCapacity(field.name);
-
         @field(values.union_value, @tagName(tag_type)).appendAssumeCapacity(field.value);
     }
-    try self.enumerations.append(self.allocator, .{
+    try module.enumerations.append(self.allocator, .{
         .name = shortTypeName(T),
         .names = names,
         .values = values,
     });
+}
+
+pub fn addFunction(
+    self: *Self,
+    comptime M: type,
+    comptime F: anytype,
+) !void {
+    const module = try self.getModule(M);
 }
 
 pub fn registerObject(
@@ -421,7 +463,7 @@ pub fn registerModule(
     });
 }
 
-test "database" {
+test "registry" {
     const MyObject = struct {
         position: [3]f32,
         scale: [3]f32,
@@ -450,20 +492,20 @@ test "database" {
     };
 
     std.testing.log_level = .debug;
-    var database = Self.init(std.testing.allocator);
-    defer database.deinit();
-    try database.registerEnumeration(Type);
-    try database.registerEnumeration(MyEnum);
-    try database.registerObject(MyObject, .{
+    var registry = Self.init(std.testing.allocator);
+    defer registry.deinit();
+    try registry.addEnum(Type);
+    try registry.addEnum(MyEnum);
+    try registry.registerObject(MyObject, .{
         .position = .{},
         .scale = .{},
     });
-    try database.registerModule(MyModule, .{
+    try registry.registerModule(MyModule, .{
         .loadTexture = .{},
         .computeValue = .{},
         .getComponentIndex = .{},
     });
-    database.dump();
+    registry.dump();
 }
 
 test "value" {

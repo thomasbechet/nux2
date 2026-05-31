@@ -1,12 +1,4 @@
 {
-    "Button": {
-        "Widget": { },
-        "Button": { }
-    },
-    "RedButton": {
-        "inherit": "/prefabs/Button",
-        "Widget": {
-            "BackgroundColor": "0xFF0000"
-        }
-    }
+    "inherit": "/Prefabs/Button",
+    "backgroundColor": "0xFF0000"
 }

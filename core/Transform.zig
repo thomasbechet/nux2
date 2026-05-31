@@ -13,14 +13,15 @@ objects: nux.Objects(struct {
     scale: [3]f32,
 }),
 
-pub fn configure(reg: *nux.Registry) !void {
-    try reg.enumeration(Self, MyEnum);
-    try reg.function(Self, copy);
-    try reg.property(Self, .position);
-    try reg.property(Self, .scale);
+pub fn register(reg: *nux.Registry) !void {
+    try reg.addEnum(Self, MyEnum);
+    try reg.addFunction(Self, copy);
+    try reg.addProperty(Self, .position);
+    try reg.addProperty(Self, .scale);
 }
 pub fn init(self: *Self, core: *nux.Core) !void {
-    self.objects = try .register(core, .{});
+    _ = self;
+    _ = core;
 }
 pub fn deinit(self: *Self) void {
     _ = self;

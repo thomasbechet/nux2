@@ -1,7 +1,7 @@
 const std = @import("std");
 
+const ID = usize;
 const EnumerationID = usize;
-const ComponentID = usize;
 const PropertyID = usize;
 const ModuleID = usize;
 const FunctionID = usize;
@@ -9,12 +9,12 @@ const FunctionID = usize;
 const Self = @This();
 
 const Type = enum {
-    id,
     bool,
     u32,
     f32,
     vec3,
     quat,
+    id,
     object,
     property,
     enumeration,
@@ -28,6 +28,7 @@ const Type = enum {
             u32 => .u32,
             f32 => .f32,
             [3]f32 => .vec3,
+            ID => .id,
             else => @compileError("Unsupported primitive " ++ @typeName(T)),
         };
     }
@@ -39,12 +40,11 @@ const Type = enum {
             .f32 => f32,
             .vec3 => [3]f32,
             .quat => [4]f32,
-            .id => u32,
-            .object => ComponentID,
+            .id => ID,
+            .module => ModuleID,
             .property => PropertyID,
             .enumeration => EnumerationID,
             .function => FunctionID,
-            .module => ModuleID,
             .type => TypeValue,
         };
     }
@@ -52,7 +52,6 @@ const Type = enum {
 
 const TypeValue = union(enum) {
     type: Type,
-    component: ComponentID,
     enumeration: EnumerationID,
     function: FunctionID,
     module: ModuleID,

@@ -1,7 +1,7 @@
 const std = @import("std");
-const Database = @import("Database.zig");
-const Transform = @import("Transform.zig");
-const ID = u32;
+pub const Database = @import("Database.zig");
+pub const Transform = @import("Transform.zig");
+pub const ID = u32;
 
 const Self = @This();
 
@@ -13,19 +13,33 @@ pub fn Objects(comptime T: type) type {
     };
 }
 
-pub fn Reg(comptime T: type) type {
-    _ = T;
-    return struct {
-        pub fn init() @This() {
-            return .{};
-        }
+pub const Registry = struct {
+    database: *Database,
 
-        pub fn enumeration(self: *@This(), comptime E: type) !void {
-            _ = E;
-            _ = self;
-        }
-    };
-}
+    pub fn init(database: *Database) @This() {
+        return .{
+            .database = database,
+        };
+    }
+
+    pub fn enumeration(self: *@This(), comptime M: type, comptime E: type) !void {
+        _ = M;
+        _ = E;
+        _ = self;
+    }
+
+    pub fn function(self: *@This(), comptime M: type, comptime F: anytype) !void {
+        _ = M;
+        _ = F;
+        _ = self;
+    }
+
+    pub fn property(self: *@This(), comptime M: type, comptime P: anytype) !void {
+        _ = M;
+        _ = P;
+        _ = self;
+    }
+};
 
 database: Database,
 
@@ -34,7 +48,7 @@ pub fn init(allocator: std.mem.Allocator) Self {
         .database = .init(allocator),
     };
     errdefer core.deinit();
-    var reg = Reg(Transform).init();
+    var reg: Registry = .init();
     try Transform.configure(&reg);
     return core;
 }

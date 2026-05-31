@@ -9,6 +9,8 @@ const FunctionID = usize;
 
 const Self = @This();
 
+const objects_field = "objects";
+
 const Type = enum {
     bool,
     u32,
@@ -378,11 +380,27 @@ pub fn addEnum(
     });
 }
 
+pub fn addModule(self: *Self, comptime M: type) !void {
+    if (@hasField(M, objects_field)) {}
+}
+
 pub fn addFunction(
     self: *Self,
     comptime M: type,
     comptime F: anytype,
 ) !void {
+    const module = try self.getModule(M);
+}
+
+pub fn addProperty(
+    self: *Self,
+    comptime M: type,
+    comptime F: anytype,
+) !void {
+    if (!@hasField(M, objects_field)) {
+        @compileError(@typeName(M) ++ " is not an object module");
+    }
+
     const module = try self.getModule(M);
 }
 

@@ -10,7 +10,7 @@ const Platform = struct {};
 pub fn Objects(comptime T: type) type {
     return struct {
         pub fn register(core: *Self, comptime properties: anytype) !@This() {
-            try core.registry.registerObject(T, properties);
+            try core.registry.registerComponent(T, properties);
         }
     };
 }

@@ -18,7 +18,7 @@ const Type = enum {
     vec3,
     quat,
     id,
-    object,
+    component,
     property,
     enumeration,
     function,
@@ -404,7 +404,7 @@ pub fn addProperty(
     const module = try self.getModule(M);
 }
 
-pub fn registerObject(
+pub fn registerComponent(
     self: *Self,
     T: type,
     comptime properties: anytype,
@@ -482,7 +482,7 @@ pub fn registerModule(
 }
 
 test "registry" {
-    const MyObject = struct {
+    const MyComponent = struct {
         position: [3]f32,
         scale: [3]f32,
     };
@@ -514,7 +514,7 @@ test "registry" {
     defer registry.deinit();
     try registry.addEnum(Type);
     try registry.addEnum(MyEnum);
-    try registry.registerObject(MyObject, .{
+    try registry.registerComponent(MyComponent, .{
         .position = .{},
         .scale = .{},
     });

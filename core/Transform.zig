@@ -8,16 +8,24 @@ pub const MyEnum = enum(u32) {
     c,
 };
 
-objects: nux.Objects(struct {
+components: nux.Components(struct {
     position: [3]f32,
     scale: [3]f32,
 }),
 
 pub fn register(reg: *nux.Registry) !void {
-    try reg.addEnum(Self, MyEnum);
-    try reg.addFunction(Self, copy);
-    try reg.addProperty(Self, .position);
-    try reg.addProperty(Self, .scale);
+    try reg.define(Self, .{
+        .enums = .{
+            MyEnum,
+        },
+        .functions = .{
+            copy,
+        },
+        .properties = .{
+            .position,
+            .scale,
+        },
+    });
 }
 pub fn init(self: *Self, core: *nux.Core) !void {
     _ = self;

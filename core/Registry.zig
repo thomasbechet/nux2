@@ -9,7 +9,7 @@ const FunctionID = usize;
 
 const Self = @This();
 
-const objects_field = "objects";
+const components_field = "components";
 
 const Type = enum {
     bool,
@@ -225,7 +225,7 @@ const Module = struct {
         stop: *const fn (*anyopaque) void,
         destroy: *const fn (*anyopaque, std.mem.Allocator) void,
     },
-    v_object: ?struct {
+    v_component: ?struct {
         init: *const fn (
             pointer: *anyopaque,
             node: *nux.Node,
@@ -381,7 +381,7 @@ pub fn addEnum(
 }
 
 pub fn addModule(self: *Self, comptime M: type) !void {
-    if (@hasField(M, objects_field)) {}
+    if (@hasField(M, components_field)) {}
 }
 
 pub fn addFunction(
@@ -397,14 +397,14 @@ pub fn addProperty(
     comptime M: type,
     comptime F: anytype,
 ) !void {
-    if (!@hasField(M, objects_field)) {
+    if (!@hasField(M, components_field)) {
         @compileError(@typeName(M) ++ " is not an object module");
     }
 
     const module = try self.getModule(M);
 }
 
-pub fn registerComponent(
+fn defineComponents(
     self: *Self,
     T: type,
     comptime properties: anytype,
@@ -426,6 +426,18 @@ pub fn registerComponent(
         .name = shortTypeName(T),
         .properties = props,
     });
+}
+
+pub fn define(self: *Self, comptime M: type, comptime meta: anytype) !void {
+    if (@hasDecl(meta, "enums")) {
+        inline for (@typeInfo(@TypeOf(@field(meta, "enums"))).@"struct".decls) |decl| {}
+    }
+    if (@hasDecl(meta, "functions")) {}
+    if (@hasDecl(meta, "properties")) {
+        if (!@hasField(M, components_field)) {
+            @compileError("Properties definition but module " ++ @typeName(M) ++ " is not a component module.");
+        }
+    }
 }
 
 pub fn registerModule(

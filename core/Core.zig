@@ -7,7 +7,7 @@ const Self = @This();
 
 const Platform = struct {};
 
-pub fn Objects(comptime T: type) type {
+pub fn Components(comptime T: type) type {
     return struct {
         pub fn register(core: *Self, comptime properties: anytype) !@This() {
             try core.registry.registerComponent(T, properties);

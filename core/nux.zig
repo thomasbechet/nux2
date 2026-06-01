@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const modules = @import("modules.zig");
+pub const Registry = @import("base/Registry.zig");
 pub const Logger = @import("base/Logger.zig");
 pub const Config = @import("base/Config.zig");
 pub const Prefab = @import("base/Prefab.zig");
@@ -105,6 +106,7 @@ pub const Platform = struct {
 
 pub const Core = struct {
     platform: Platform,
+    registry: Registry,
     running: bool = false,
     modules: std.ArrayList(Module.Module),
 
@@ -319,6 +321,7 @@ pub const Core = struct {
     pub fn init(platform: Platform) !*Core {
         var core = try platform.allocator.create(@This());
         core.platform = platform;
+        core.registry = try .init(platform.allocator);
         core.modules = .empty;
         errdefer core.deinit();
 

@@ -7,7 +7,7 @@ const Self = @This();
 allocator: std.mem.Allocator,
 kinds: std.ArrayList(u32),
 
-fn PropertyView(comptime T: type, comptime name: []const u8) type {
+fn Property(comptime T: type, comptime name: []const u8) type {
     return struct {};
 }
 
@@ -19,11 +19,9 @@ pub fn init(allocator: std.mem.Allocator) Self {
 
 const MyModule = struct {
     entity: Module(nux.Entity),
-    positions: PropertyView(nux.Vec3, "position"),
+    positions: Property(nux.Vec3, "position"),
 
-    pub fn mySystem(self: *Self) !void {
-        for (entity.filter()
-    }
+    pub fn mySystem(self: *Self) !void {}
 };
 
 test "world" {

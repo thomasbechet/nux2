@@ -1,0 +1,6 @@
+{
+    "name": "grunt",
+    "position": "vec3",
+    "model": "model",
+    "texture": "texture"
+}
